@@ -1,0 +1,3 @@
+"""
+QueryCraft Test Suite
+"""

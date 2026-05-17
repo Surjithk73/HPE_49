@@ -1,0 +1,237 @@
+"""
+Comprehensive tests for Query Executor
+"""
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from pipeline.executor import QueryExecutor, ExecutionError, detect_chart_type
+
+
+def test_basic_execution():
+    """Test basic query execution."""
+    print("\n" + "=" * 80)
+    print("TEST 1: Basic Query Execution")
+    print("=" * 80)
+    
+    executor = QueryExecutor()
+    
+    test_cases = [
+        ("SELECT COUNT(*) FROM macht413.cpu", "count query"),
+        ("SELECT cpu_num FROM macht413.cpu LIMIT 5", "simple select"),
+        ("SELECT AVG(cpu_busy_time) FROM macht413.cpu", "aggregation"),
+    ]
+    
+    passed = 0
+    for sql, description in test_cases:
+        try:
+            result = executor.execute(sql)
+            if result.row_count >= 0 and result.execution_time_ms > 0:
+                print(f"✓ {description}: {result.row_count} rows in {result.execution_time_ms}ms")
+                passed += 1
+            else:
+                print(f"✗ {description}: Invalid result")
+        except Exception as e:
+            print(f"✗ {description}: {e}")
+    
+    print(f"\nBasic Execution: {passed}/{len(test_cases)} passed")
+    return passed == len(test_cases)
+
+
+def test_limit_enforcement():
+    """Test that LIMIT is enforced."""
+    print("\n" + "=" * 80)
+    print("TEST 2: LIMIT Enforcement")
+    print("=" * 80)
+    
+    executor = QueryExecutor()
+    
+    # Query without LIMIT should have it added
+    sql_without_limit = "SELECT * FROM macht413.cpu"
+    result = executor.execute(sql_without_limit)
+    
+    if result.row_count <= 10000:
+        print(f"✓ LIMIT enforced: {result.row_count} rows (max 10000)")
+        return True
+    else:
+        print(f"✗ LIMIT not enforced: {result.row_count} rows")
+        return False
+
+
+def test_timeout_handling():
+    """Test timeout configuration."""
+    print("\n" + "=" * 80)
+    print("TEST 3: Timeout Configuration")
+    print("=" * 80)
+    
+    executor = QueryExecutor()
+    
+    if executor.timeout == 30:
+        print(f"✓ Timeout configured: {executor.timeout}s")
+        return True
+    else:
+        print(f"✗ Timeout incorrect: {executor.timeout}s")
+        return False
+
+
+def test_read_only_enforcement():
+    """Test that only read-only user is allowed."""
+    print("\n" + "=" * 80)
+    print("TEST 4: Read-Only User Enforcement")
+    print("=" * 80)
+    
+    try:
+        # Try to create executor with postgres user
+        executor = QueryExecutor(user="postgres")
+        print("✗ Should have rejected postgres user")
+        return False
+    except ExecutionError as e:
+        if "read-only" in str(e).lower():
+            print(f"✓ Correctly rejected non-read-only user")
+            return True
+        else:
+            print(f"✗ Wrong error: {e}")
+            return False
+
+
+def test_result_format():
+    """Test result format."""
+    print("\n" + "=" * 80)
+    print("TEST 5: Result Format")
+    print("=" * 80)
+    
+    executor = QueryExecutor()
+    result = executor.execute("SELECT cpu_num, cpu_busy_time FROM macht413.cpu LIMIT 1")
+    
+    checks = []
+    
+    # Check columns
+    if isinstance(result.columns, list) and len(result.columns) == 2:
+        print(f"✓ Columns: {result.columns}")
+        checks.append(True)
+    else:
+        print(f"✗ Columns invalid: {result.columns}")
+        checks.append(False)
+    
+    # Check rows
+    if isinstance(result.rows, list) and len(result.rows) == 1:
+        print(f"✓ Rows: {len(result.rows)} row")
+        checks.append(True)
+    else:
+        print(f"✗ Rows invalid: {result.rows}")
+        checks.append(False)
+    
+    # Check row format
+    if isinstance(result.rows[0], dict):
+        print(f"✓ Row format: dict with keys {list(result.rows[0].keys())}")
+        checks.append(True)
+    else:
+        print(f"✗ Row format invalid")
+        checks.append(False)
+    
+    # Check metadata
+    if result.row_count == 1 and result.execution_time_ms > 0:
+        print(f"✓ Metadata: row_count={result.row_count}, time={result.execution_time_ms}ms")
+        checks.append(True)
+    else:
+        print(f"✗ Metadata invalid")
+        checks.append(False)
+    
+    passed = sum(checks)
+    print(f"\nResult Format: {passed}/{len(checks)} checks passed")
+    return all(checks)
+
+
+def test_chart_type_detection():
+    """Test chart type detection."""
+    print("\n" + "=" * 80)
+    print("TEST 6: Chart Type Detection")
+    print("=" * 80)
+    
+    test_cases = [
+        (["cpu_num", "avg_busy_time"], "bar"),
+        (["from_timestamp", "cpu_busy_time"], "line"),
+        (["to_timestamp", "value"], "line"),
+        (["system_name", "total"], "bar"),
+        (["device_name", "reads"], "bar"),
+        (["process_name", "cpu_time"], "bar"),
+        (["count"], "table"),
+        (["sum", "avg"], "table"),
+    ]
+    
+    passed = 0
+    for columns, expected in test_cases:
+        result = detect_chart_type(columns)
+        if result == expected:
+            print(f"✓ {columns} → {result}")
+            passed += 1
+        else:
+            print(f"✗ {columns} → {result} (expected {expected})")
+    
+    print(f"\nChart Type Detection: {passed}/{len(test_cases)} passed")
+    return passed == len(test_cases)
+
+
+def test_error_handling():
+    """Test error handling."""
+    print("\n" + "=" * 80)
+    print("TEST 7: Error Handling")
+    print("=" * 80)
+    
+    executor = QueryExecutor()
+    
+    # Test invalid SQL
+    try:
+        executor.execute("SELECT * FROM macht413.nonexistent_table")
+        print("✗ Should have raised error for invalid table")
+        return False
+    except ExecutionError as e:
+        print(f"✓ Correctly raised error for invalid table")
+        return True
+
+
+def run_all_tests():
+    """Run all executor tests."""
+    print("\n" + "=" * 80)
+    print("QUERY EXECUTOR - COMPREHENSIVE TEST SUITE")
+    print("=" * 80)
+    
+    results = []
+    
+    results.append(("Basic Execution", test_basic_execution()))
+    results.append(("LIMIT Enforcement", test_limit_enforcement()))
+    results.append(("Timeout Configuration", test_timeout_handling()))
+    results.append(("Read-Only Enforcement", test_read_only_enforcement()))
+    results.append(("Result Format", test_result_format()))
+    results.append(("Chart Type Detection", test_chart_type_detection()))
+    results.append(("Error Handling", test_error_handling()))
+    
+    print("\n" + "=" * 80)
+    print("TEST SUMMARY")
+    print("=" * 80)
+    
+    for name, passed in results:
+        status = "✓ PASSED" if passed else "✗ FAILED"
+        print(f"{name:30s}: {status}")
+    
+    all_passed = all(result[1] for result in results)
+    
+    print("\n" + "=" * 80)
+    if all_passed:
+        print("✓ ALL EXECUTOR TESTS PASSED")
+    else:
+        print("✗ SOME TESTS FAILED")
+    print("=" * 80)
+    
+    return all_passed
+
+
+if __name__ == "__main__":
+    try:
+        success = run_all_tests()
+        sys.exit(0 if success else 1)
+    except Exception as e:
+        print(f"\n✗ Test suite failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

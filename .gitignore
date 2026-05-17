@@ -1,0 +1,21 @@
+# Backend
+backend/.env
+backend/audit/query_log.db
+backend/__pycache__/
+backend/**/__pycache__/
+backend/cache_store/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
