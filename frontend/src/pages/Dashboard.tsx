@@ -1,13 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen } from 'lucide-react'
+import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import QueryInput from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
 import ResultsTable from '../components/ResultsTable'
-import ChartView from '../components/ChartView'
+import ChartView, { type ChartKind } from '../components/ChartView'
 import ReportDownload from '../components/ReportDownload'
 import QueryHistory from '../components/QueryHistory'
 import { runQuery, getHistory, getHealth, type QueryResponse, type HistoryEntry, type HealthResponse } from '../lib/api'
+
+const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
+  { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
+  { kind: 'stacked-bar', label: 'Stacked',       icon: <Layers size={12} /> },
+  { kind: 'line',        label: 'Line',          icon: <TrendingUp size={12} /> },
+  { kind: 'area',        label: 'Area',          icon: <AreaChart size={12} /> },
+  { kind: 'scatter',     label: 'Scatter',       icon: <ScatterChart size={12} /> },
+]
 
 export default function Dashboard() {
   const [result, setResult] = useState<QueryResponse | null>(null)
@@ -17,6 +25,7 @@ export default function Dashboard() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [healthFailed, setHealthFailed] = useState(false)
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('table')
+  const [chartKind, setChartKind] = useState<ChartKind>('bar')
   const [currentQuery, setCurrentQuery] = useState('')
 
   useEffect(() => {
@@ -36,7 +45,21 @@ export default function Dashboard() {
     try {
       const res = await runQuery(query)
       setResult(res)
-      setViewMode(res.chart_type !== 'table' ? 'chart' : 'table')
+      // Auto-select chart kind based on data shape
+      if (res.chart_type === 'line') {
+        setChartKind('line')
+        setViewMode('chart')
+      } else if (res.chart_type === 'bar') {
+        // Use stacked bar if multiple numeric columns (like CPU utilization breakdown)
+        const numericCols = res.columns.filter(c => {
+          const s = res.rows[0]?.[c]
+          return typeof s === 'number' || (!isNaN(Number(s)) && s !== '')
+        })
+        setChartKind(numericCols.length > 2 ? 'stacked-bar' : 'bar')
+        setViewMode('chart')
+      } else {
+        setViewMode('table')
+      }
       await refreshHistory()
     } catch (e: any) {
       setError(e.message)
@@ -46,7 +69,8 @@ export default function Dashboard() {
     }
   }
 
-  const showChart = result && result.chart_type !== 'table'
+  // Always allow chart view when there's result data
+  const canChart = result && result.columns.length >= 2
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0f0f0', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
@@ -166,39 +190,71 @@ export default function Dashboard() {
                   domain={result.domain}
                 />
 
-                {/* Stats + toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {/* Stats + view controls */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                   <span style={{ fontSize: '12px', color: '#444' }}>
                     {result.row_count.toLocaleString()} rows returned
                   </span>
-                  {showChart && (
-                    <div style={{
-                      display: 'flex', borderRadius: '8px',
-                      border: '1px solid #2a2a2a', background: '#161616', padding: '3px',
-                    }}>
-                      {(['chart', 'table'] as const).map(mode => (
-                        <button
-                          key={mode}
-                          onClick={() => setViewMode(mode)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '5px',
-                            borderRadius: '6px', padding: '5px 12px', fontSize: '11px',
-                            border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                            background: viewMode === mode ? '#2a2a2a' : 'transparent',
-                            color: viewMode === mode ? '#f0f0f0' : '#555',
-                            transition: 'all 0.15s',
-                          }}
-                        >
-                          {mode === 'chart' ? <BarChart2 size={11} /> : <Table2 size={11} />}
-                          {mode === 'chart' ? 'Chart' : 'Table'}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+                    {/* Chart type picker — only visible in chart mode */}
+                    {viewMode === 'chart' && canChart && (
+                      <div style={{
+                        display: 'flex', borderRadius: '8px',
+                        border: '1px solid #2a2a2a', background: '#111', padding: '3px', gap: '2px',
+                      }}>
+                        {CHART_TYPES.map(ct => (
+                          <button
+                            key={ct.kind}
+                            onClick={() => setChartKind(ct.kind)}
+                            title={ct.label}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '4px',
+                              borderRadius: '6px', padding: '5px 10px', fontSize: '11px',
+                              border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                              background: chartKind === ct.kind ? '#2a2a2a' : 'transparent',
+                              color: chartKind === ct.kind ? '#f0f0f0' : '#555',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {ct.icon}
+                            <span>{ct.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Chart / Table toggle */}
+                    {canChart && (
+                      <div style={{
+                        display: 'flex', borderRadius: '8px',
+                        border: '1px solid #2a2a2a', background: '#161616', padding: '3px',
+                      }}>
+                        {(['chart', 'table'] as const).map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '5px',
+                              borderRadius: '6px', padding: '5px 12px', fontSize: '11px',
+                              border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                              background: viewMode === mode ? '#2a2a2a' : 'transparent',
+                              color: viewMode === mode ? '#f0f0f0' : '#555',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {mode === 'chart' ? <BarChart2 size={11} /> : <Table2 size={11} />}
+                            {mode === 'chart' ? 'Chart' : 'Table'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {viewMode === 'chart' && showChart
-                  ? <ChartView chartType={result.chart_type as 'bar' | 'line'} columns={result.columns} rows={result.rows} />
+                {viewMode === 'chart' && canChart
+                  ? <ChartView chartType={chartKind} columns={result.columns} rows={result.rows} />
                   : <ResultsTable columns={result.columns} rows={result.rows} />
                 }
 
