@@ -27,6 +27,17 @@
 #     Snapshot      â€” point-in-time value; unaffected by RATE
 #     Response-time â€” cumulative response time; RATE ON â†’ avg per transaction
 #     Lockwait      â€” cumulative lock wait; RATE ON â†’ avg per lock
+#
+#   JOIN GUIDANCE (important):
+#     `from_timestamp` values in this dataset are sampled per-table with
+#     microsecond precision and DO NOT match exactly across tables (e.g. cpu
+#     records start at 19:33:10.046881 while disc records start at .048083).
+#     An equality join on `from_timestamp` will return zero rows. Either:
+#       (a) Omit `from_timestamp` from the join predicate and rely on
+#           (system_name, cpu_num, ...) keys with aggregation, OR
+#       (b) Bucket the timestamp on both sides, e.g.
+#           date_trunc('second', from_timestamp), before joining.
+#     Pre-aggregating each side in a CTE before the join is usually cleanest.
 # ================================================================
 
 # ----------------------------------------------------------------
