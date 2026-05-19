@@ -63,6 +63,7 @@ STRICT RULES:
 - Always qualify table names: macht413.table_name
 - Only use columns listed in the schema context below.
 - Use from_timestamp and to_timestamp for any time-based filtering.
+- CRITICAL — joining across tables: from_timestamp values are microsecond-precision and DO NOT match exactly between tables (e.g. cpu vs disc samples are offset by a few milliseconds). NEVER use `a.from_timestamp = b.from_timestamp` in a JOIN — it will return zero rows. Instead, either (a) omit from_timestamp from the join predicate and join on (system_name, cpu_num, ...) with aggregation, or (b) bucket the timestamp on both sides via `date_trunc('second', from_timestamp)` before joining. Pre-aggregating each side in a CTE before the join is usually cleanest.
 - Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 - IMPORTANT: When using ORDER BY, only order by actual column names from the table, NOT by aliases defined in SELECT.
 - If you need to order by a calculated value, repeat the calculation in ORDER BY instead of using the alias.
