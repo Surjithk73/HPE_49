@@ -174,9 +174,9 @@ disc:
   ddl_record: ZMSDISC
   entity_type: DISC (Disk Device)
   purpose: >
-    Per-disk performance metrics for all disk devices. Captures I/O activity,
-    queue times, free space, and per-cache-level statistics for each disk volume.
-    DISC capacity information is only available from the primary DP2 process records.
+    Per-disk performance: I/O, queue times, free space, per-cache stats.
+    Cache spans 8 levels c0..c7; totals must sum ALL eight, not just c0.
+    Capacity comes from primary DP2 records only.
   identity_columns: [system_name, cpu_num, device_name]
   time_columns: [from_timestamp, to_timestamp, delta_time]
   join_hints:

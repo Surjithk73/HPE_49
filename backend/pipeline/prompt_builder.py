@@ -71,16 +71,13 @@ Generate a single valid PostgreSQL SELECT query for the schema 'macht413'.
 
 STRICT RULES:
 - Output ONLY the raw SQL query. No explanation, no markdown, no backticks.
-- Only SELECT statements. No INSERT, UPDATE, DELETE, DROP, ALTER, or any DDL.
-- Always qualify table names: macht413.table_name
-- Only use columns listed in the schema context below.
-- Use from_timestamp and to_timestamp for any time-based filtering.
-- CRITICAL — joining across tables: from_timestamp values are microsecond-precision and DO NOT match exactly between tables (e.g. cpu vs disc samples are offset by a few milliseconds). NEVER use `a.from_timestamp = b.from_timestamp` in a JOIN — it will return zero rows. Instead, either (a) omit from_timestamp from the join predicate and join on (system_name, cpu_num, ...) with aggregation, or (b) bucket the timestamp on both sides via `date_trunc('second', from_timestamp)` before joining. Pre-aggregating each side in a CTE before the join is usually cleanest.
+- Only SELECT statements. No DDL/DML.
+- Always qualify tables: macht413.table_name.
+- Only use columns shown in the schema context; never invent column names.
+- Use from_timestamp / to_timestamp for time filtering.
+- CRITICAL — cross-table joins: from_timestamp values are microsecond-precision and DO NOT match between tables. NEVER write `a.from_timestamp = b.from_timestamp`. Either join on (system_name, cpu_num, ...) with pre-aggregation, or bucket both sides via date_trunc('second', from_timestamp).
 - Always include LIMIT {self.max_rows} unless a smaller limit is specified.
-- IMPORTANT: When using ORDER BY, only order by actual column names from the table, NOT by aliases defined in SELECT.
-- If you need to order by a calculated value, repeat the calculation in ORDER BY instead of using the alias.
-- For disc table cache metrics: The disc table has 8 cache levels (c0 through c7). When calculating cache statistics, you MUST include ALL 8 levels (c0_hits + c0_misses + c1_hits + c1_misses + ... + c7_hits + c7_misses). Do NOT simplify to just c0 or a subset of levels.
-- CRITICAL: You MUST always include column names in your SELECT clause. NEVER generate "SELECT FROM table" without columns. If you cannot find a requested column in the schema, use only the columns that exist and skip the missing ones.
+- If the user asks for a column that doesn't exist in the schema, omit it; never generate `SELECT FROM table` without columns.
 
 SCHEMA CONTEXT:
 {schema_context}
