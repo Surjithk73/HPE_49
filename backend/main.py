@@ -1,6 +1,17 @@
 """
 QueryCraft — FastAPI Backend
 Wires all pipeline components into REST API endpoints.
+
+New endpoints:
+  GET  /api/stats                — audit log analytics dashboard
+  GET  /api/cache/threshold      — read current similarity threshold
+  POST /api/cache/threshold      — update threshold at runtime (no restart)
+
+Other improvements:
+  - Execution result (success + row_count) is passed back to cache.store()
+    so bad entries are auto-flagged via cache.flag_failed()
+  - Executor pool is closed cleanly on shutdown
+  - llm_retries count is tracked and written to the audit log
 """
 import io
 import os
@@ -8,10 +19,10 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ── Pipeline imports ──────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
@@ -36,17 +47,17 @@ import yaml
 
 
 # ── Global component instances (initialised at startup) ───────────────────────
-_schema_loader  = None
-_schema         = None
-_normalizer     = None
-_linker         = None
-_builder        = None
-_llm_engine     = None
-_validator      = None
-_executor       = None
-_cache          = None
-_audit          = None
-_few_shots      = []
+_schema_loader = None
+_schema        = None
+_normalizer    = None
+_linker        = None
+_builder       = None
+_llm_engine    = None
+_validator     = None
+_executor      = None
+_cache         = None
+_audit         = None
+_few_shots     = []
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -68,16 +79,19 @@ async def lifespan(app: FastAPI):
     _linker     = SchemaLinker(_schema)
     _builder    = PromptBuilder(max_rows=MAX_ROWS)
     _validator  = SQLValidator(_schema)
-    _executor   = QueryExecutor()
     print("[QueryCraft] Pipeline components ready")
 
     # LLM engine
     _llm_engine = LLMEngine()
     print(f"[QueryCraft] LLM engine ready — model: {GEMINI_MODEL}")
 
-    # Semantic cache
+    # Executor — creates the connection pool
+    _executor = QueryExecutor()
+
+    # Semantic cache — embedding model loads in background thread
+    # API is available immediately; cache returns misses until model is ready
     _cache = SemanticCache(persist_path="cache_store")
-    print(f"[QueryCraft] Cache ready — {_cache.count()} entries")
+    print(f"[QueryCraft] Cache initialised — {_cache.count()} entries (model loading in background)")
 
     # Audit log
     _audit = AuditLog(AUDIT_LOG_PATH)
@@ -95,7 +109,11 @@ async def lifespan(app: FastAPI):
 
     print("[QueryCraft] Startup complete\n")
     yield
+
+    # ── Shutdown ──────────────────────────────────────────────────────────────
     print("[QueryCraft] Shutting down...")
+    if _executor:
+        _executor.close()
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -123,8 +141,12 @@ class SqlRequest(BaseModel):
 
 class ExportRequest(BaseModel):
     sql: str
-    format: str          # "csv" | "excel" | "pdf"
+    format: str                  # "csv" | "excel" | "pdf"
     query_text: Optional[str] = ""
+
+class ThresholdRequest(BaseModel):
+    threshold: float = Field(..., gt=0.0, le=1.0,
+                             description="Cosine similarity threshold (0 < value ≤ 1)")
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -141,7 +163,6 @@ def health():
     db_ok    = False
     cache_ok = False
 
-    # DB check
     try:
         from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
         conn = psycopg2.connect(
@@ -154,19 +175,19 @@ def health():
     except Exception:
         pass
 
-    # Cache check
     try:
         cache_ok = _cache is not None and _cache.collection is not None
     except Exception:
         pass
 
     return {
-        "status": "ok",
-        "db_connected": db_ok,
-        "cache_ready": cache_ok,
-        "llm_model": GEMINI_MODEL,
-        "cache_entries": _cache.count() if _cache else 0,
-        "schema_tables": len(_schema) if _schema else 0
+        "status":          "ok",
+        "db_connected":    db_ok,
+        "cache_ready":     cache_ok,
+        "cache_model_ready": _cache.is_model_ready if _cache else False,
+        "llm_model":       GEMINI_MODEL,
+        "cache_entries":   _cache.count() if _cache else 0,
+        "schema_tables":   len(_schema) if _schema else 0,
     }
 
 
@@ -178,9 +199,9 @@ def schema_info():
     for table_name, table_def in _schema.items():
         columns = table_def.get("columns", {})
         result.append({
-            "table_name": table_name,
+            "table_name":   table_name,
             "column_count": len(columns),
-            "description": table_def.get("purpose", "")[:200]
+            "description":  table_def.get("purpose", "")[:200],
         })
     return result
 
@@ -190,6 +211,23 @@ def schema_info():
 def history():
     """Return last 50 query log entries."""
     return _audit.get_history(50)
+
+
+# GET /api/stats  ── NEW ──────────────────────────────────────────────────────
+@app.get("/api/stats")
+def stats():
+    """
+    Analytics dashboard over the full audit log.
+
+    Returns:
+        total_queries           — total queries logged
+        cache_hit_rate          — fraction served from cache
+        avg_execution_time_ms   — mean execution time across all queries
+        top_domains             — top 10 queried domains with counts
+        validation_failure_rate — fraction that failed SQL validation
+        retry_rate              — fraction of LLM queries that needed a retry
+    """
+    return _audit.get_stats()
 
 
 # POST /api/query
@@ -205,23 +243,24 @@ def run_query(req: QueryRequest):
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
     log_entry = {
-        "original_input":   original_query,
-        "normalized_input": "",
-        "domain_category":  "",
-        "generated_sql":    None,
+        "original_input":    original_query,
+        "normalized_input":  "",
+        "domain_category":   "",
+        "generated_sql":     None,
         "validation_passed": False,
-        "validation_error": None,
-        "cache_hit":        False,
-        "row_count":        None,
+        "validation_error":  None,
+        "cache_hit":         False,
+        "row_count":         None,
         "execution_time_ms": None,
-        "export_format":    None,
+        "export_format":     None,
+        "llm_retries":       0,
     }
 
     try:
         # Step 1 — Normalize
-        norm        = _normalizer.normalize(original_query)
-        norm_text   = norm["normalized_text"]
-        domain      = norm["domain_category"]
+        norm      = _normalizer.normalize(original_query)
+        norm_text = norm["normalized_text"]
+        domain    = norm["domain_category"]
         log_entry["normalized_input"] = norm_text
         log_entry["domain_category"]  = domain
 
@@ -230,8 +269,8 @@ def run_query(req: QueryRequest):
 
         if cache_result.hit:
             sql = cache_result.sql
-            log_entry["cache_hit"]        = True
-            log_entry["generated_sql"]    = sql
+            log_entry["cache_hit"]         = True
+            log_entry["generated_sql"]     = sql
             log_entry["validation_passed"] = True
         else:
             # Step 3 — Schema linking
@@ -241,6 +280,17 @@ def run_query(req: QueryRequest):
             prompt = _builder.build_prompt(norm_text, schema_context, _few_shots)
 
             # Step 5 — LLM generation with retry
+            # We monkey-patch the builder temporarily to count retries
+            retry_count = 0
+            original_build_retry = _builder.build_retry_prompt
+
+            def _counting_retry(original_prompt, failed_sql, error):
+                nonlocal retry_count
+                retry_count += 1
+                return original_build_retry(original_prompt, failed_sql, error)
+
+            _builder.build_retry_prompt = _counting_retry
+
             try:
                 sql = _llm_engine.generate_sql_with_retry(
                     prompt=prompt,
@@ -250,8 +300,13 @@ def run_query(req: QueryRequest):
                 )
             except LLMError as e:
                 log_entry["validation_error"] = str(e)
+                log_entry["llm_retries"]      = retry_count
                 _audit.log_query(log_entry)
                 raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+            finally:
+                _builder.build_retry_prompt = original_build_retry
+
+            log_entry["llm_retries"] = retry_count
 
             # Step 6 — Final validation
             val = _validator.validate(sql)
@@ -261,23 +316,33 @@ def run_query(req: QueryRequest):
                 raise HTTPException(status_code=400, detail=f"SQL validation failed: {val.error}")
 
             sql = val.sanitized_sql
-            log_entry["generated_sql"]    = sql
+            log_entry["generated_sql"]     = sql
             log_entry["validation_passed"] = True
 
         # Step 7 — Execute
+        execution_success = False
         try:
             result = _executor.execute(sql)
+            execution_success = True
         except ExecutionError as e:
             log_entry["validation_error"] = str(e)
             _audit.log_query(log_entry)
+            # If this was a cache hit that failed, flag the entry as bad
+            if cache_result.hit:
+                _cache.flag_failed(norm_text)
             raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
         # Step 8 — Chart type
         chart_type = detect_chart_type(result.columns)
 
-        # Step 9 — Store in cache (only on cache miss)
+        # Step 9 — Store in cache (only on cache miss, with execution metadata)
         if not cache_result.hit:
-            _cache.store(norm_text, sql)
+            _cache.store(
+                norm_text,
+                sql,
+                execution_success=execution_success,
+                row_count=result.row_count,
+            )
 
         # Step 10 — Audit log
         log_entry["row_count"]         = result.row_count
@@ -285,14 +350,14 @@ def run_query(req: QueryRequest):
         _audit.log_query(log_entry)
 
         return {
-            "sql":              sql,
-            "columns":          result.columns,
-            "rows":             result.rows,
-            "row_count":        result.row_count,
+            "sql":               sql,
+            "columns":           result.columns,
+            "rows":              result.rows,
+            "row_count":         result.row_count,
             "execution_time_ms": result.execution_time_ms,
-            "cache_hit":        cache_result.hit,
-            "chart_type":       chart_type,
-            "domain":           domain,
+            "cache_hit":         cache_result.hit,
+            "chart_type":        chart_type,
+            "domain":            domain,
         }
 
     except HTTPException:
@@ -301,7 +366,6 @@ def run_query(req: QueryRequest):
         log_entry["validation_error"] = str(e)
         _audit.log_query(log_entry)
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
 
 
 # POST /api/sql
@@ -328,9 +392,9 @@ def run_sql(req: SqlRequest):
         "row_count":         None,
         "execution_time_ms": None,
         "export_format":     None,
+        "llm_retries":       0,
     }
 
-    # Validate
     val = _validator.validate(raw_sql)
     if not val.valid:
         log_entry["validation_error"] = val.error
@@ -341,7 +405,6 @@ def run_sql(req: SqlRequest):
     log_entry["validation_passed"] = True
     log_entry["generated_sql"]     = sql
 
-    # Execute
     try:
         result = _executor.execute(sql)
     except ExecutionError as e:
@@ -370,29 +433,22 @@ def run_sql(req: SqlRequest):
 # POST /api/export
 @app.post("/api/export")
 def export(req: ExportRequest):
-    """
-    Export query results as CSV, Excel, or PDF.
-    Re-validates and re-executes the SQL before generating the file.
-    """
-    # Validate format
+    """Export query results as CSV, Excel, or PDF."""
     fmt = req.format.lower().strip()
     if fmt not in ("csv", "excel", "xlsx", "pdf"):
         raise HTTPException(status_code=400, detail=f"Unsupported format: {req.format}")
 
-    # Re-validate SQL
     val = _validator.validate(req.sql)
     if not val.valid:
         raise HTTPException(status_code=400, detail=f"SQL validation failed: {val.error}")
 
     sql = val.sanitized_sql
 
-    # Execute
     try:
         result = _executor.execute(sql)
     except ExecutionError as e:
         raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
-    # Generate report
     try:
         file_bytes, mime_type = generate_report(
             format=fmt,
@@ -404,7 +460,7 @@ def export(req: ExportRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
 
-    ext = _ext_for(fmt)
+    ext      = _ext_for(fmt)
     filename = f"querycraft_report.{ext}"
 
     return StreamingResponse(
@@ -417,11 +473,11 @@ def export(req: ExportRequest):
 # GET /api/cache
 @app.get("/api/cache")
 def get_cache():
-    """Get all cached query entries."""
+    """Get all cached query entries (includes metadata fields)."""
     entries = _cache.get_all()
     return {
-        "count": len(entries),
-        "entries": entries
+        "count":   len(entries),
+        "entries": entries,
     }
 
 
@@ -430,36 +486,59 @@ def get_cache():
 def clear_cache():
     """Clear all entries from the cache."""
     _cache.clear()
+    return {"status": "success", "message": "Cache cleared", "count": 0}
+
+
+# DELETE /api/cache/query
+@app.delete("/api/cache/query")
+def delete_cache_entry(query: str = Query(..., description="The query text to delete")):
+    """Delete a specific query from the cache by query text."""
+    norm      = _normalizer.normalize(query)
+    norm_text = norm["normalized_text"]
+    deleted   = _cache.delete(norm_text)
+
+    if deleted:
+        return {
+            "status":     "success",
+            "message":    "Cache entry deleted",
+            "query":      query,
+            "normalized": norm_text,
+        }
+    raise HTTPException(status_code=404, detail="Cache entry not found")
+
+
+# GET /api/cache/threshold  ── NEW ────────────────────────────────────────────
+@app.get("/api/cache/threshold")
+def get_threshold():
+    """Return the current cache similarity threshold."""
     return {
-        "status": "success",
-        "message": "Cache cleared",
-        "count": 0
+        "threshold": _cache.get_threshold(),
+        "description": (
+            "Cosine similarity threshold for cache hits. "
+            "Higher = stricter matching. Range: (0.0, 1.0]"
+        ),
     }
 
 
-# DELETE /api/cache/{query}
-@app.delete("/api/cache/query")
-def delete_cache_entry(query: str):
+# POST /api/cache/threshold  ── NEW ───────────────────────────────────────────
+@app.post("/api/cache/threshold")
+def set_threshold(req: ThresholdRequest):
     """
-    Delete a specific query from the cache.
-    
-    Query parameter:
-        query: The normalized query text to delete
-    """
-    # Normalize the query first
-    norm = _normalizer.normalize(query)
-    norm_text = norm["normalized_text"]
-    
-    # Delete from cache
-    deleted = _cache.delete(norm_text)
-    
-    if deleted:
-        return {
-            "status": "success",
-            "message": f"Cache entry deleted",
-            "query": query,
-            "normalized": norm_text
-        }
-    else:
-        raise HTTPException(status_code=404, detail="Cache entry not found")
+    Update the cache similarity threshold at runtime.
 
+    No server restart required.  The new value takes effect immediately
+    for all subsequent lookups.
+
+    Body:
+        { "threshold": 0.85 }   — float in (0.0, 1.0]
+    """
+    try:
+        _cache.set_threshold(req.threshold)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return {
+        "status":    "updated",
+        "threshold": _cache.get_threshold(),
+        "message":   f"Cache similarity threshold set to {req.threshold}",
+    }
