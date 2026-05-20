@@ -29,13 +29,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from config import (
     SCHEMA_YAML_PATH, FEW_SHOTS_PATH, AUDIT_LOG_PATH,
-    GEMINI_MODEL, MAX_ROWS
+    GEMINI_MODEL, MAX_ROWS, LLM_PROVIDER, OLLAMA_MODEL,
 )
 from pipeline.schema_loader import load_schema
 from pipeline.normalizer import QueryNormalizer
 from pipeline.schema_linker import SchemaLinker
 from pipeline.prompt_builder import PromptBuilder
-from pipeline.llm_engine import LLMEngine, LLMError
+from pipeline.llm_engine import LLMError, make_llm_engine
 from pipeline.validator import SQLValidator
 from pipeline.executor import QueryExecutor, ExecutionError, detect_chart_type
 from pipeline.cache import SemanticCache
@@ -81,9 +81,9 @@ async def lifespan(app: FastAPI):
     _validator  = SQLValidator(_schema)
     print("[QueryCraft] Pipeline components ready")
 
-    # LLM engine
-    _llm_engine = LLMEngine()
-    print(f"[QueryCraft] LLM engine ready — model: {GEMINI_MODEL}")
+    # LLM engine — provider chosen by LLM_PROVIDER (gemini|ollama)
+    _llm_engine = make_llm_engine()
+    print(f"[QueryCraft] LLM engine ready — provider: {LLM_PROVIDER}, model: {_llm_engine.model_name}")
 
     # Executor — creates the connection pool
     _executor = QueryExecutor()
@@ -181,13 +181,14 @@ def health():
         pass
 
     return {
-        "status":          "ok",
-        "db_connected":    db_ok,
-        "cache_ready":     cache_ok,
+        "status":            "ok",
+        "db_connected":      db_ok,
+        "cache_ready":       cache_ok,
         "cache_model_ready": _cache.is_model_ready if _cache else False,
-        "llm_model":       GEMINI_MODEL,
-        "cache_entries":   _cache.count() if _cache else 0,
-        "schema_tables":   len(_schema) if _schema else 0,
+        "llm_provider":      LLM_PROVIDER,
+        "llm_model":         (_llm_engine.model_name if _llm_engine else None) or GEMINI_MODEL,
+        "cache_entries":     _cache.count() if _cache else 0,
+        "schema_tables":     len(_schema) if _schema else 0,
     }
 
 
@@ -228,6 +229,18 @@ def stats():
         retry_rate              — fraction of LLM queries that needed a retry
     """
     return _audit.get_stats()
+
+
+# POST /api/admin/retry-analysis
+@app.post("/api/admin/retry-analysis")
+def retry_analysis():
+    """
+    Analyze the audit log for queries that exhausted the retry budget,
+    bucket them by failure mode, and emit recommended prompt / pipeline
+    changes. See backend/jobs/retry_analysis.py for the classifier rules.
+    """
+    from jobs.retry_analysis import run_analysis
+    return run_analysis()
 
 
 # POST /api/query

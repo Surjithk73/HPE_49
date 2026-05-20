@@ -15,9 +15,20 @@ DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
-# Gemini API Configuration
+# LLM Provider Configuration
+# 'gemini' (default) or 'ollama'. Ollama enables fully-offline SQL generation
+# against a local model server; the chosen engine must satisfy the same
+# generate_sql(prompt) interface (see pipeline/llm_engine.py).
+LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "gemini").lower()
+
+# Gemini API Configuration (required when LLM_PROVIDER='gemini')
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL")
+
+# Ollama Configuration (required when LLM_PROVIDER='ollama')
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
+OLLAMA_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
 
 # App Settings
 MAX_ROWS = int(os.getenv("MAX_ROWS", "10000"))
@@ -34,9 +45,18 @@ required_vars = {
     "DB_NAME": DB_NAME,
     "DB_USER": DB_USER,
     "DB_PASSWORD": DB_PASSWORD,
-    "GEMINI_API_KEY": GEMINI_API_KEY,
-    "GEMINI_MODEL": GEMINI_MODEL,
 }
+
+# Provider-specific requirements
+if LLM_PROVIDER == "gemini":
+    required_vars["GEMINI_API_KEY"] = GEMINI_API_KEY
+    required_vars["GEMINI_MODEL"] = GEMINI_MODEL
+elif LLM_PROVIDER == "ollama":
+    required_vars["OLLAMA_MODEL"] = OLLAMA_MODEL
+else:
+    raise ValueError(
+        f"Unknown LLM_PROVIDER='{LLM_PROVIDER}'. Expected 'gemini' or 'ollama'."
+    )
 
 missing_vars = [key for key, value in required_vars.items() if not value]
 if missing_vars:

@@ -448,3 +448,245 @@ examples:
       WHERE requests > 0
       ORDER BY requests DESC
       LIMIT 10000;
+
+  # ==========================================================================
+  # dfile — per-file disk-level statistics
+  # ==========================================================================
+
+  - domain: dfile
+    query: "Top 20 files by total physical I/O calls"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        device_name,
+        CAST(driver_input_calls AS BIGINT) + CAST(driver_output_calls AS BIGINT) AS total_driver_calls,
+        CAST(driver_input_calls AS BIGINT) AS reads,
+        CAST(driver_output_calls AS BIGINT) AS writes
+      FROM macht413.dfile
+      ORDER BY total_driver_calls DESC
+      LIMIT 20;
+
+  - domain: dfile
+    query: "Show per-file cache read-hit ratio for files with at least 100 driver input calls"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        cache_read_hits,
+        CAST(driver_input_calls AS BIGINT) AS driver_input_calls,
+        cache_read_hits * 100.0 / NULLIF(CAST(driver_input_calls AS BIGINT), 0) AS read_cache_hit_pct
+      FROM macht413.dfile
+      WHERE CAST(driver_input_calls AS BIGINT) >= 100
+      ORDER BY read_cache_hit_pct ASC
+      LIMIT 10000;
+
+  - domain: dfile
+    query: "Show files with the most block splits and extent allocations, indicating fragmentation"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        device_name,
+        block_splits,
+        CAST(extent_allocations AS BIGINT) AS extent_allocations,
+        starting_eof,
+        ending_eof
+      FROM macht413.dfile
+      WHERE block_splits > 0 OR CAST(extent_allocations AS BIGINT) > 0
+      ORDER BY block_splits DESC, extent_allocations DESC
+      LIMIT 10000;
+
+  - domain: dfile
+    query: "Show SQL DML activity per file: inserts, updates, deletes"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        CAST(sql_inserts AS BIGINT) AS inserts,
+        CAST(sql_updates AS BIGINT) AS updates,
+        sql_deletes,
+        CAST(sql_inserts AS BIGINT) + CAST(sql_updates AS BIGINT) + sql_deletes AS total_dml,
+        CAST(ending_rows AS BIGINT) - CAST(starting_rows AS BIGINT) AS row_delta
+      FROM macht413.dfile
+      WHERE CAST(sql_inserts AS BIGINT) + CAST(sql_updates AS BIGINT) + sql_deletes > 0
+      ORDER BY total_dml DESC
+      LIMIT 10000;
+
+  # ==========================================================================
+  # dopen — per-open file activity (opener-side)
+  # ==========================================================================
+
+  - domain: dopen
+    query: "Count active opens per file and total requests across all openers"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        COUNT(*) AS open_count,
+        SUM(requests) AS total_requests,
+        SUM(requests_blocked) AS total_blocked,
+        SUM(lockwait_time) AS total_lockwait_us
+      FROM macht413.dopen
+      GROUP BY file_name_volume, file_name_subvol, file_name_filename
+      ORDER BY total_requests DESC
+      LIMIT 10000;
+
+  - domain: dopen
+    query: "Show openers with the worst lockwait times per file"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        opener_cpu,
+        opener_pin,
+        requests_blocked,
+        lockwait_time,
+        max_lockwait_time,
+        lockwait_time / NULLIF(requests_blocked, 0) AS avg_lockwait_us
+      FROM macht413.dopen
+      WHERE requests_blocked > 0
+      ORDER BY max_lockwait_time DESC, lockwait_time DESC
+      LIMIT 10000;
+
+  - domain: dopen
+    query: "Join dopen with proc to identify which process names are causing the most file block splits"
+    sql: |
+      SELECT
+        p.process_name,
+        do.file_name_volume || '.' || do.file_name_subvol || '.' || do.file_name_filename AS file_path,
+        do.block_splits,
+        do.requests,
+        do.requests_blocked
+      FROM macht413.dopen do
+      LEFT JOIN macht413.proc p
+        ON do.system_name = p.system_name
+        AND CAST(do.opener_cpu AS BIGINT) = p.cpu_num
+        AND do.opener_pin = p.pin
+        AND date_trunc('second', do.from_timestamp) = date_trunc('second', p.from_timestamp)
+      WHERE do.block_splits > 0
+      ORDER BY do.block_splits DESC
+      LIMIT 10000;
+
+  # ==========================================================================
+  # udef — user-defined process counters (key/value)
+  # ==========================================================================
+
+  - domain: udef
+    query: "List all distinct user-defined counter names and how many processes set each"
+    sql: |
+      SELECT
+        name,
+        COUNT(DISTINCT pin) AS process_count,
+        COUNT(*) AS row_count
+      FROM macht413.udef
+      WHERE name IS NOT NULL
+      GROUP BY name
+      ORDER BY process_count DESC
+      LIMIT 10000;
+
+  - domain: udef
+    query: "Show all user-defined counter values for each process along with its program file"
+    sql: |
+      SELECT
+        process_name,
+        pin,
+        cpu_num,
+        program_file_name_volume || '.' || program_file_name_subvol || '.' || program_file_name_filename AS program_path,
+        type,
+        name,
+        index,
+        value
+      FROM macht413.udef
+      WHERE name IS NOT NULL
+      ORDER BY process_name, name
+      LIMIT 10000;
+
+  - domain: udef
+    query: "Show ancestor process chain for each process via udef ancestor fields"
+    sql: |
+      SELECT
+        process_name,
+        cpu_num,
+        pin,
+        ancestor_sysname,
+        ancestor_cpu,
+        ancestor_pin,
+        ancestor_process_name,
+        gmom_process_name
+      FROM macht413.udef
+      WHERE ancestor_process_name IS NOT NULL
+      ORDER BY process_name
+      LIMIT 10000;
+
+  # ==========================================================================
+  # file — per-file logical I/O (opener-side, OS-level)
+  # ==========================================================================
+
+  - domain: file
+    query: "Top 20 files by logical reads + writes"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        opener_processname,
+        reads,
+        writes,
+        reads + writes AS total_io,
+        (read_bytes + write_bytes) / 1024 / 1024 AS total_mb
+      FROM macht413.file
+      ORDER BY total_io DESC
+      LIMIT 20;
+
+  - domain: file
+    query: "Show file-level lock waits and timeouts per opener process"
+    sql: |
+      SELECT
+        opener_processname,
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        lock_waits,
+        CAST(timeouts_or_cancels AS BIGINT) AS timeouts_or_cancels,
+        CAST(escalations AS BIGINT) AS escalations
+      FROM macht413.file
+      WHERE lock_waits > 0 OR CAST(timeouts_or_cancels AS BIGINT) > 0
+      ORDER BY lock_waits DESC, timeouts_or_cancels DESC
+      LIMIT 10000;
+
+  - domain: file
+    query: "Compare logical reads to physical disc_reads to find files served well by cache"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        opener_processname,
+        reads AS logical_reads,
+        disc_reads AS physical_reads,
+        (reads - disc_reads) * 100.0 / NULLIF(reads, 0) AS implied_cache_hit_pct
+      FROM macht413.file
+      WHERE reads > 100
+      ORDER BY implied_cache_hit_pct DESC
+      LIMIT 10000;
+
+  - domain: file
+    query: "Show DBIO byte volume and OSS cache activity per file"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        opener_processname,
+        dbio_reads,
+        dbio_writes,
+        (dbio_read_bytes + dbio_write_bytes) / 1024 / 1024 AS dbio_mb,
+        oss_cache_reads,
+        oss_cache_writes,
+        (oss_cache_read_bytes + oss_cache_write_bytes) / 1024 / 1024 AS oss_cache_mb
+      FROM macht413.file
+      WHERE dbio_reads + dbio_writes + oss_cache_reads + oss_cache_writes > 0
+      ORDER BY dbio_mb DESC, oss_cache_mb DESC
+      LIMIT 10000;
+
+  - domain: file
+    query: "Group file-level I/O by opener program to find which programs drive the most file traffic"
+    sql: |
+      SELECT
+        opener_program_filename_volume || '.' || opener_program_filename_subvol || '.' || opener_program_filename_filename AS opener_program,
+        COUNT(*) AS open_count,
+        SUM(reads + writes) AS total_io,
+        SUM(file_busy_time) AS total_busy_time,
+        SUM(messages) AS total_messages,
+        SUM(message_bytes) / 1024 / 1024 AS total_message_mb
+      FROM macht413.file
+      GROUP BY opener_program_filename_volume, opener_program_filename_subvol, opener_program_filename_filename
+      ORDER BY total_io DESC
+      LIMIT 10000;
