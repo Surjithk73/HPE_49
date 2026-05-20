@@ -27,6 +27,11 @@ AUDIT_LOG_PATH = os.getenv("AUDIT_LOG_PATH", "audit/query_log.db")
 SCHEMA_YAML_PATH = os.getenv("SCHEMA_YAML_PATH", "schema_store/enriched_schema.yaml")
 FEW_SHOTS_PATH = os.getenv("FEW_SHOTS_PATH", "few_shots/examples.yaml")
 
+# Allowed DB users and Max Cost Limits
+ALLOWED_DB_USERS = [u.strip() for u in os.getenv("ALLOWED_DB_USERS", "querycraft_user").split(",") if u.strip()]
+MAX_QUERY_COST = float(os.getenv("MAX_QUERY_COST", "10000.0"))
+
+
 # Validation - ensure critical keys are present
 required_vars = {
     "DB_HOST": DB_HOST,
