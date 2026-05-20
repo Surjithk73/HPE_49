@@ -30,7 +30,7 @@ export default function ArchitectureDiagram() {
     // Row 2 - Right to Left
     { id: 'cache', label: 'Semantic Cache', sublabel: 'ChromaDB', color: '#f59e0b', x: 540, y: 230, width: 180, height: 90 },
     { id: 'prompt', label: 'Prompt Builder', sublabel: 'Context Assembly', color: '#10b981', x: 290, y: 230, width: 180, height: 90 },
-    { id: 'llm', label: 'LLM Engine', sublabel: 'Gemini 3.1 Flash', color: '#10b981', x: 40, y: 230, width: 180, height: 90 },
+    { id: 'llm', label: 'LLM Engine', sublabel: 'Gemini 3.1 Flash Lite', color: '#10b981', x: 40, y: 230, width: 180, height: 90 },
 
     // Row 3 - Left to Right
     { id: 'validator', label: 'SQL Validator', sublabel: 'Security Check', color: '#ef4444', x: 40, y: 420, width: 180, height: 90 },

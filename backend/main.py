@@ -118,6 +118,9 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     query: str
 
+class SqlRequest(BaseModel):
+    sql: str
+
 class ExportRequest(BaseModel):
     sql: str
     format: str          # "csv" | "excel" | "pdf"
@@ -298,6 +301,70 @@ def run_query(req: QueryRequest):
         log_entry["validation_error"] = str(e)
         _audit.log_query(log_entry)
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+
+# POST /api/sql
+@app.post("/api/sql")
+def run_sql(req: SqlRequest):
+    """
+    Direct SQL execution endpoint.
+    Accepts a raw SELECT query, validates it, executes it, and returns results.
+    Bypasses the LLM pipeline entirely — no normalization, no cache, no prompt building.
+    """
+    raw_sql = req.sql.strip()
+
+    if not raw_sql:
+        raise HTTPException(status_code=400, detail="SQL cannot be empty")
+
+    log_entry = {
+        "original_input":    raw_sql,
+        "normalized_input":  raw_sql,
+        "domain_category":   "sql_direct",
+        "generated_sql":     raw_sql,
+        "validation_passed": False,
+        "validation_error":  None,
+        "cache_hit":         False,
+        "row_count":         None,
+        "execution_time_ms": None,
+        "export_format":     None,
+    }
+
+    # Validate
+    val = _validator.validate(raw_sql)
+    if not val.valid:
+        log_entry["validation_error"] = val.error
+        _audit.log_query(log_entry)
+        raise HTTPException(status_code=400, detail=f"SQL validation failed: {val.error}")
+
+    sql = val.sanitized_sql
+    log_entry["validation_passed"] = True
+    log_entry["generated_sql"]     = sql
+
+    # Execute
+    try:
+        result = _executor.execute(sql)
+    except ExecutionError as e:
+        log_entry["validation_error"] = str(e)
+        _audit.log_query(log_entry)
+        raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+    chart_type = detect_chart_type(result.columns)
+
+    log_entry["row_count"]         = result.row_count
+    log_entry["execution_time_ms"] = result.execution_time_ms
+    _audit.log_query(log_entry)
+
+    return {
+        "sql":               sql,
+        "columns":           result.columns,
+        "rows":              result.rows,
+        "row_count":         result.row_count,
+        "execution_time_ms": result.execution_time_ms,
+        "cache_hit":         False,
+        "chart_type":        chart_type,
+        "domain":            "sql_direct",
+    }
 
 
 # POST /api/export

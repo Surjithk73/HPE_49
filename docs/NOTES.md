@@ -12,7 +12,7 @@ All 10 build phases (0–10) are complete. The system is production-ready for lo
 - Backend: FastAPI on port 8000
 - Frontend: React/Vite on port 5173
 - Database: PostgreSQL `querycraft_db`, schema `macht413`, 212,689 rows across 9 tables
-- LLM: Gemini API (`gemini-3.1-flash-lite-preview` — configured in `.env`)
+- LLM: Gemini API (`gemini-3.1-flash-lite` — configured in `.env`)
 - Cache: ChromaDB in `backend/cache_store/`, similarity threshold 0.95 (code) — note: some older docs say 0.85, the actual value in `config.py` is 0.95
 - Audit log: SQLite at `backend/audit/query_log.db`
 
@@ -71,7 +71,7 @@ python fix_ossns_datatypes.py
 
 3. **PDF backend on Windows** — WeasyPrint requires GTK (unavailable on Windows). `report_generator.py` falls back to `reportlab` automatically. Both produce valid PDFs.
 
-4. **Cache threshold discrepancy** — Some older docs and the `HowItWorks.tsx` UI say "85% similarity". The actual threshold in `config.py` is `0.95`. The UI text should be updated if it matters.
+4. **Cache threshold discrepancy** — Fixed. `.env` was set to `0.85` but `config.py` defaulted to `0.95`. Both are now aligned at `0.95`. The `HowItWorks.tsx` UI text has also been updated to say "95%".
 
 5. **Dead dependencies:**
    - Frontend: `axios` is installed but `api.ts` uses native `fetch`
@@ -115,7 +115,7 @@ Direct validator tests (33/33 passed): DELETE, DROP, ALTER, INSERT, UPDATE, TRUN
 
 ## LLM Notes
 
-- Model: `gemini-3.1-flash-lite-preview` (set in `.env`)
+- Model: `gemini-3.1-flash-lite` (set in `.env`)
 - Retry logic: max 2 retries on validation failure, with error feedback to LLM
 - Interface is swappable — to migrate to Ollama, only `pipeline/llm_engine.py` needs to change
 - The `LLMEngine.generate_sql(prompt)` method is the only public contract the pipeline uses

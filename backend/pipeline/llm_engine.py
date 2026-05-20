@@ -16,7 +16,7 @@ try:
 except (ValueError, ImportError) as e:
     GEMINI_AVAILABLE = False
     GEMINI_API_KEY = None
-    GEMINI_MODEL = "gemini-1.5-flash"
+    GEMINI_MODEL = "gemini-3.1-flash-lite"
     print(f"Warning: Gemini API not configured: {e}")
 
 

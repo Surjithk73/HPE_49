@@ -18,7 +18,7 @@
 
 **In scope:**
 - All 9 tables in `macht413` schema (cpu, disc, dfile, dopen, file, ossns, proc, tmf, udef)
-- Natural language → SQL via Gemini API (`gemini-3.1-flash-lite-preview`)
+- Natural language → SQL via Gemini API (`gemini-3.1-flash-lite`)
 - Semantic cache using ChromaDB + `all-MiniLM-L6-v2`
 - SQL validation and security guard via `sqlglot`
 - Report export: CSV, Excel, PDF
@@ -41,7 +41,7 @@
 - PostgreSQL latest stable version installed locally on Windows
 - CSV files for all 9 tables exist in `backend/data/` (sourced from `measurefiles/`: cpucsv, dfilecsv, disccsv, dopencsv, filecsv, ossnscsv, proccsv, tmfcsv, udefcsv)
 - `enriched_schema.yaml` (883 lines, all 9 tables, all column descriptions) already exists
-- Gemini API key is available and the model `gemini-3.1-flash-lite-preview` is accessible
+- Gemini API key is available and the model `gemini-3.1-flash-lite` is accessible
 - Python latest stable version installed
 - Node.js (LTS) installed for React frontend
 - Both backend and frontend run in separate terminals on localhost

@@ -100,7 +100,7 @@ export default function HowItWorks() {
               { title: 'Frontend', tech: 'React + TypeScript + Vite', desc: 'Modern UI with real-time query execution' },
               { title: 'Backend', tech: 'FastAPI + Python 3.10+', desc: 'High-performance async API server' },
               { title: 'Database', tech: 'PostgreSQL 16+', desc: '212K+ rows across 9 performance tables' },
-              { title: 'AI Engine', tech: 'Google Gemini 3.1 Flash', desc: 'Fast, accurate SQL generation' },
+              { title: 'AI Engine', tech: 'Google Gemini 3.1 Flash Lite', desc: 'Fast, accurate SQL generation' },
               { title: 'Caching', tech: 'ChromaDB + Embeddings', desc: 'Semantic similarity matching' },
               { title: 'Validation', tech: 'SQLGlot Parser', desc: 'Multi-layer security checks' }
             ].map((item, idx) => (
@@ -135,63 +135,63 @@ export default function HowItWorks() {
               {
                 num: '01',
                 title: 'Query Normalization',
-                desc: 'Cleans and standardizes the natural language input by removing extra whitespace, normalizing punctuation, and preparing the query for processing.',
+                desc: 'Cleans and standardizes the natural language input: lowercases, strips whitespace, expands HPE-specific abbreviations (e.g. "disk" → "disc", "proc" → "process"), and detects the domain category (cpu, disc, proc, tmf, etc.).',
                 tech: 'normalizer.py',
                 color: '#3b82f6'
               },
               {
                 num: '02',
-                title: 'Schema Linking',
-                desc: 'Analyzes the query to identify relevant database tables and columns using keyword matching and semantic understanding. Links query terms to schema entities.',
-                tech: 'schema_linker.py',
-                color: '#8b5cf6'
-              },
-              {
-                num: '03',
                 title: 'Semantic Cache Check',
-                desc: 'Converts the query to an embedding vector and searches ChromaDB for semantically similar past queries. Returns cached SQL if similarity > 85%.',
+                desc: 'Converts the normalized query to an embedding vector using all-MiniLM-L6-v2 and searches ChromaDB for semantically similar past queries. Returns cached SQL immediately if cosine similarity ≥ 95%, skipping the LLM entirely.',
                 tech: 'cache.py + ChromaDB',
                 color: '#f59e0b'
               },
               {
+                num: '03',
+                title: 'Schema Linking',
+                desc: 'On a cache miss, analyzes the query to identify relevant database tables and columns using TF-IDF scoring against the enriched schema. Selects the top 1–3 tables and up to 20 relevant columns per table to keep the LLM prompt focused.',
+                tech: 'schema_linker.py',
+                color: '#8b5cf6'
+              },
+              {
                 num: '04',
                 title: 'Prompt Building',
-                desc: 'Constructs a comprehensive prompt for the LLM including schema context, few-shot examples, and query-specific instructions. Optimizes for accurate SQL generation.',
+                desc: 'Constructs a comprehensive prompt for the LLM including filtered schema DDL, 14 few-shot NL→SQL examples, and strict generation rules. Optimizes for accurate, safe SQL generation.',
                 tech: 'prompt_builder.py',
                 color: '#10b981'
               },
               {
                 num: '05',
                 title: 'LLM Query Generation',
-                desc: 'Sends the prompt to Google Gemini 3.1 Flash which generates optimized SQL based on 14 few-shot examples and schema understanding. Extracts clean SQL from response.',
+                desc: 'Sends the assembled prompt to Google Gemini 3.1 Flash Lite which generates optimized SQL. Extracts clean SQL from the response and retries up to 2 times with error feedback if validation fails.',
                 tech: 'llm_engine.py + Gemini API',
                 color: '#10b981'
               },
               {
                 num: '06',
                 title: 'SQL Validation',
-                desc: 'Multi-layer security: (1) Parses SQL with SQLGlot, (2) Blocks non-SELECT statements, (3) Validates table/column names, (4) Prevents SQL injection.',
+                desc: 'Multi-layer security using SQLGlot AST parsing: (1) Valid syntax, (2) SELECT-only — blocks INSERT/UPDATE/DELETE/DROP/ALTER, (3) Injection pattern detection, (4) Auto-adds macht413 schema prefix, (5) Validates table and column existence.',
                 tech: 'validator.py + SQLGlot',
                 color: '#ef4444'
               },
               {
                 num: '07',
                 title: 'Query Execution',
-                desc: 'Executes validated SQL against PostgreSQL with timeout protection. Fetches results and measures execution time. Handles errors gracefully.',
+                desc: 'Executes validated SQL against PostgreSQL as a read-only role (querycraft_user) with a 30-second statement timeout and a 10,000-row LIMIT enforced at the executor level. Measures execution time precisely.',
                 tech: 'executor.py + psycopg2',
                 color: '#06b6d4'
               },
               {
                 num: '08',
                 title: 'Report Generation',
-                desc: 'Formats results into structured JSON with column metadata, row data, chart type detection, and execution statistics. Supports Excel/PDF export.',
+                desc: 'Formats results into structured JSON with column metadata, row data, auto-detected chart type (line/bar/table), and execution statistics. Supports in-memory CSV, Excel (openpyxl), and PDF (reportlab) export with no temp files on disk.',
                 tech: 'report_generator.py',
                 color: '#ec4899'
               },
               {
                 num: '09',
                 title: 'Audit Logging',
-                desc: 'Records every query execution to SQLite database including timestamp, user query, generated SQL, execution time, and results. Enables compliance tracking.',
+                desc: 'Records every query execution to a SQLite database including timestamp, original and normalized query, generated SQL, validation result, cache hit status, row count, and execution time. Enables compliance tracking and history replay.',
                 tech: 'audit/query_log.py',
                 color: '#64748b'
               }
@@ -257,7 +257,7 @@ export default function HowItWorks() {
               {
                 icon: Zap,
                 title: 'Semantic Caching',
-                desc: 'ChromaDB stores query embeddings and matches similar queries with 85%+ similarity, dramatically reducing LLM API calls and response time.',
+                desc: 'ChromaDB stores query embeddings and matches similar queries with 95%+ cosine similarity, dramatically reducing LLM API calls and response time.',
                 stats: '~200ms cache hits vs ~2s LLM calls'
               },
               {
@@ -352,7 +352,7 @@ export default function HowItWorks() {
                 },
                 {
                   step: 'Cache Check',
-                  content: 'No similar query found (similarity < 85%)',
+                  content: 'No similar query found (cosine similarity < 95%)',
                   type: 'Cache Miss',
                   color: '#f59e0b'
                 },

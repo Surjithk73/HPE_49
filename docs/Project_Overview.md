@@ -167,7 +167,7 @@ DB_PASSWORD=your_readonly_password
 
 # Gemini API
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.1-flash-lite-preview
+GEMINI_MODEL=gemini-3.1-flash-lite
 
 # App settings
 MAX_ROWS=10000
@@ -286,7 +286,7 @@ SQL:
 #### Step 5 — LLM Engine (`pipeline/llm_engine.py`)
 
 - Uses `google-generativeai` Python package
-- Model: value from `GEMINI_MODEL` env var (`gemini-3.1-flash-lite-preview`)
+- Model: value from `GEMINI_MODEL` env var (`gemini-3.1-flash-lite`)
 - Sends assembled prompt
 - Extracts only the SQL text from response (strip markdown fences if present)
 - Future: swap to Ollama by changing this file only — all other pipeline unchanged
@@ -571,7 +571,7 @@ examples:
 
 ## 9. LLM Engine — Gemini API
 
-**Current model:** `gemini-3.1-flash-lite-preview`  
+**Current model:** `gemini-3.1-flash-lite`  
 **Package:** `google-generativeai`  
 **Future replacement:** Ollama with local SQLCoder model — swap `pipeline/llm_engine.py` only.
 

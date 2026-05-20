@@ -70,6 +70,13 @@ export async function runQuery(query: string): Promise<QueryResponse> {
   })
 }
 
+export async function runSqlDirect(sql: string): Promise<QueryResponse> {
+  return request<QueryResponse>('/api/sql', {
+    method: 'POST',
+    body: JSON.stringify({ sql }),
+  })
+}
+
 export async function exportReport(
   sql: string,
   format: 'csv' | 'excel' | 'pdf',

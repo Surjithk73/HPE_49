@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import QueryInput from '../components/QueryInput'
+import QueryInput, { type InputMode } from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
 import ResultsTable from '../components/ResultsTable'
 import ChartView, { type ChartKind } from '../components/ChartView'
 import ReportDownload from '../components/ReportDownload'
 import QueryHistory from '../components/QueryHistory'
-import { runQuery, getHistory, getHealth, type QueryResponse, type HistoryEntry, type HealthResponse } from '../lib/api'
+import { runQuery, runSqlDirect, getHistory, getHealth, type QueryResponse, type HistoryEntry, type HealthResponse } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -38,12 +38,12 @@ export default function Dashboard() {
 
   useEffect(() => { refreshHistory() }, [refreshHistory])
 
-  const handleQuery = async (query: string) => {
+  const handleQuery = async (query: string, mode: InputMode = 'nl') => {
     setLoading(true)
     setError(null)
     setCurrentQuery(query)
     try {
-      const res = await runQuery(query)
+      const res = mode === 'sql' ? await runSqlDirect(query) : await runQuery(query)
       setResult(res)
       // Auto-select chart kind based on data shape
       if (res.chart_type === 'line') {
@@ -290,7 +290,7 @@ export default function Dashboard() {
 
           {/* Right column — History */}
           <aside>
-            <QueryHistory history={history} onSelect={q => { setCurrentQuery(q); handleQuery(q) }} />
+            <QueryHistory history={history} onSelect={q => { setCurrentQuery(q); handleQuery(q, 'nl') }} />
           </aside>
         </div>
       </main>
