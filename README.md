@@ -219,7 +219,7 @@ Expected response:
   "status": "ok",
   "db_connected": true,
   "cache_ready": true,
-  "llm_model": "gemini-2.0-flash",
+  "llm_model": "gemini-3.1-flash-lite",
   "cache_entries": 0,
   "schema_tables": 9
 }
