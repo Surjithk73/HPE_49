@@ -125,3 +125,34 @@ export async function clearCache(): Promise<void> {
     method: 'DELETE',
   })
 }
+
+export interface RetryAnalysisSample {
+  id: number
+  timestamp: string
+  original_input: string
+  domain: string | null
+  validation_error: string
+  retry_count: number | null
+}
+
+export interface RetryAnalysisBucket {
+  key: string
+  label: string
+  fix_surface: string
+  recommendation: string
+  count: number
+  samples: RetryAnalysisSample[]
+}
+
+export interface RetryAnalysisReport {
+  total_failures: number
+  buckets: RetryAnalysisBucket[]
+  unclassified: RetryAnalysisSample[]
+  summary: string
+}
+
+export async function runRetryAnalysis(): Promise<RetryAnalysisReport> {
+  return request<RetryAnalysisReport>('/api/admin/retry-analysis', {
+    method: 'POST',
+  })
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers } from 'lucide-react'
+import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import QueryInput, { type InputMode } from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
@@ -7,7 +7,7 @@ import ResultsTable from '../components/ResultsTable'
 import ChartView, { type ChartKind } from '../components/ChartView'
 import ReportDownload from '../components/ReportDownload'
 import QueryHistory from '../components/QueryHistory'
-import { runQuery, runSqlDirect, getHistory, getHealth, type QueryResponse, type HistoryEntry, type HealthResponse } from '../lib/api'
+import { runQuery, runSqlDirect, getHistory, getHealth, runRetryAnalysis, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -27,6 +27,24 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('table')
   const [chartKind, setChartKind] = useState<ChartKind>('bar')
   const [currentQuery, setCurrentQuery] = useState('')
+  const [retryReport, setRetryReport] = useState<RetryAnalysisReport | null>(null)
+  const [retryLoading, setRetryLoading] = useState(false)
+  const [retryError, setRetryError] = useState<string | null>(null)
+  const [retryOpen, setRetryOpen] = useState(false)
+
+  const handleRetryAnalysis = async () => {
+    setRetryOpen(true)
+    setRetryLoading(true)
+    setRetryError(null)
+    try {
+      const report = await runRetryAnalysis()
+      setRetryReport(report)
+    } catch (e: any) {
+      setRetryError(e.message)
+    } finally {
+      setRetryLoading(false)
+    }
+  }
 
   useEffect(() => {
     getHealth().then(setHealth).catch(() => setHealthFailed(true))
@@ -115,7 +133,30 @@ export default function Dashboard() {
               Cache ({health?.cache_entries || 0})
             </Link>
 
-            <Link 
+            <button
+              onClick={handleRetryAnalysis}
+              title="Analyze the audit log for queries that exhausted the retry budget"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid #2a2a2a',
+                background: '#161616',
+                color: '#f0f0f0',
+                fontSize: '12px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+                transition: 'all 0.2s',
+              }}
+            >
+              <Activity size={14} />
+              Retry Analysis
+            </button>
+
+            <Link
               to="/how-it-works"
               style={{
                 display: 'flex',
@@ -294,6 +335,133 @@ export default function Dashboard() {
           </aside>
         </div>
       </main>
+
+      {/* Retry Analysis modal */}
+      {retryOpen && (
+        <div
+          onClick={() => setRetryOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            padding: '64px 24px', zIndex: 100, overflowY: 'auto',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: '880px', background: '#111',
+              border: '1px solid #2a2a2a', borderRadius: '12px',
+              padding: '24px', color: '#f0f0f0', fontFamily: 'inherit',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Activity size={16} style={{ color: '#3b82f6' }} />
+                <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Retry Analysis</h2>
+              </div>
+              <button
+                onClick={() => setRetryOpen(false)}
+                style={{
+                  background: 'transparent', border: 'none', color: '#555',
+                  cursor: 'pointer', padding: '4px', display: 'flex',
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {retryLoading && (
+              <p style={{ fontSize: '12px', color: '#777', margin: 0 }}>Analyzing audit log…</p>
+            )}
+
+            {retryError && !retryLoading && (
+              <div style={{
+                fontSize: '12px', color: '#fbbf24',
+                border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)',
+                borderRadius: '8px', padding: '10px 12px',
+              }}>
+                {retryError}
+              </div>
+            )}
+
+            {retryReport && !retryLoading && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ fontSize: '12px', color: '#888', lineHeight: 1.5 }}>
+                  {retryReport.summary}
+                </div>
+
+                {retryReport.total_failures === 0 && (
+                  <p style={{ fontSize: '12px', color: '#555' }}>
+                    No failed queries in the audit log yet. Failed queries appear here
+                    once the retry loop exhausts its budget.
+                  </p>
+                )}
+
+                {retryReport.buckets.map(b => (
+                  <div
+                    key={b.key}
+                    style={{
+                      border: '1px solid #1c1c1c', borderRadius: '10px',
+                      background: '#161616', padding: '14px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600 }}>{b.label}</div>
+                      <span style={{
+                        fontSize: '11px', color: '#3b82f6',
+                        background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
+                        borderRadius: '999px', padding: '2px 10px',
+                      }}>
+                        {b.count}x
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#888', marginBottom: '8px' }}>
+                      Fix in: <code style={{ color: '#cbd5e1' }}>{b.fix_surface}</code>
+                    </div>
+                    <div style={{
+                      fontSize: '12px', color: '#cbd5e1', lineHeight: 1.55,
+                      borderLeft: '2px solid #2a2a2a', paddingLeft: '10px', marginBottom: '10px',
+                    }}>
+                      {b.recommendation}
+                    </div>
+                    {b.samples.length > 0 && (
+                      <details>
+                        <summary style={{ fontSize: '11px', color: '#666', cursor: 'pointer' }}>
+                          {b.samples.length} example{b.samples.length !== 1 ? 's' : ''}
+                        </summary>
+                        <ul style={{ margin: '8px 0 0', padding: '0 0 0 16px', fontSize: '11px', color: '#999', lineHeight: 1.5 }}>
+                          {b.samples.map(s => (
+                            <li key={s.id} style={{ marginBottom: '6px' }}>
+                              <span style={{ color: '#555' }}>#{s.id}</span>{' '}
+                              <span style={{ color: '#cbd5e1' }}>{s.original_input.slice(0, 120)}</span>
+                              {s.original_input.length > 120 && '…'}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                ))}
+
+                {retryReport.unclassified.length > 0 && (
+                  <div style={{
+                    border: '1px solid #1c1c1c', borderRadius: '10px',
+                    background: '#161616', padding: '14px',
+                  }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                      Unclassified ({retryReport.unclassified.length})
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#888', margin: 0 }}>
+                      These don't match any known failure pattern. Add a new bucket to{' '}
+                      <code style={{ color: '#cbd5e1' }}>backend/jobs/retry_analysis.py</code>.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
