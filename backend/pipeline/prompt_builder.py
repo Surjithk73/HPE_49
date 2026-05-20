@@ -44,14 +44,26 @@ class PromptBuilder:
         if few_shots is None:
             few_shots = []
         
-        # Build few-shot examples section
+        # Build few-shot examples section as explicit input/output pairs.
+        # Gemini follows the pattern more reliably when each example is a
+        # labeled INPUT/OUTPUT block separated by a delimiter, rather than
+        # interleaved SQL comments which the model can mistake for schema.
         few_shot_section = ""
         if few_shots:
-            few_shot_section = "\nEXAMPLE QUERIES:\n"
-            for example in few_shots:
-                query = example.get('query', '')
-                sql = example.get('sql', '')
-                few_shot_section += f"-- Query: {query}\n-- SQL: {sql}\n\n"
+            blocks = []
+            for i, example in enumerate(few_shots, 1):
+                query = example.get('query', '').strip()
+                sql = example.get('sql', '').strip()
+                blocks.append(
+                    f"### Example {i}\n"
+                    f"INPUT: {query}\n"
+                    f"OUTPUT:\n{sql}"
+                )
+            few_shot_section = (
+                "\nEXAMPLES (follow this INPUT/OUTPUT pattern exactly):\n"
+                + "\n\n---\n\n".join(blocks)
+                + "\n"
+            )
         
         # Assemble the complete prompt using the exact template from Project_Overview.md
         prompt = f"""You are a SQL expert for HPE NonStop performance monitoring systems.
@@ -140,7 +152,7 @@ CREATE TABLE macht413.cpu (
     assert "USER REQUEST:" in prompt
     assert "SQL:" in prompt
     assert f"LIMIT {MAX_ROWS}" in prompt
-    assert "EXAMPLE QUERIES:" not in prompt  # Should be omitted when empty
+    assert "EXAMPLES" not in prompt  # Should be omitted when empty
     print("✓ Basic prompt structure correct")
     
     # Test 2: Prompt with few-shot examples
@@ -168,9 +180,11 @@ CREATE TABLE macht413.cpu (
     print("\n" + "=" * 80)
     
     # Verify few-shot section
-    assert "EXAMPLE QUERIES:" in prompt_with_examples
-    assert "-- Query: Show CPU busy time per CPU" in prompt_with_examples
-    assert "-- SQL: SELECT cpu_num" in prompt_with_examples
+    assert "EXAMPLES (follow this INPUT/OUTPUT pattern exactly):" in prompt_with_examples
+    assert "### Example 1" in prompt_with_examples
+    assert "INPUT: Show CPU busy time per CPU" in prompt_with_examples
+    assert "OUTPUT:\nSELECT cpu_num" in prompt_with_examples
+    assert "### Example 2" in prompt_with_examples
     print("✓ Few-shot examples included correctly")
     
     # Test 3: Retry prompt
