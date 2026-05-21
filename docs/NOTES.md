@@ -42,52 +42,6 @@ All 10 build phases (0–10) are complete. The system is production-ready for lo
 
 ---
 
-## All-Tables Datatype Fix (completed May 21, 2026)
-
-**Problem:** The CSV loader imported every column as TEXT by default. Aggregate functions
-(`SUM`, `AVG`, `MAX`, etc.) fail with `function sum(text) does not exist` on any counter
-column that was not explicitly cast at load time. This affected all 9 tables — not just ossns.
-
-**Affected tables and column counts fixed:**
-- cpu: 3 columns  
-- dfile: 19 columns  
-- disc: 21 columns  
-- dopen: 10 columns  
-- file: 14 columns (ip_ip_addr intentionally left as TEXT — contains IP address strings)  
-- ossns: 3 columns  
-- proc: 49 columns  
-- tmf: 10 columns  
-- udef: 16 columns  
-- **Total: 145 columns converted to BIGINT**
-
-**Fix applied:** `backend/setup_scripts/fix_all_column_types.py` — run once as postgres superuser.
-All 212,689 rows preserved. Safe to re-run (skips already-BIGINT columns).
-
-**Prevention:** The fix script is now in the repo. Run it after any fresh CSV load.
-
----
-
-## OSSNS Datatype Fix (completed April 13, 2026)
-
-**Problem:** 12 columns in `macht413.ossns` were loaded as TEXT instead of BIGINT, breaking `AVG()`, `SUM()`, etc.
-
-**Fix applied:** `backend/setup_scripts/fix_ossns_datatypes.py` was run with postgres superuser credentials. All 12 columns converted to BIGINT. All 212,689 rows preserved.
-
-**Affected columns (all now BIGINT):**
-`ic_entries`, `lc_entries`, `rr_processed`, `rr_redir_sent`, `rr_redir_processed`,
-`ic_lookups`, `lc_lookups`, `checkpoint_reqs`, `checkpoint_blks`, `dp2_dd_reqs`,
-`gettime_reqs`, `settime_reqs`
-
-**Prevention:** `backend/setup_scripts/create_tables.sql` has been corrected. Future DB setups will use BIGINT for these columns.
-
-If you ever need to re-run the fix (e.g. fresh DB setup from old scripts):
-```bash
-cd backend/setup_scripts
-python fix_ossns_datatypes.py
-```
-
----
-
 ## Known Issues / Gotchas
 
 1. **`reads_` trailing underscore** — The `disc` table uses `reads_` (not `reads`) to avoid a PostgreSQL reserved word conflict. The normalizer handles this automatically, but be aware when writing raw SQL.
@@ -122,7 +76,7 @@ python fix_ossns_datatypes.py
 | CSV export | Instant |
 | Excel export | Instant |
 | PDF export | Instant |
-| Embedding model load (first start) | ~10–15 seconds |
+| Embedding model load (background, first start) | ~10–15 seconds (API available immediately) |
 
 ---
 

@@ -77,6 +77,8 @@ python backend/setup_scripts/setup_database_auto.py
 psql -U postgres -d querycraft_db -f backend/setup_scripts/create_tables.sql
 ```
 
+All column types are correctly defined in this file — no post-load fixes required.
+
 ### 2.3 Load the CSV data
 
 ```bash
@@ -98,27 +100,7 @@ Or manually via psql (update the paths to match your system):
 \copy macht413.udef  FROM 'C:/path/to/HPE_49/measurefiles/udefcsv'  WITH (FORMAT csv, HEADER true, NULL '');
 ```
 
-### 2.4 Fix OSSNS column types
-
-The `ossns` table has 12 columns that load as TEXT but need to be BIGINT for aggregate functions to work. Run this once after loading:
-
-```sql
-ALTER TABLE macht413.ossns
-    ALTER COLUMN ic_entries       TYPE BIGINT USING ic_entries::BIGINT,
-    ALTER COLUMN lc_entries       TYPE BIGINT USING lc_entries::BIGINT,
-    ALTER COLUMN rr_processed     TYPE BIGINT USING rr_processed::BIGINT,
-    ALTER COLUMN rr_redir_sent    TYPE BIGINT USING rr_redir_sent::BIGINT,
-    ALTER COLUMN rr_redir_processed TYPE BIGINT USING rr_redir_processed::BIGINT,
-    ALTER COLUMN ic_lookups       TYPE BIGINT USING ic_lookups::BIGINT,
-    ALTER COLUMN lc_lookups       TYPE BIGINT USING lc_lookups::BIGINT,
-    ALTER COLUMN checkpoint_reqs  TYPE BIGINT USING checkpoint_reqs::BIGINT,
-    ALTER COLUMN checkpoint_blks  TYPE BIGINT USING checkpoint_blks::BIGINT,
-    ALTER COLUMN dp2_dd_reqs      TYPE BIGINT USING dp2_dd_reqs::BIGINT,
-    ALTER COLUMN gettime_reqs     TYPE BIGINT USING gettime_reqs::BIGINT,
-    ALTER COLUMN settime_reqs     TYPE BIGINT USING settime_reqs::BIGINT;
-```
-
-### 2.5 Verify
+### 2.4 Verify
 
 ```sql
 SELECT 'cpu'   AS tbl, COUNT(*) FROM macht413.cpu
@@ -154,7 +136,7 @@ DB_PASSWORD=your_readonly_password
 
 # Gemini API — get key from https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_MODEL=gemini-2.0-flash
 
 # App settings (defaults are fine)
 MAX_ROWS=10000
@@ -175,7 +157,7 @@ cd backend
 pip install -r requirements.txt
 ```
 
-> First run will download the `all-MiniLM-L6-v2` embedding model (~90MB) from HuggingFace. This only happens once — it's cached locally after that.
+> First run will download the `all-MiniLM-L6-v2` embedding model (~90MB) from HuggingFace. This only happens once — it's cached locally after that. The API is available immediately while the model loads in the background.
 
 **Frontend:**
 ```bash
@@ -195,7 +177,7 @@ cd backend
 uvicorn main:app --reload --port 8000
 ```
 
-Wait for: `[QueryCraft] Startup complete` (takes ~15 seconds on first run while the embedding model loads)
+The API is available within ~1 second. The embedding model loads in the background — cache hits are available once `[Cache] Embedding model ready` appears in the terminal (usually within 15 seconds).
 
 **Terminal 2 — Frontend:**
 ```bash
@@ -219,13 +201,15 @@ Expected response:
   "status": "ok",
   "db_connected": true,
   "cache_ready": true,
-  "llm_model": "gemini-3.1-flash-lite",
+  "cache_model_ready": true,
+  "llm_model": "gemini-2.0-flash",
   "cache_entries": 0,
   "schema_tables": 9
 }
 ```
 
-If `db_connected` is `false`, check your `.env` credentials and that PostgreSQL is running.
+If `db_connected` is `false`, check your `.env` credentials and that PostgreSQL is running.  
+If `cache_model_ready` is `false`, the embedding model is still loading — wait a few seconds and retry.
 
 ---
 
@@ -273,15 +257,14 @@ HPE_49/
 │   │   ├── prompt_builder.py          # LLM prompt assembly
 │   │   ├── llm_engine.py              # Gemini API + retry logic
 │   │   ├── validator.py               # SQLGlot security + correctness checks
-│   │   ├── executor.py                # psycopg2 query execution
+│   │   ├── executor.py                # psycopg2 connection pool + execution
 │   │   └── report_generator.py        # CSV / Excel / PDF export
 │   ├── schema_store/
-│   │   └── enriched_schema.yaml       # Full schema with column descriptions
+│   │   └── enriched_schema.yaml       # Full schema with column descriptions and correct types
 │   ├── few_shots/
-│   │   └── examples.yaml              # 14 NL→SQL examples for the LLM
+│   │   └── examples.yaml              # NL→SQL examples for the LLM
 │   ├── audit/
 │   │   └── query_log.py               # SQLite audit log
-│   ├── data/                          # CSV copies used by setup scripts
 │   ├── setup_scripts/                 # One-time DB setup utilities
 │   └── tests/                         # Unit + integration tests
 ├── frontend/
@@ -304,11 +287,15 @@ HPE_49/
 |--------|----------|-------------|
 | `GET` | `/api/health` | System health check |
 | `POST` | `/api/query` | Run a natural language query |
+| `POST` | `/api/sql` | Run a raw SQL query directly |
 | `POST` | `/api/export` | Download results as CSV / Excel / PDF |
 | `GET` | `/api/history` | Last 50 queries from audit log |
+| `GET` | `/api/stats` | Analytics: hit rate, avg time, top domains |
 | `GET` | `/api/schema` | Table names and column counts |
 | `GET` | `/api/cache` | View cached query entries |
 | `DELETE` | `/api/cache` | Clear all cache entries |
+| `GET` | `/api/cache/threshold` | Read current similarity threshold |
+| `POST` | `/api/cache/threshold` | Update threshold at runtime |
 
 Interactive docs: http://localhost:8000/docs
 
@@ -326,14 +313,14 @@ Interactive docs: http://localhost:8000/docs
 - Test manually: `psql -U querycraft_user -d querycraft_db -h localhost`
 - Make sure `querycraft_user` role was created and granted SELECT
 
+**`cache_model_ready: false` in health check**
+- The embedding model is still loading in the background — wait a few seconds and retry
+- Queries will work immediately but won't benefit from cache hits until the model is ready
+
 **LLM returns errors / no SQL generated**
 - Check `GEMINI_API_KEY` is valid and has quota remaining
 - Check internet connection (Gemini API is the only external call)
 - Look at backend terminal for the specific error
-
-**`function avg(text) does not exist` on ossns queries**
-- The OSSNS column type fix (Step 2.4) hasn't been applied yet
-- Run the ALTER TABLE statement from Step 2.4
 
 **Frontend shows "Backend unreachable"**
 - Make sure backend is running on port 8000
