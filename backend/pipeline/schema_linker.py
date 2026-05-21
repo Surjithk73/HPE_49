@@ -2,23 +2,39 @@
 Schema Linker for QueryCraft
 Selects relevant tables and columns based on the query.
 """
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
+try:
+    from pipeline import embeddings
+except ImportError:
+    import embeddings  # type: ignore
+
+
 class SchemaLinker:
     """Links queries to relevant schema elements."""
-    
+
     def __init__(self, schema: Dict):
         """
         Initialize the schema linker.
-        
+
         Args:
             schema: Loaded schema dictionary from SchemaLoader
         """
         self.schema = schema
         self.vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
+
+        # Lazy cache of per-table embeddings. Populated on the first call after
+        # the shared embedding model is ready. Until then we fall back to TF-IDF
+        # so startup queries still work.
+        self._table_embeddings: Optional[np.ndarray] = None
+        self._table_embedding_names: List[str] = []
+
+        # Make sure the shared model is loading. Idempotent — safe to call from
+        # multiple components.
+        embeddings.start_loading()
     
     def link_schema(self, normalized_text: str, domain_category: str) -> str:
         """
@@ -51,72 +67,92 @@ class SchemaLinker:
 
         return schema_context
     
+    def _build_table_corpus(self) -> Tuple[List[str], List[str]]:
+        """Build the per-table document used for scoring (names + texts)."""
+        table_names: List[str] = []
+        table_texts: List[str] = []
+
+        for table_name, table_def in self.schema.items():
+            if not (isinstance(table_def, dict) and 'columns' in table_def):
+                continue
+            table_names.append(table_name)
+
+            parts: List[str] = [table_name]
+            if 'entity_type' in table_def:
+                parts.append(str(table_def['entity_type']))
+            if 'purpose' in table_def:
+                parts.append(str(table_def['purpose']))
+            for ident in table_def.get('identity_columns', []) or []:
+                parts.append(str(ident))
+
+            # Include both column names AND descriptions so literal token
+            # matches (e.g. user types "cpu_busy_time") have something to hit.
+            for col_name, col_def in table_def.get('columns', {}).items():
+                if not isinstance(col_def, dict):
+                    continue
+                parts.append(col_name.replace('_', ' '))
+                desc = col_def.get('description', '')
+                if desc:
+                    parts.append(desc)
+
+            table_texts.append(' '.join(parts))
+
+        return table_names, table_texts
+
+    def _ensure_table_embeddings(self) -> bool:
+        """Compute per-table embeddings on first use. Returns True on success."""
+        if self._table_embeddings is not None:
+            return True
+
+        model = embeddings.get()
+        if model is None:
+            return False
+
+        names, texts = self._build_table_corpus()
+        if not texts:
+            return False
+
+        print(f"[SchemaLinker] Embedding {len(texts)} tables for semantic matching...")
+        self._table_embeddings = np.asarray(model.encode(texts, normalize_embeddings=True))
+        self._table_embedding_names = names
+        return True
+
     def _score_and_select_tables(self, query_text: str, top_n: int = 3) -> List[str]:
         """
-        Score tables using TF-IDF and select top N.
-        
-        Args:
-            query_text: Query text to match against
-            top_n: Number of tables to select
-            
-        Returns:
-            List of selected table names
+        Score tables against the query and return the top N.
+
+        Uses the shared MiniLM model when available (semantic similarity over
+        per-table embeddings); falls back to TF-IDF on cold start so the
+        pipeline keeps working before the model has finished loading.
         """
-        # Build corpus of table descriptions
-        table_names = []
-        table_texts = []
-        
-        for table_name, table_def in self.schema.items():
-            if isinstance(table_def, dict) and 'columns' in table_def:
-                table_names.append(table_name)
-                
-                # Combine table purpose and column descriptions
-                text_parts = []
-                
-                # Add table purpose
-                if 'purpose' in table_def:
-                    text_parts.append(table_def['purpose'])
-                
-                # Add column descriptions
-                for col_name, col_def in table_def.get('columns', {}).items():
-                    if isinstance(col_def, dict):
-                        desc = col_def.get('description', '')
-                        if desc:
-                            text_parts.append(desc)
-                
-                table_texts.append(' '.join(text_parts))
-        
+        # Embedding path
+        if self._ensure_table_embeddings():
+            assert self._table_embeddings is not None
+            model = embeddings.get()
+            assert model is not None  # checked inside _ensure_table_embeddings
+            query_vec = np.asarray(model.encode([query_text], normalize_embeddings=True))[0]
+            sims = self._table_embeddings @ query_vec  # rows already normalized
+            top_indices = np.argsort(sims)[::-1][:top_n]
+            selected = [self._table_embedding_names[i] for i in top_indices if sims[i] > 0.25]
+            if not selected and self._table_embedding_names:
+                selected = [self._table_embedding_names[top_indices[0]]]
+            return selected
+
+        # Fallback: TF-IDF (cold start before model is loaded)
+        table_names, table_texts = self._build_table_corpus()
         if not table_texts:
             return []
-        
-        # Compute TF-IDF similarity
         try:
-            # Fit vectorizer on table texts + query
             all_texts = table_texts + [query_text]
             tfidf_matrix = self.vectorizer.fit_transform(all_texts)
-            
-            # Query vector is the last one
-            query_vector = tfidf_matrix[-1]
-            table_vectors = tfidf_matrix[:-1]
-            
-            # Compute cosine similarity
-            similarities = cosine_similarity(query_vector, table_vectors)[0]
-            
-            # Get top N tables
+            similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])[0]
             top_indices = np.argsort(similarities)[::-1][:top_n]
-            
-            # Filter out tables with very low scores (< 0.1)
             selected = [table_names[i] for i in top_indices if similarities[i] > 0.1]
-            
-            # If no tables scored well, return top 1
             if not selected and table_names:
                 selected = [table_names[top_indices[0]]]
-            
             return selected
-            
         except Exception as e:
-            # Fallback: return first table
-            print(f"Warning: TF-IDF scoring failed: {e}")
+            print(f"Warning: TF-IDF fallback scoring failed: {e}")
             return [table_names[0]] if table_names else []
     
     def _build_schema_context(self, table_names: List[str], query_text: str) -> str:
