@@ -75,12 +75,12 @@ export default function ChartView({ chartType, columns, rows }: Props) {
     columns.find(c => c.includes('name') || c.includes('device') || c.includes('num') || c.includes('cpu')) ||
     columns[0]
 
-  // All numeric columns except X
+  // All numeric columns except X — cap at 8 to keep legend readable
   const yColumns = columns.filter(c => {
     if (c === xCol) return false
     const sample = rows[0]?.[c]
     return typeof sample === 'number' || (typeof sample === 'string' && !isNaN(Number(sample)) && sample !== '')
-  })
+  }).slice(0, 8)
 
   // Cap at 200 rows for rendering performance
   const data = rows.slice(0, 200).map(row => {
@@ -107,15 +107,27 @@ export default function ChartView({ chartType, columns, rows }: Props) {
 
   const commonProps = {
     data,
-    margin: { top: 8, right: 24, left: 8, bottom: 40 },
+    margin: { top: 8, right: 24, left: 8, bottom: 72 },
+  }
+
+  // Auto-skip ticks when there are many data points to prevent label overlap
+  const tickInterval = data.length > 100 ? Math.ceil(data.length / 15)
+    : data.length > 40 ? Math.ceil(data.length / 20)
+    : 0
+
+  // Truncate long tick labels (e.g. timestamps)
+  const fmtXTick = (v: string) => {
+    const s = String(v)
+    return s.length > 12 ? s.slice(0, 12) + '…' : s
   }
 
   const xAxisProps = {
     dataKey: xCol,
-    tick: { ...axisStyle, angle: -35, textAnchor: 'end' as const, dy: 8 },
+    tick: { ...axisStyle, angle: -45, textAnchor: 'end' as const, dy: 8 },
     tickLine: false,
     axisLine: axisLine,
-    interval: 0,
+    interval: tickInterval,
+    tickFormatter: fmtXTick,
   }
 
   const yAxisProps = {
@@ -127,7 +139,10 @@ export default function ChartView({ chartType, columns, rows }: Props) {
   }
 
   const legendProps = {
-    wrapperStyle: { fontSize: 11, color: '#888', paddingTop: '8px' },
+    verticalAlign: 'top' as const,
+    align: 'center' as const,
+    wrapperStyle: { fontSize: 11, color: '#888', paddingBottom: '16px', lineHeight: '22px' },
+    iconSize: 10,
     formatter: fmtLegend,
   }
 
@@ -281,7 +296,7 @@ export default function ChartView({ chartType, columns, rows }: Props) {
 // ── Wrapper with row cap notice ───────────────────────────────────────────────
 function ChartShell({ rows, cap, children }: { rows: unknown[], cap: number, children: React.ReactNode }) {
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', overflow: 'hidden' }}>
       {rows.length > cap && (
         <div style={{ position: 'absolute', top: 0, right: 0, fontSize: '11px', color: '#444', zIndex: 1 }}>
           showing first {cap} of {rows.length.toLocaleString()} rows
