@@ -50,6 +50,32 @@ class SQLValidator:
             schema: Schema dictionary from SchemaLoader
         """
         self.schema = schema
+        
+        # Precompute the full expanded column set at startup rather than regex matching
+        import copy
+        self.expanded_schema = copy.deepcopy(schema)
+        for table_name, table_def in self.expanded_schema.items():
+            if not isinstance(table_def, dict) or 'columns' not in table_def:
+                continue
+            columns = table_def['columns']
+            new_columns = {}
+            for col_name, col_def in columns.items():
+                col_normalized = col_name.replace('.', '_').lower()
+                if 'ipu{n}' in col_normalized:
+                    for i in range(16):
+                        expanded_name = col_normalized.replace('ipu{n}', f'ipu{i}')
+                        new_columns[expanded_name] = col_def
+                elif 'svnet{n}' in col_normalized:
+                    for i in range(16):
+                        expanded_name = col_normalized.replace('svnet{n}', f'svnet{i}')
+                        new_columns[expanded_name] = col_def
+                elif 'c{n}' in col_normalized:
+                    for i in range(8):
+                        expanded_name = col_normalized.replace('c{n}', f'c{i}')
+                        new_columns[expanded_name] = col_def
+                else:
+                    new_columns[col_normalized] = col_def
+            table_def['columns'] = new_columns
     
     def validate(self, sql: str) -> ValidationResult:
         """
@@ -110,6 +136,11 @@ class SQLValidator:
         column_check = self._validate_columns(parsed)
         if not column_check['valid']:
             return ValidationResult(False, None, column_check['error'])
+            
+        # Check 8: Complexity limits
+        complexity_check = self._validate_complexity(parsed)
+        if not complexity_check['valid']:
+            return ValidationResult(False, None, complexity_check['error'])
         
         # All checks passed
         return ValidationResult(True, sanitized_sql, None)
@@ -124,8 +155,14 @@ class SQLValidator:
         Returns:
             SQL string with schema prefixes added
         """
+        # Collect all CTE names defined in the query
+        ctes = {cte.alias.lower() for cte in parsed.find_all(exp.CTE)}
+        
         # Find all table references
         for table in parsed.find_all(exp.Table):
+            # If this is a CTE reference, do not add schema prefix
+            if table.name.lower() in ctes:
+                continue
             # If no schema/database specified, add macht413
             if not table.db:
                 table.set("db", exp.Identifier(this="macht413"))
@@ -142,9 +179,16 @@ class SQLValidator:
         Returns:
             Dict with 'valid' bool and optional 'error' string
         """
+        # Collect all CTE names defined in the query
+        ctes = {cte.alias.lower() for cte in parsed.find_all(exp.CTE)}
+        
         for table in parsed.find_all(exp.Table):
             table_name = table.name
             
+            # If this is a CTE reference, skip validation
+            if table_name.lower() in ctes:
+                continue
+                
             # Remove schema prefix if present for lookup
             if '.' in table_name:
                 table_name = table_name.split('.')[-1]
@@ -189,89 +233,203 @@ class SQLValidator:
     def _validate_columns(self, parsed: exp.Expression) -> Dict:
         """
         Validate that all referenced columns exist in their tables.
-        Skips validation for aliases defined within the query itself
-        (subquery columns, CTE columns, SELECT expression aliases).
-
-        Args:
-            parsed: Parsed SQL expression
-
-        Returns:
-            Dict with 'valid' bool and optional 'error' string
+        Uses AST scope resolution to map columns to their correct sources.
         """
-        # Collect all aliases defined anywhere in the query — these are valid
-        # to reference in outer SELECTs and should not be checked against schema
-        derived_aliases = self._collect_derived_aliases(parsed)
+        from sqlglot.optimizer.scope import build_scope
+        
+        try:
+            scope_tree = build_scope(parsed)
+        except Exception as e:
+            return {
+                'valid': False,
+                'error': f"Failed to build AST scope tree: {str(e)}"
+            }
 
-        # Build a map of table aliases to actual table names
-        table_map = {}
-        for table in parsed.find_all(exp.Table):
-            table_name = table.name
-            if '.' in table_name:
-                table_name = table_name.split('.')[-1]
+        # Step 1: Precompute exported columns for each scope bottom-up
+        scope_exports = {}
+        
+        def get_source_columns(source) -> set:
+            if isinstance(source, exp.Table):
+                t_name = source.name
+                if '.' in t_name:
+                    t_name = t_name.split('.')[-1]
+                table_def = self.expanded_schema.get(t_name, {})
+                return set(table_def.get('columns', {}).keys())
+            elif isinstance(source, sqlglot.optimizer.scope.Scope):
+                return scope_exports.get(id(source), set())
+            return set()
 
-            alias = table.alias_or_name
-            table_map[alias] = table_name
+        for scope in scope_tree.traverse():
+            exported = set()
+            for select in scope.expression.selects:
+                if isinstance(select, exp.Star):
+                    for src_alias, src in scope.sources.items():
+                        exported.update(get_source_columns(src))
+                elif isinstance(select, exp.Column) and select.name == '*':
+                    src = scope.sources.get(select.table)
+                    if src:
+                        exported.update(get_source_columns(src))
+                else:
+                    name = select.alias_or_name
+                    if name:
+                        exported.add(name.lower())
+            scope_exports[id(scope)] = exported
 
-        # If only one real (non-subquery) table, use it as default
-        default_table = None
-        real_tables = {k: v for k, v in table_map.items() if v in self.schema}
-        if len(real_tables) == 1:
-            default_table = list(real_tables.values())[0]
+        # Step 2: Validate columns in each scope
+        for scope in scope_tree.traverse():
+            for column in scope.columns:
+                col_name = column.name
+                
+                # Skip wildcards
+                if col_name == '*':
+                    continue
+                
+                col_lower = col_name.lower()
+                
+                # Skip if this is a locally defined SELECT alias in the scope or parent scopes
+                is_select_alias = False
+                curr = scope
+                while curr:
+                    curr_select_aliases = {
+                        select.alias.lower() for select in curr.expression.selects if isinstance(select, exp.Alias)
+                    }
+                    if col_lower in curr_select_aliases:
+                        is_select_alias = True
+                        break
+                    curr = curr.parent
+                
+                if is_select_alias:
+                    continue
 
-        # Check all column references
-        for column in parsed.find_all(exp.Column):
-            col_name = column.name
+                # Locate the source table/subquery for this column
+                table_ref = column.table
+                source = None
+                
+                if table_ref:
+                    curr = scope
+                    while curr:
+                        if table_ref in curr.sources:
+                            source = curr.sources[table_ref]
+                            break
+                        curr = curr.parent
+                    
+                    if not source:
+                        return {
+                            'valid': False,
+                            'error': f"Table alias or reference '{table_ref}' is not defined in this scope"
+                        }
+                    
+                    if isinstance(source, exp.Table):
+                        t_name = source.name
+                        if '.' in t_name:
+                            t_name = t_name.split('.')[-1]
+                        
+                        if t_name not in self.expanded_schema:
+                            continue
+                        
+                        table_def = self.expanded_schema[t_name]
+                        columns_dict = table_def.get('columns', {})
+                        normalized_col = col_name.replace('.', '_').lower()
+                        if normalized_col not in columns_dict:
+                            return {
+                                'valid': False,
+                                'error': f"Column '{col_name}' does not exist in macht413.{t_name}"
+                            }
+                    else:
+                        src_cols = scope_exports.get(id(source), set())
+                        if col_lower not in src_cols:
+                            return {
+                                'valid': False,
+                                'error': f"Column '{col_name}' does not exist in subquery/CTE '{table_ref}'"
+                            }
+                
+                else:
+                    found_in_sources = []
+                    curr = scope
+                    while curr:
+                        for src_alias, src in curr.sources.items():
+                            if isinstance(src, exp.Table):
+                                t_name = src.name
+                                if '.' in t_name:
+                                    t_name = t_name.split('.')[-1]
+                                
+                                if t_name in self.expanded_schema:
+                                    table_def = self.expanded_schema[t_name]
+                                    columns_dict = table_def.get('columns', {})
+                                    normalized_col = col_name.replace('.', '_').lower()
+                                    if normalized_col in columns_dict:
+                                        found_in_sources.append((src_alias, t_name))
+                            else:
+                                src_cols = scope_exports.get(id(src), set())
+                                if col_lower in src_cols:
+                                    found_in_sources.append((src_alias, "subquery/CTE"))
+                        
+                        if found_in_sources:
+                            break
+                        curr = curr.parent
+                    
+                    if not found_in_sources:
+                        local_tables = []
+                        for s_alias, s_val in scope.sources.items():
+                            if isinstance(s_val, exp.Table):
+                                local_tables.append(s_val.name.split('.')[-1])
+                        
+                        table_msg = f"macht413.{local_tables[0]}" if len(local_tables) == 1 else "any of the referenced tables"
+                        return {
+                            'valid': False,
+                            'error': f"Column '{col_name}' does not exist in {table_msg}"
+                        }
 
-            # Skip wildcards
-            if col_name == '*':
-                continue
+        return {'valid': True}
 
-            # Skip if this column name is a derived alias (subquery / CTE / expression alias)
-            if col_name.lower() in derived_aliases:
-                continue
+    def _validate_complexity(self, parsed: exp.Expression) -> Dict:
+        """
+        Validate query complexity limits:
+        - Max 4 tables per query
+        - Max 30 columns in SELECT (across any SELECT statement)
+        - Max 3 levels of subquery nesting
+        """
+        # 1. Max 4 tables
+        tables = list(parsed.find_all(exp.Table))
+        if len(tables) > 4:
+            return {
+                'valid': False,
+                'error': f"Query complexity limit exceeded: contains {len(tables)} tables (max 4 allowed)"
+            }
 
-            # Get table for this column
-            table_ref = column.table
-            if table_ref:
-                table_name = table_map.get(table_ref, table_ref)
-            elif default_table:
-                table_name = default_table
-            else:
-                # Can't determine table — skip validation
-                continue
+        from sqlglot.optimizer.scope import build_scope
+        try:
+            scope_tree = build_scope(parsed)
+        except Exception as e:
+            return {
+                'valid': False,
+                'error': f"Failed to build scope tree for complexity check: {str(e)}"
+            }
 
-            # Only validate against known base tables
-            if table_name not in self.schema:
-                continue
-
-            table_def = self.schema[table_name]
-            columns = table_def.get('columns', {})
-
-            # Normalize column name (handle dots and special chars)
-            normalized_col = col_name.replace('.', '_').lower()
-
-            # Check if column exists (case-insensitive).
-            # Schema keys may use {N} for repeating groups (e.g. c{N}.hits → c0_hits).
-            # We match by replacing {N} with a digit pattern.
-            import re as _re
-            column_exists = False
-            for schema_col in columns.keys():
-                # Normalize schema key the same way the schema linker does
-                schema_normalized = schema_col.replace('.', '_').lower()
-                # Replace {N} placeholder with a digit so c{n}_hits matches c0_hits, c1_hits, etc.
-                schema_pattern = schema_normalized.replace('{n}', r'\d+')
-                if schema_normalized == normalized_col:
-                    column_exists = True
-                    break
-                if '{n}' in schema_normalized and _re.fullmatch(schema_pattern, normalized_col):
-                    column_exists = True
-                    break
-
-            if not column_exists:
+        # 2. Max 30 columns in SELECT
+        for scope in scope_tree.traverse():
+            num_cols = len(scope.expression.selects)
+            if num_cols > 30:
                 return {
                     'valid': False,
-                    'error': f"Column '{col_name}' does not exist in macht413.{table_name}"
+                    'error': f"Query complexity limit exceeded: SELECT projects {num_cols} columns (max 30 allowed)"
                 }
+
+        # 3. Max 3 levels of subquery nesting
+        max_nesting = 0
+        for scope in scope_tree.traverse():
+            depth = 0
+            curr = scope
+            while curr.parent:
+                depth += 1
+                curr = curr.parent
+            max_nesting = max(max_nesting, depth)
+            
+        if max_nesting > 3:
+            return {
+                'valid': False,
+                'error': f"Query complexity limit exceeded: subquery nesting level of {max_nesting} exceeds max 3"
+            }
 
         return {'valid': True}
 

@@ -10,19 +10,44 @@ interface Props {
 
 export default function SQLPreview({ sql, cacheHit, executionTimeMs, domain }: Props) {
   const [copied, setCopied] = useState(false)
+  // Format SQL with newlines before major clauses for better readability
+  const formatSQL = (rawSql: string): string => {
+    let formatted = rawSql.replace(/\s+/g, ' ').trim()
+    const clauses = [
+      'SELECT',
+      'FROM',
+      'WHERE',
+      'GROUP BY',
+      'ORDER BY',
+      'LIMIT',
+      'LEFT JOIN',
+      'RIGHT JOIN',
+      'INNER JOIN',
+      'JOIN',
+      'HAVING',
+      'UNION'
+    ]
+    clauses.forEach(clause => {
+      const regex = new RegExp(`\\b${clause}\\b`, 'gi')
+      formatted = formatted.replace(regex, (match) => `\n${match}`)
+    })
+    return formatted.trim()
+  }
+
+  const formattedSql = formatSQL(sql)
 
   const copy = async () => {
-    await navigator.clipboard.writeText(sql)
+    await navigator.clipboard.writeText(formattedSql)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Simple keyword highlighting
-  const highlighted = sql
+  // Simple keyword highlighting with digits replaced first to avoid matching style attributes
+  const highlighted = formattedSql
+    .replace(/\b(\d+)\b/g, '<span style="color:#fbbf24">$1</span>')
     .replace(/\b(SELECT|FROM|WHERE|GROUP BY|ORDER BY|LIMIT|JOIN|ON|AS|AVG|SUM|COUNT|MAX|MIN|DISTINCT|AND|OR|NOT|IN|HAVING|LEFT|RIGHT|INNER|OUTER)\b/g,
       '<span style="color:#60a5fa;font-weight:600">$1</span>')
     .replace(/(macht413\.\w+)/g, '<span style="color:#34d399">$1</span>')
-    .replace(/\b(\d+)\b/g, '<span style="color:#fbbf24">$1</span>')
 
   return (
     <div style={{

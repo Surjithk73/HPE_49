@@ -190,6 +190,67 @@ def test_error_handling():
         return True
 
 
+def test_configurable_allowed_users():
+    """Test dynamic allowed users validation."""
+    print("\n" + "=" * 80)
+    print("TEST 8: Configurable Allowed Users")
+    print("=" * 80)
+    
+    passed = 0
+    # 1. Matching user should succeed and create pool
+    try:
+        executor = QueryExecutor(user="querycraft_user", allowed_users=["querycraft_user"])
+        print("✓ Allowed user querycraft_user accepted")
+        passed += 1
+    except ExecutionError as e:
+        print(f"✗ Failed to allow querycraft_user: {e}")
+        
+    # 2. User not in allowed list should be rejected immediately
+    try:
+        executor = QueryExecutor(user="querycraft_user", allowed_users=["custom_user"])
+        print("✗ Should have rejected querycraft_user when not in allowed list")
+    except ExecutionError as e:
+        if "read-only" in str(e).lower():
+            print("✓ Correctly rejected querycraft_user (not in allowed list)")
+            passed += 1
+        else:
+            print(f"✗ Unexpected error: {e}")
+            
+    return passed == 2
+
+
+
+def test_query_cost_limits():
+    """Test dynamic cost estimation limits."""
+    print("\n" + "=" * 80)
+    print("TEST 9: Query Cost Limits")
+    print("=" * 80)
+    
+    passed = 0
+    # 1. Rejecting high cost query (cost threshold 0.001)
+    try:
+        executor = QueryExecutor(max_query_cost=0.001)
+        executor.execute("SELECT * FROM macht413.cpu LIMIT 10")
+        print("✗ High-cost query should have been rejected")
+    except ExecutionError as e:
+        if "cost" in str(e).lower() and "rejected" in str(e).lower():
+            print(f"✓ High-cost query rejected correctly: {e}")
+            passed += 1
+        else:
+            print(f"✗ Unexpected error for high-cost query: {e}")
+            
+    # 2. Accepting low-cost query
+    try:
+        executor = QueryExecutor(max_query_cost=10000.0)
+        executor.execute("SELECT cpu_num FROM macht413.cpu LIMIT 1")
+        print("✓ Low-cost query accepted correctly")
+        passed += 1
+    except ExecutionError as e:
+        print(f"✗ Failed to accept low-cost query: {e}")
+        
+    return passed == 2
+
+
 def run_all_tests():
     """Run all executor tests."""
     print("\n" + "=" * 80)
@@ -205,6 +266,8 @@ def run_all_tests():
     results.append(("Result Format", test_result_format()))
     results.append(("Chart Type Detection", test_chart_type_detection()))
     results.append(("Error Handling", test_error_handling()))
+    results.append(("Configurable Allowed Users", test_configurable_allowed_users()))
+    results.append(("Query Cost Limits", test_query_cost_limits()))
     
     print("\n" + "=" * 80)
     print("TEST SUMMARY")
@@ -235,3 +298,4 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
