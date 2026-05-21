@@ -25,84 +25,47 @@ class LLMError(Exception):
     pass
 
 
-class LLMEngine:
-    """Handles SQL generation using Gemini API."""
-    
-    def __init__(self, api_key: str = None, model: str = None):
-        """
-        Initialize the LLM engine.
-        
-        Args:
-            api_key: Gemini API key (defaults to config value)
-            model: Model name (defaults to config value)
-        """
-        self.api_key = api_key or GEMINI_API_KEY
-        self.model_name = model or GEMINI_MODEL
-        
-        if not self.api_key:
-            raise LLMError("Gemini API key not configured. Set GEMINI_API_KEY in .env file")
-        
-        # Configure Gemini
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(self.model_name)
-    
-    def generate_sql(self, prompt: str) -> str:
-        """
-        Generate SQL from a prompt.
-        
-        Args:
-            prompt: Complete prompt string
-            
-        Returns:
-            Raw SQL string
-            
-        Raises:
-            LLMError: If generation fails
-        """
-        try:
-            response = self.model.generate_content(prompt)
-            
-            if not response or not response.text:
-                raise LLMError("Empty response from LLM")
-            
-            # Extract and clean SQL
-            sql = self._extract_sql(response.text)
-            
-            return sql
-            
-        except Exception as e:
-            raise LLMError(f"Failed to generate SQL: {str(e)}")
-    
+class BaseLLMEngine:
+    """
+    Shared interface for SQL-generating LLM backends.
+
+    Subclasses must implement `generate_sql(prompt) -> str`. The retry loop
+    and SQL extraction helpers live here so every backend shares identical
+    behavior.
+    """
+
+    model_name: str = ""
+
+    def generate_sql(self, prompt: str) -> str:  # pragma: no cover - abstract
+        raise NotImplementedError
+
     def generate_sql_with_retry(self, prompt: str, validator, prompt_builder, max_retries: int = 2) -> str:
         """
         Generate SQL with automatic retry on validation failure.
-        
+
         Args:
             prompt: Initial prompt string
             validator: SQLValidator instance
             prompt_builder: PromptBuilder instance
             max_retries: Maximum number of retry attempts
-            
+
         Returns:
             Valid SQL string
-            
+
         Raises:
             LLMError: If all retries fail
         """
         last_error = None
         failed_sql = None
         current_prompt = prompt
-        
+
         for attempt in range(max_retries + 1):
             print(f"[LLM] Attempt {attempt + 1}/{max_retries + 1}...")
-            
+
             try:
-                # Generate SQL
                 sql = self.generate_sql(current_prompt)
-                
-                # Validate
                 result = validator.validate(sql)
-                
+
                 if result.valid:
                     print(f"[LLM] ✓ Valid SQL generated on attempt {attempt + 1}")
                     return result.sanitized_sql
@@ -110,53 +73,105 @@ class LLMEngine:
                     print(f"[LLM] ✗ Validation failed: {result.error}")
                     last_error = result.error
                     failed_sql = sql
-                    
-                    # Build retry prompt if we have attempts left
+
                     if attempt < max_retries:
                         current_prompt = prompt_builder.build_retry_prompt(
                             original_prompt=prompt,
                             failed_sql=failed_sql,
-                            error=last_error
+                            error=last_error,
                         )
-                    
+
             except LLMError as e:
                 last_error = str(e)
                 print(f"[LLM] ✗ Generation failed: {last_error}")
-                
+
                 if attempt >= max_retries:
                     break
-        
-        # All retries exhausted
+
         raise LLMError(f"Max retries exceeded. Last error: {last_error}")
-    
+
     def _extract_sql(self, response_text: str) -> str:
         """
         Extract SQL from LLM response, removing markdown fences and explanations.
-        
-        Args:
-            response_text: Raw response from LLM
-            
-        Returns:
-            Cleaned SQL string
         """
-        # Remove markdown code fences
         text = response_text.strip()
-        
-        # Pattern 1: ```sql ... ```
+
         sql_fence_pattern = r'```sql\s*(.*?)\s*```'
         match = re.search(sql_fence_pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()
-        
-        # Pattern 2: ``` ... ```
+
         fence_pattern = r'```\s*(.*?)\s*```'
         match = re.search(fence_pattern, text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        
-        # Pattern 3: No fences - return the whole text
-        # The LLM should follow instructions to return only SQL
+
         return text
+
+
+class LLMEngine(BaseLLMEngine):
+    """Handles SQL generation using Gemini API."""
+
+    def __init__(self, api_key: str = None, model: str = None):
+        """
+        Initialize the LLM engine.
+
+        Args:
+            api_key: Gemini API key (defaults to config value)
+            model: Model name (defaults to config value)
+        """
+        self.api_key = api_key or GEMINI_API_KEY
+        self.model_name = model or GEMINI_MODEL
+
+        if not self.api_key:
+            raise LLMError("Gemini API key not configured. Set GEMINI_API_KEY in .env file")
+
+        genai.configure(api_key=self.api_key)
+        self.model = genai.GenerativeModel(self.model_name)
+
+    def generate_sql(self, prompt: str) -> str:
+        """
+        Generate SQL from a prompt.
+
+        Args:
+            prompt: Complete prompt string
+
+        Returns:
+            Raw SQL string
+
+        Raises:
+            LLMError: If generation fails
+        """
+        try:
+            response = self.model.generate_content(prompt)
+
+            if not response or not response.text:
+                raise LLMError("Empty response from LLM")
+
+            return self._extract_sql(response.text)
+
+        except Exception as e:
+            raise LLMError(f"Failed to generate SQL: {str(e)}")
+
+
+def make_llm_engine() -> "BaseLLMEngine":
+    """
+    Factory that returns the configured LLM engine.
+
+    Reads LLM_PROVIDER from config:
+      - 'gemini' (default) -> LLMEngine
+      - 'ollama'           -> OllamaEngine (imported lazily so Gemini-only
+                              setups don't need to load the Ollama module)
+    """
+    try:
+        from config import LLM_PROVIDER
+    except (ValueError, ImportError):
+        LLM_PROVIDER = "gemini"
+
+    if LLM_PROVIDER == "ollama":
+        from pipeline.ollama_engine import OllamaEngine
+        return OllamaEngine()
+    return LLMEngine()
 
 
 # Test the LLM engine (requires API key)

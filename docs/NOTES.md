@@ -42,6 +42,31 @@ All 10 build phases (0–10) are complete. The system is production-ready for lo
 
 ---
 
+## All-Tables Datatype Fix (completed May 21, 2026)
+
+**Problem:** The CSV loader imported every column as TEXT by default. Aggregate functions
+(`SUM`, `AVG`, `MAX`, etc.) fail with `function sum(text) does not exist` on any counter
+column that was not explicitly cast at load time. This affected all 9 tables — not just ossns.
+
+**Affected tables and column counts fixed:**
+- cpu: 3 columns  
+- dfile: 19 columns  
+- disc: 21 columns  
+- dopen: 10 columns  
+- file: 14 columns (ip_ip_addr intentionally left as TEXT — contains IP address strings)  
+- ossns: 3 columns  
+- proc: 49 columns  
+- tmf: 10 columns  
+- udef: 16 columns  
+- **Total: 145 columns converted to BIGINT**
+
+**Fix applied:** `backend/setup_scripts/fix_all_column_types.py` — run once as postgres superuser.
+All 212,689 rows preserved. Safe to re-run (skips already-BIGINT columns).
+
+**Prevention:** The fix script is now in the repo. Run it after any fresh CSV load.
+
+---
+
 ## OSSNS Datatype Fix (completed April 13, 2026)
 
 **Problem:** 12 columns in `macht413.ossns` were loaded as TEXT instead of BIGINT, breaking `AVG()`, `SUM()`, etc.
