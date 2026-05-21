@@ -10,7 +10,6 @@ Improvements:
 import hashlib
 import sys
 import os
-import threading
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -23,6 +22,11 @@ except (ValueError, ImportError):
 
 import chromadb
 from sentence_transformers import SentenceTransformer
+
+try:
+    from pipeline import embeddings
+except ImportError:
+    import embeddings  # type: ignore
 
 
 class CacheResult:
@@ -61,10 +65,6 @@ class SemanticCache:
         """
         self._threshold = threshold
 
-        # model is None until the background thread finishes loading
-        self.model: Optional[SentenceTransformer] = None
-        self._model_ready = threading.Event()
-
         # Ensure directory exists
         os.makedirs(persist_path, exist_ok=True)
 
@@ -76,32 +76,25 @@ class SemanticCache:
         )
 
         print(f"[Cache] ChromaDB ready — {self.collection.count()} entries.")
-        print(f"[Cache] Loading embedding model '{self.MODEL_NAME}' in background...")
 
-        # Kick off background load — daemon=True so it doesn't block process exit
-        self._load_thread = threading.Thread(
-            target=self._load_model,
-            name="cache-model-loader",
-            daemon=True
-        )
-        self._load_thread.start()
+        # Shared embedding model — kicks off background load on first caller.
+        embeddings.start_loading()
 
-    # ── Model loading ─────────────────────────────────────────────────────────
+    # ── Model access ──────────────────────────────────────────────────────────
 
-    def _load_model(self) -> None:
-        """Background thread: load the sentence-transformer model."""
-        try:
-            self.model = SentenceTransformer(self.MODEL_NAME)
-            self._model_ready.set()
-            print(f"[Cache] Embedding model ready. Cache is now active.")
-        except Exception as e:
-            print(f"[Cache] ERROR: Failed to load embedding model: {e}")
-            # _model_ready is never set — lookups will keep returning misses
+    @property
+    def model(self) -> Optional[SentenceTransformer]:
+        return embeddings.get()
+
+    @property
+    def _model_ready(self):
+        """Back-compat alias for tests that wait on the event directly."""
+        return embeddings._ready
 
     @property
     def is_model_ready(self) -> bool:
-        """True once the background model load has completed."""
-        return self._model_ready.is_set()
+        """True once the shared embedding model has finished loading."""
+        return embeddings.is_ready()
 
     # ── Threshold management ──────────────────────────────────────────────────
 
