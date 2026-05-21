@@ -124,6 +124,18 @@ class QueryNormalizer:
     # Threshold by which the top domain's score must exceed the runner-up for
     # the result to be treated as single-domain rather than 'multi'.
     DOMINANCE_RATIO = 1.5
+
+    # When any of these comparison words appear AND at least two domains
+    # scored above COMPARISON_DOMAIN_FLOOR, force 'multi'. Rationale:
+    # phrasings like "compare X with Y" or "X vs Y" are explicit cross-domain
+    # intent that pure keyword scoring misses when one side's tokens repeat.
+    COMPARISON_TRIGGERS = [
+        'compare', 'compared', 'comparison',
+        'versus', ' vs ', ' vs. ',
+        'alongside', 'side by side', 'side-by-side',
+        'against',
+    ]
+    COMPARISON_DOMAIN_FLOOR = 2.0
     
     def __init__(self):
         """Initialize the normalizer and precompile keyword regexes."""
@@ -234,6 +246,16 @@ class QueryNormalizer:
 
         if len(domain_scores) == 1:
             return next(iter(domain_scores))
+
+        # Comparison override: explicit cross-domain phrasing wins over scoring.
+        # Keyword scoring double-counts a domain when its column name repeats
+        # ("compare cpu_busy_time with per-process cpu_busy_time"), so check
+        # the surface text for comparison intent before applying the ratio.
+        if any(trigger in text for trigger in self.COMPARISON_TRIGGERS):
+            qualifying = [d for d, s in domain_scores.items()
+                          if s >= self.COMPARISON_DOMAIN_FLOOR]
+            if len(qualifying) >= 2:
+                return 'multi'
 
         sorted_items = sorted(domain_scores.items(), key=lambda kv: kv[1], reverse=True)
         top_domain, top_score = sorted_items[0]
