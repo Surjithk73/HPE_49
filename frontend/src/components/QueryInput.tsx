@@ -27,7 +27,7 @@ const SQL_SUGGESTIONS = [
 
 // Very lightweight SQL keyword highlighter — returns spans as a string
 // We render it in a read-only overlay div behind the textarea
-function highlightSQL(sql: string): string {
+export function highlightSQL(sql: string): string {
   const keywords = /\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|GROUP BY|ORDER BY|HAVING|LIMIT|AS|AND|OR|NOT|IN|IS|NULL|DISTINCT|COUNT|SUM|AVG|MAX|MIN|NULLIF|CASE|WHEN|THEN|ELSE|END|WITH|UNION|ALL|BY)\b/gi
   const strings  = /'[^']*'/g
   const numbers  = /\b\d+(\.\d+)?\b/g
