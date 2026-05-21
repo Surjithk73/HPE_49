@@ -157,16 +157,16 @@ cpu:
 
     # --- IPU sub-counters (repeating group, N = 0..15) ---
     # Present only on NSMA systems (J-series+). Zero on non-NSMA systems.
-    ipu{queryable: true, type: integer, unit: microseconds, counter_type: Busy, description: "Time IPU N was busy; N = 0..15; RATE ON â†’ % of interval"}
-    ipu{queryable: true, type: integer, unit: microseconds, counter_type: Queue, description: "Time processes waited on IPU N ready queue; RATE ON â†’ AQL"}
-    ipu{queryable: true, type: integer, counter_type: Incrementing, description: "Number of process dispatches on IPU N"}
+    ipu{N}.ipu_busy_time:  { queryable: true, type: integer, unit: microseconds, counter_type: Busy, description: "Time IPU N was busy; N = 0..15; RATE ON → % of interval" }
+    ipu{N}.ipu_qtime:      { queryable: true, type: integer, unit: microseconds, counter_type: Queue, description: "Time processes waited on IPU N ready queue; RATE ON → AQL" }
+    ipu{N}.ipu_dispatches: { queryable: true, type: integer, counter_type: Incrementing, description: "Number of process dispatches on IPU N" }
 
     # --- ServerNet interface sub-counters (repeating group, N = 0..15) ---
     # SUM across all N for node-wide totals.
-    svnet{queryable: true, type: integer, counter_type: Incrementing, description: "Transfers initiated by this CPU that brought data INTO CPU N; N = 0..15"}
-    svnet{queryable: true, type: integer, counter_type: Incrementing, description: "Transfers initiated by this CPU that sent data OUT FROM CPU N (writes + message sends)"}
-    svnet{queryable: true, type: integer, unit: bytes, counter_type: Accumulating, description: "Bytes transferred by read requests for CPU N"}
-    svnet{queryable: true, type: integer, unit: bytes, counter_type: Accumulating, description: "Bytes transferred by write requests for CPU N"}
+    svnet{N}.read_requests:  { queryable: true, type: integer, counter_type: Incrementing, description: "Transfers initiated by this CPU that brought data INTO CPU N; N = 0..15" }
+    svnet{N}.write_requests: { queryable: true, type: integer, counter_type: Incrementing, description: "Transfers initiated by this CPU that sent data OUT FROM CPU N (writes + message sends)" }
+    svnet{N}.read_bytes:     { queryable: true, type: integer, unit: bytes, counter_type: Accumulating, description: "Bytes transferred by read requests for CPU N" }
+    svnet{N}.write_bytes:    { queryable: true, type: integer, unit: bytes, counter_type: Accumulating, description: "Bytes transferred by write requests for CPU N" }
 
 
 disc:
@@ -257,19 +257,19 @@ disc:
     # --- Disk Cache (repeating group, N = 0..7) ---
     # Eight cache levels corresponding to block sizes:
     # C0=512B, C1=1024B, C2=2048B, C3=4096B, C4=8192B, C5=16384B, C6=32768B, C7=65536B
-    c{queryable: true, type: integer, counter_type: Snapshot, description: "Total cache blocks allocated for level N; N = 0..7"}
-    c{queryable: true, type: integer, unit: bytes, counter_type: Snapshot, description: "Cache block size for level N in bytes"}
-    c{queryable: true, type: integer, counter_type: Snapshot, description: "Cache blocks in use at interval start for level N"}
-    c{queryable: true, type: integer, counter_type: Snapshot, description: "Cache blocks in use at interval end for level N"}
-    c{queryable: true, type: integer, counter_type: Incrementing, description: "Number of block splits per block size for level N"}
-    c{queryable: true, type: integer, counter_type: Incrementing, description: "Cache hits for level N on read or buffered write; hits/(hits+misses) = hit ratio"}
-    c{queryable: true, type: integer, counter_type: Incrementing, description: "Cache misses for level N on read operations; causes a disk I/O"}
-    c{queryable: true, type: integer, counter_type: Incrementing, description: "Cache faults for level N â€” block indicated in cache but stolen by memory manager; >5% of I/Os indicates need for more memory"}
-    c{queryable: true, type: integer, counter_type: Incrementing, description: "Times disk process had to write to audit-trail before freeing a dirty cache block; should be near zero"}
-    c{queryable: true, type: integer, unit: microseconds, counter_type: Queue, description: "Time cache blocks spent dirty for level N; RATE ON â†’ AQL"}
-    c{queryable: true, type: integer, counter_type: Accumulating, description: "Times a write found the required block clean in cache for level N; saves a disk read per write"}
-    c{queryable: true, type: integer, counter_type: Accumulating, description: "Times a write found the required block dirty in cache for level N"}
-    c{queryable: true, type: integer, counter_type: Accumulating, description: "Times a write did not find the required block in cache for level N; requires a disk read before write"}
+    c{N}.blks:               { queryable: true, type: integer, counter_type: Snapshot, description: "Total cache blocks allocated for level N; N = 0..7" }
+    c{N}.block_size:         { queryable: true, type: integer, unit: bytes, counter_type: Snapshot, description: "Cache block size for level N in bytes" }
+    c{N}.blocks_inuse_start: { queryable: true, type: integer, counter_type: Snapshot, description: "Cache blocks in use at interval start for level N" }
+    c{N}.blocks_inuse_end:   { queryable: true, type: integer, counter_type: Snapshot, description: "Cache blocks in use at interval end for level N" }
+    c{N}.block_splits:       { queryable: true, type: integer, counter_type: Incrementing, description: "Number of block splits per block size for level N" }
+    c{N}.hits:               { queryable: true, type: integer, counter_type: Incrementing, description: "Cache hits for level N on read or buffered write; hits/(hits+misses) = hit ratio" }
+    c{N}.misses:             { queryable: true, type: integer, counter_type: Incrementing, description: "Cache misses for level N on read operations; causes a disk I/O" }
+    c{N}.faults:             { queryable: true, type: integer, counter_type: Incrementing, description: "Cache faults for level N — block indicated in cache but stolen by memory manager; >5% of I/Os indicates need for more memory" }
+    c{N}.audit_buf_forces:   { queryable: true, type: integer, counter_type: Incrementing, description: "Times disk process had to write to audit-trail before freeing a dirty cache block; should be near zero" }
+    c{N}.blks_dirty_qtime:   { queryable: true, type: integer, unit: microseconds, counter_type: Queue, description: "Time cache blocks spent dirty for level N; RATE ON → AQL" }
+    c{N}.write_cleans:       { queryable: true, type: integer, counter_type: Accumulating, description: "Times a write found the required block clean in cache for level N; saves a disk read per write" }
+    c{N}.write_dirtys:       { queryable: true, type: integer, counter_type: Accumulating, description: "Times a write found the required block dirty in cache for level N" }
+    c{N}.write_misses:       { queryable: true, type: integer, counter_type: Accumulating, description: "Times a write did not find the required block in cache for level N; requires a disk read before write" }
 
 
 dfile:
