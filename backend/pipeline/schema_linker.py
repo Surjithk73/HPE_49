@@ -32,6 +32,10 @@ class SchemaLinker:
         self._table_embeddings: Optional[np.ndarray] = None
         self._table_embedding_names: List[str] = []
 
+        # Per-table column embeddings, populated lazily. Maps table_name to
+        # (column_names, embedding_matrix) for the queryable, non-key columns.
+        self._column_embeddings: Dict[str, Tuple[List[str], np.ndarray]] = {}
+
         # Make sure the shared model is loading. Idempotent — safe to call from
         # multiple components.
         embeddings.start_loading()
@@ -250,33 +254,82 @@ class SchemaLinker:
         
         # Score remaining columns by relevance
         if remaining:
-            scored = []
-            query_words = set(query_text.lower().split())
-            
-            for col_name, col_def in remaining:
-                score = 0
-                
-                # Score based on column name match
-                col_words = set(col_name.lower().replace('_', ' ').split())
-                score += len(query_words & col_words) * 2
-                
-                # Score based on description match
-                desc = col_def.get('description', '').lower()
-                for word in query_words:
-                    if len(word) > 3 and word in desc:
-                        score += 1
-                
-                scored.append((score, col_name, col_def))
-            
-            # Sort by score and take top columns
-            scored.sort(reverse=True, key=lambda x: x[0])
-            
-            # Add top scored columns
-            remaining_slots = max_cols - len(selected)
-            for score, col_name, col_def in scored[:remaining_slots]:
-                selected.append((col_name, col_def))
-        
+            remaining_slots = max(0, max_cols - len(selected))
+            if remaining_slots:
+                ranked = self._rank_columns_by_relevance(table_name, remaining, query_text)
+                for col_name, col_def in ranked[:remaining_slots]:
+                    selected.append((col_name, col_def))
+
         return selected[:max_cols]
+
+    def _rank_columns_by_relevance(
+        self,
+        table_name: str,
+        candidates: List[Tuple[str, Dict]],
+        query_text: str,
+    ) -> List[Tuple[str, Dict]]:
+        """Rank candidate columns by semantic relevance to the query.
+
+        Uses cached MiniLM embeddings of `col_name + description` when the
+        shared model is ready; falls back to keyword overlap on cold start.
+        """
+        if not candidates:
+            return []
+
+        model = embeddings.get()
+        if model is not None:
+            names, matrix = self._ensure_column_embeddings(table_name, candidates, model)
+            if matrix is not None and matrix.size:
+                qv = np.asarray(model.encode([query_text], normalize_embeddings=True))[0]
+                sims = matrix @ qv
+                order = np.argsort(sims)[::-1]
+                by_name = {name: defn for name, defn in candidates}
+                return [(names[i], by_name[names[i]]) for i in order if names[i] in by_name]
+
+        # Fallback: keyword overlap (original behavior)
+        query_words = set(query_text.lower().split())
+        scored = []
+        for col_name, col_def in candidates:
+            score = 0
+            col_words = set(col_name.lower().replace('_', ' ').split())
+            score += len(query_words & col_words) * 2
+            desc = col_def.get('description', '').lower()
+            for word in query_words:
+                if len(word) > 3 and word in desc:
+                    score += 1
+            scored.append((score, col_name, col_def))
+        scored.sort(reverse=True, key=lambda x: x[0])
+        return [(name, defn) for _, name, defn in scored]
+
+    def _ensure_column_embeddings(
+        self,
+        table_name: str,
+        candidates: List[Tuple[str, Dict]],
+        model,
+    ) -> Tuple[List[str], Optional[np.ndarray]]:
+        """Return (names, matrix) for the candidate columns, computing once and caching."""
+        cached = self._column_embeddings.get(table_name)
+        candidate_names = [name for name, _ in candidates]
+        if cached is not None and cached[0] == candidate_names:
+            return cached
+
+        docs = []
+        for col_name, col_def in candidates:
+            parts = [col_name.replace('_', ' ').replace('.', ' ')]
+            desc = col_def.get('description', '')
+            if desc:
+                parts.append(desc)
+            unit = col_def.get('unit')
+            if unit:
+                parts.append(str(unit))
+            docs.append(' '.join(parts))
+
+        if not docs:
+            return candidate_names, None
+
+        matrix = np.asarray(model.encode(docs, normalize_embeddings=True))
+        self._column_embeddings[table_name] = (candidate_names, matrix)
+        return candidate_names, matrix
     
     def _build_join_hints(self, table_names: List[str]) -> str:
         """
