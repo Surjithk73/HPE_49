@@ -27,22 +27,119 @@ class QueryNormalizer:
         'filesystem': 'file',
     }
     
-    # Domain detection keywords
+    # Domain detection keywords with scoring weights.
+    # Vocabulary grounded in HPE NonStop Measure Reference Manual entity names
+    # (CPU, DISC, DISCOPEN, DISKFILE, FILE, OSSNS, PROCESS, TMF, USERDEF) and the
+    # enriched schema (backend/schema_store/enriched_schema.yaml).
+    #
+    # Weight 3 = highly specific (entity name, DDL record name, unique term).
+    # Weight 2 = strong signal for this domain.
+    # Weight 1 = generic / could overlap with other domains.
     DOMAIN_KEYWORDS = {
-        'cpu': ['cpu', 'processor', 'busy time', 'dispatch', 'memory', 'swap', 'page'],
-        'disc': ['disc', 'disk', 'storage', 'free space', 'volume', 'device'],
-        'dfile': ['disk file', 'diskfile', 'dfile'],
-        'dopen': ['disk open', 'discopen', 'dopen', 'file opener', 'opener'],
-        'file': ['file open', 'file close', 'dbio', 'file system', 'filesystem', 'file read', 'file write'],
-        'proc': ['process', 'program', 'thread', 'checkpoint', 'ancestor', 'creator'],
-        'ossns': ['ossns', 'oss ns', 'namespace', 'semaphore', 'pipe server', 'local server'],
-        'tmf': ['tmf', 'transaction', 'backout', 'abort', 'commit', 'audit trail'],
-        'udef': ['user defined', 'userdef', 'udef', 'custom metric'],
+        'cpu': [
+            ('cpu', 3), ('processor', 3), ('ipu', 3), ('zmscpu', 3),
+            ('busy time', 3), ('cpu busy', 3), ('cpu_busy_time', 3),
+            ('servernet', 3), ('svnet', 3),
+            ('dispatch', 2), ('dispatcher', 2), ('scheduler', 2),
+            ('memory', 2), ('swap', 2), ('paging', 2), ('page fault', 2),
+            ('queue length', 2), ('ready queue', 2), ('interrupt', 2),
+            ('utilization', 1), ('load', 1), ('page', 1),
+        ],
+        'disc': [
+            ('disc', 3), ('disk', 3), ('discs', 3), ('disks', 3),
+            ('zmsdisc', 3), ('dp2', 3), ('device name', 3),
+            ('volume', 2), ('free space', 3), ('disk space', 3), ('disc space', 3),
+            ('storage', 2), ('device', 2), ('mount', 2), ('partition', 2),
+            ('cache hit', 2), ('cache miss', 2), ('cache level', 2),
+            ('disc i/o', 2), ('disk i/o', 2),
+        ],
+        'dfile': [
+            ('dfile', 3), ('diskfile', 3), ('disk file', 3), ('disc file', 3),
+            ('zmsdfile', 3),
+            ('per file', 2), ('per-file', 2), ('file extent', 2), ('extents', 2),
+            ('file size', 2),
+        ],
+        'dopen': [
+            ('dopen', 3), ('discopen', 3), ('diskopen', 3),
+            ('disk open', 3), ('disc open', 3),
+            ('opener', 3), ('openers', 3),
+            ('file opener', 3), ('file openers', 3),
+            ('opener statistics', 3), ('opener stats', 3), ('opener count', 3),
+            ('zmsdopen', 3),
+            ('who opened', 2), ('which process opened', 2),
+            ('processes that opened', 2), ('opens per file', 2),
+            ('per open', 2), ('per-opener', 2), ('open instance', 2),
+            ('physical i/o', 2), ('physical io', 2),
+        ],
+        'file': [
+            ('zmsfile', 3), ('dbio', 3),
+            ('file activity', 3), ('file operations', 3), ('file ops', 3),
+            ('file i/o', 3), ('file io', 3), ('logical i/o', 3), ('logical io', 3),
+            ('file open', 2), ('file close', 2), ('file opens', 2), ('file closes', 2),
+            ('file read', 2), ('file write', 2), ('file reads', 2), ('file writes', 2),
+            # Post-abbreviation forms ("reads" → "reads_" expansion in _expand_abbreviations)
+            ('file reads_', 2), ('file writes_', 2),
+            ('file system', 2), ('filesystem', 2),
+            ('bytes read', 2), ('bytes written', 2),
+            ('read count', 1), ('write count', 1),
+        ],
+        'proc': [
+            ('process', 3), ('processes', 3), ('proc', 3), ('procs', 3),
+            ('zmsproc', 3), ('pin', 3), ('process name', 3),
+            ('program', 2), ('program file', 2),
+            ('thread', 2), ('threads', 2),
+            ('checkpoint', 2), ('ancestor', 2), ('creator', 2),
+            ('parent process', 2), ('child process', 2),
+            ('running process', 2), ('process state', 2), ('process status', 2),
+            ('messaging', 1), ('cpu time', 1),
+        ],
+        'ossns': [
+            ('ossns', 3), ('oss ns', 3), ('oss name service', 3),
+            ('name service', 3), ('name server', 3), ('namespace', 3),
+            ('zmsossns', 3),
+            ('semaphore', 3), ('semaphores', 3),
+            ('pipe server', 3), ('local server', 3),
+            ('oss', 2), ('posix', 2), ('pathname', 2),
+        ],
+        'tmf': [
+            ('tmf', 3), ('transaction', 3), ('transactions', 3),
+            ('zmstmf', 3), ('$tmp', 3),
+            ('audit trail', 3), ('audit dump', 3),
+            ('backout', 3), ('backouts', 3),
+            ('home transaction', 3), ('remote transaction', 3),
+            ('commit', 2), ('committed', 2), ('aborted', 2), ('abort', 2),
+            ('rollback', 2), ('two phase', 2), ('2pc', 2),
+            ('tx', 2), ('txn', 2),
+        ],
+        'udef': [
+            ('udef', 3), ('userdef', 3), ('user defined', 3), ('user-defined', 3),
+            ('zmsudef', 3),
+            ('custom metric', 3), ('custom metrics', 3),
+            ('meascounterbump', 3), ('meascounterbumpinit', 3),
+            ('user metric', 2), ('user counter', 2), ('custom counter', 2),
+            ('application counter', 2),
+        ],
     }
+
+    # Threshold by which the top domain's score must exceed the runner-up for
+    # the result to be treated as single-domain rather than 'multi'.
+    DOMINANCE_RATIO = 1.5
     
     def __init__(self):
-        """Initialize the normalizer."""
-        pass
+        """Initialize the normalizer and precompile keyword regexes."""
+        self._compiled_keywords: Dict[str, list] = {}
+        for domain, keywords in self.DOMAIN_KEYWORDS.items():
+            compiled = []
+            for keyword, weight in keywords:
+                # Word-boundary match where the keyword begins/ends with a word char;
+                # for tokens like 'i/o' or '$tmp' fall back to escaped substring with
+                # surrounding non-word lookarounds so we still avoid partial overlap.
+                if keyword[:1].isalnum() and keyword[-1:].isalnum():
+                    pattern = r'\b' + re.escape(keyword) + r'\b'
+                else:
+                    pattern = r'(?<!\w)' + re.escape(keyword) + r'(?!\w)'
+                compiled.append((re.compile(pattern), keyword, weight))
+            self._compiled_keywords[domain] = compiled
     
     def normalize(self, query: str) -> Dict[str, str]:
         """
@@ -98,49 +195,53 @@ class QueryNormalizer:
     
     def _detect_domain(self, text: str) -> str:
         """
-        Detect the domain category from the query text.
-        
-        Args:
-            text: Normalized query text
-            
-        Returns:
-            Domain category: one of the table names or 'multi'
+        Detect the domain category from the query text using weighted keyword scoring.
+
+        Each keyword carries an explicit weight (3=specific, 2=strong, 1=generic).
+        Multi-word keywords additionally pick up a small bonus per extra token, so
+        a phrase like "file opener" outscores the bare word "file".
         """
-        # Count keyword matches per domain
-        domain_scores = {}
-        
-        for domain, keywords in self.DOMAIN_KEYWORDS.items():
-            score = 0
-            for keyword in keywords:
-                # Count occurrences of each keyword
-                if keyword in text:
-                    score += text.count(keyword)
-            
+        domain_scores: Dict[str, float] = {}
+
+        # Per domain: collect all keyword hits as (start, end, weight, keyword), then
+        # drop any hit whose span is fully contained in a longer hit from the same
+        # domain. This stops phrases like "disc space" from double-counting alongside
+        # the bare "disc" keyword.
+        for domain, compiled in self._compiled_keywords.items():
+            hits = []
+            for regex, keyword, weight in compiled:
+                for m in regex.finditer(text):
+                    hits.append((m.start(), m.end(), weight, keyword))
+            if not hits:
+                continue
+
+            hits.sort(key=lambda h: (h[1] - h[0]), reverse=True)
+            kept = []
+            for start, end, weight, keyword in hits:
+                if any(ks <= start and end <= ke for ks, ke, _, _ in kept):
+                    continue
+                kept.append((start, end, weight, keyword))
+
+            score = 0.0
+            for _, _, weight, keyword in kept:
+                phrase_bonus = 1 + 0.25 * keyword.count(' ')
+                score += weight * phrase_bonus
             if score > 0:
                 domain_scores[domain] = score
-        
-        # If no matches, return 'multi'
+
         if not domain_scores:
             return 'multi'
-        
-        # If only one domain matched, return it
+
         if len(domain_scores) == 1:
-            return list(domain_scores.keys())[0]
-        
-        # If multiple domains matched, check if one is significantly dominant
-        max_score = max(domain_scores.values())
-        top_domains = [d for d, s in domain_scores.items() if s == max_score]
-        
-        # If there's a clear winner (only one domain with max score), check if it's dominant
-        if len(top_domains) == 1:
-            # Check if the winner has at least 2x the score of the second place
-            sorted_scores = sorted(domain_scores.values(), reverse=True)
-            if len(sorted_scores) > 1 and sorted_scores[0] >= sorted_scores[1] * 2:
-                return top_domains[0]
-            # If scores are close, it's a multi-domain query
-            return 'multi'
-        
-        # Multiple domains with same score = multi-domain query
+            return next(iter(domain_scores))
+
+        sorted_items = sorted(domain_scores.items(), key=lambda kv: kv[1], reverse=True)
+        top_domain, top_score = sorted_items[0]
+        runner_up_score = sorted_items[1][1]
+
+        if top_score >= runner_up_score * self.DOMINANCE_RATIO:
+            return top_domain
+
         return 'multi'
 
 
@@ -163,6 +264,11 @@ def run_tests():
         ("user defined metrics", "udef", "UDEF domain"),
         ("show dfile statistics", "dfile", "DFILE domain"),
         ("file opener statistics", "dopen", "DOPEN domain"),
+        ("show opener statistics", "dopen", "DOPEN via 'opener' alone"),
+        ("show file activity", "file", "FILE via 'file activity'"),
+        ("who opened this file", "dopen", "DOPEN via 'who opened'"),
+        ("logical i/o per process", "multi", "Ambiguous file+proc → multi"),
+        ("audit trail backouts", "tmf", "TMF via audit/backout phrase"),
         ("show cpu and process data", "multi", "Multi-domain"),
         ("", "multi", "Empty query"),
     ]
