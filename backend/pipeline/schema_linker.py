@@ -41,7 +41,14 @@ class SchemaLinker:
         
         # Step 2: Build filtered schema context
         schema_context = self._build_schema_context(selected_tables, normalized_text)
-        
+
+        # Step 3: Inject join hints when multiple tables are in play, so the
+        # LLM doesn't have to guess the join keys.
+        if len(selected_tables) > 1:
+            join_section = self._build_join_hints(selected_tables)
+            if join_section:
+                schema_context += "\n" + join_section
+
         return schema_context
     
     def _score_and_select_tables(self, query_text: str, top_n: int = 3) -> List[str]:
@@ -235,6 +242,64 @@ class SchemaLinker:
         
         return selected[:max_cols]
     
+    def _build_join_hints(self, table_names: List[str]) -> str:
+        """
+        Build a JOIN HINTS block for the selected tables.
+
+        Pulls per-table `join_hints` from the schema and keeps only those that
+        reference another selected table. Falls back to the intersection of
+        `identity_columns` for pairs without an explicit hint.
+        """
+        import re
+
+        selected = set(table_names)
+        lines: List[str] = []
+        seen_pairs = set()
+
+        for table_name in table_names:
+            table_def = self.schema.get(table_name)
+            if not isinstance(table_def, dict):
+                continue
+
+            for hint in table_def.get('join_hints', []) or []:
+                match = re.search(r'JOIN\s+(\w+)', hint)
+                if not match:
+                    continue
+                other = match.group(1)
+                if other not in selected or other == table_name:
+                    continue
+                pair = tuple(sorted((table_name, other)))
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                lines.append(f"-- {table_name} <-> {other}: {hint}")
+
+        # Fallback: any selected pair without a hint gets an identity-column
+        # intersection so the LLM still has explicit keys to use.
+        for i, a in enumerate(table_names):
+            for b in table_names[i + 1:]:
+                pair = tuple(sorted((a, b)))
+                if pair in seen_pairs:
+                    continue
+                a_ids = set(self.schema.get(a, {}).get('identity_columns', []) or [])
+                b_ids = set(self.schema.get(b, {}).get('identity_columns', []) or [])
+                shared = a_ids & b_ids
+                if not shared:
+                    continue
+                keys = ', '.join(sorted(shared))
+                lines.append(f"-- {a} <-> {b}: JOIN on ({keys}) [from shared identity columns]")
+                seen_pairs.add(pair)
+
+        if not lines:
+            return ""
+
+        header = (
+            "-- JOIN HINTS (use these keys instead of guessing):\n"
+            "-- Reminder: from_timestamp is microsecond-precision across tables; "
+            "either pre-aggregate per table or bucket via date_trunc('second', from_timestamp) before joining."
+        )
+        return header + "\n" + "\n".join(lines) + "\n"
+
     def _map_type(self, yaml_type: str) -> str:
         """Map YAML type to SQL type."""
         type_map = {
