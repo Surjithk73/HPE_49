@@ -690,3 +690,27 @@ examples:
       GROUP BY opener_program_filename_volume, opener_program_filename_subvol, opener_program_filename_filename
       ORDER BY total_io DESC
       LIMIT 10000;
+
+  - domain: multi
+    query: "Compare average cpu_busy_time with per-process cpu_busy_time by cpu_num"
+    sql: |
+      WITH cpu_avg AS (
+        SELECT system_name, cpu_num, AVG(cpu_busy_time) AS overall_avg_cpu_busy_time
+        FROM macht413.cpu
+        GROUP BY system_name, cpu_num
+      ),
+      proc_avg AS (
+        SELECT system_name, cpu_num, AVG(cpu_busy_time) AS processes_avg_cpu_busy_time
+        FROM macht413.proc
+        GROUP BY system_name, cpu_num
+      )
+      SELECT
+        ca.system_name,
+        ca.cpu_num,
+        ca.overall_avg_cpu_busy_time,
+        pa.processes_avg_cpu_busy_time,
+        ca.overall_avg_cpu_busy_time - pa.processes_avg_cpu_busy_time AS difference_cpu_vs_proc_busy_time
+      FROM cpu_avg AS ca
+      JOIN proc_avg AS pa ON ca.system_name = pa.system_name AND ca.cpu_num = pa.cpu_num
+      ORDER BY ca.system_name, ca.cpu_num
+      LIMIT 10000;
