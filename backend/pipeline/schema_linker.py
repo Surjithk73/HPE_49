@@ -296,7 +296,10 @@ class SchemaLinker:
         header = (
             "-- JOIN HINTS (use these keys instead of guessing):\n"
             "-- Reminder: from_timestamp is microsecond-precision across tables; "
-            "either pre-aggregate per table or bucket via date_trunc('second', from_timestamp) before joining."
+            "either pre-aggregate per table or bucket via date_trunc('second', from_timestamp) before joining.\n"
+            "-- When aggregating across joined tables, ALWAYS pre-aggregate each side "
+            "in its own CTE first, then join the CTEs. Joining raw rows then aggregating "
+            "multiplies rows by the other table's cardinality and produces weighted/incorrect averages."
         )
         return header + "\n" + "\n".join(lines) + "\n"
 
