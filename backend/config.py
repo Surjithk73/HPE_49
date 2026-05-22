@@ -38,13 +38,8 @@ AUDIT_LOG_PATH = os.getenv("AUDIT_LOG_PATH", "audit/query_log.db")
 SCHEMA_YAML_PATH = os.getenv("SCHEMA_YAML_PATH", "schema_store/enriched_schema.yaml")
 FEW_SHOTS_PATH = os.getenv("FEW_SHOTS_PATH", "few_shots/examples.yaml")
 
-# Allowed DB users and Max Cost Limits
-# MAX_QUERY_COST is the PostgreSQL planner cost ceiling. Complex analytical
-# queries on this dataset routinely reach 15k–50k cost units while still
-# executing in milliseconds. The real safety net is statement_timeout (30s).
-# Set high enough to never block legitimate queries; the timeout handles runaway ones.
+# Allowed DB users
 ALLOWED_DB_USERS = [u.strip() for u in os.getenv("ALLOWED_DB_USERS", "querycraft_user").split(",") if u.strip()]
-MAX_QUERY_COST = float(os.getenv("MAX_QUERY_COST", "500000.0"))
 
 
 # Validation - ensure critical keys are present

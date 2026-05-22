@@ -17,7 +17,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 try:
-    from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, MAX_ROWS, QUERY_TIMEOUT_SECONDS, ALLOWED_DB_USERS, MAX_QUERY_COST
+    from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, MAX_ROWS, QUERY_TIMEOUT_SECONDS, ALLOWED_DB_USERS
 except (ValueError, ImportError):
     # Fallback for standalone testing
     DB_HOST              = "localhost"
@@ -28,7 +28,6 @@ except (ValueError, ImportError):
     MAX_ROWS             = 10000
     QUERY_TIMEOUT_SECONDS = 30
     ALLOWED_DB_USERS     = ["querycraft_user"]
-    MAX_QUERY_COST       = 10000.0
 
 
 # Pool size constants — tune here if needed
@@ -79,7 +78,6 @@ class QueryExecutor:
         min_conn: int = _POOL_MIN_CONN,
         max_conn: int = _POOL_MAX_CONN,
         allowed_users: List[str] = None,
-        max_query_cost: float = None,
     ):
         """
         Initialize the executor and create the connection pool.
@@ -94,7 +92,6 @@ class QueryExecutor:
             min_conn: Minimum pool connections (default 2)
             max_conn: Maximum pool connections (default 10)
             allowed_users: List of allowed database users (defaults to config)
-            max_query_cost: Maximum allowed query cost threshold (defaults to config)
         """
         self.host     = host     or DB_HOST
         self.port     = port     or DB_PORT
@@ -103,7 +100,6 @@ class QueryExecutor:
         self.password = password or DB_PASSWORD
         self.timeout  = timeout  or QUERY_TIMEOUT_SECONDS
         self.allowed_users = allowed_users or ALLOWED_DB_USERS
-        self.max_query_cost = max_query_cost if max_query_cost is not None else MAX_QUERY_COST
 
         # Enforce read-only user checks dynamically
         if self.user not in self.allowed_users:
@@ -173,20 +169,6 @@ class QueryExecutor:
             connection.autocommit = True
 
             cursor = connection.cursor()
-
-            # Estimate query cost
-            import re
-            cursor.execute(f"EXPLAIN {sql}")
-            explain_rows = cursor.fetchall()
-            if explain_rows:
-                first_line = explain_rows[0][0]
-                match = re.search(r"cost=\d+\.?\d*\.\.(\d+\.?\d*)", first_line)
-                if match:
-                    total_cost = float(match.group(1))
-                    if total_cost > self.max_query_cost:
-                        raise ExecutionError(
-                            f"Query rejected: estimated cost {total_cost} exceeds maximum allowed cost of {self.max_query_cost}"
-                        )
 
             cursor.execute(sql)
 
