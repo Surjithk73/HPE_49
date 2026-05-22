@@ -182,8 +182,11 @@ class QueryExecutor:
                 row_dict = {}
                 for i, col_name in enumerate(columns):
                     value = row[i]
-                    if hasattr(value, 'isoformat'):   # datetime → ISO string
+                    if hasattr(value, 'isoformat'):        # datetime → ISO string
                         value = value.isoformat()
+                    elif hasattr(value, '__class__') and value.__class__.__name__ == 'Decimal':
+                        # SUM/AVG on BIGINT returns Decimal — convert to int or float
+                        value = int(value) if value == int(value) else float(value)
                     row_dict[col_name] = value
                 rows.append(row_dict)
 
