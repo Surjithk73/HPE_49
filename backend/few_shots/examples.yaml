@@ -714,3 +714,30 @@ examples:
       JOIN proc_avg AS pa ON ca.system_name = pa.system_name AND ca.cpu_num = pa.cpu_num
       ORDER BY ca.system_name, ca.cpu_num
       LIMIT 10000;
+
+  - domain: multi
+    query: "For each timestamp interval show total CPU busy time across all CPUs, total disk I/O requests across all devices, total processes running, total file opens, and total TMF transactions — give me a single unified view"
+    sql: |
+      SELECT
+        c.from_timestamp,
+        SUM(c.cpu_busy_time)              AS total_cpu_busy_time,
+        SUM(d.reads + d.writes)           AS total_disk_io_requests,
+        COUNT(DISTINCT p.pin)             AS total_processes,
+        COUNT(DISTINCT f.opener_pin)      AS total_file_opens,
+        SUM(t.home_trans + t.remote_trans) AS total_tmf_transactions
+      FROM macht413.cpu c
+      LEFT JOIN macht413.disc d
+        ON c.system_name = d.system_name
+        AND c.from_timestamp = d.from_timestamp
+      LEFT JOIN macht413.proc p
+        ON c.system_name = p.system_name
+        AND c.from_timestamp = p.from_timestamp
+      LEFT JOIN macht413.file f
+        ON c.system_name = f.system_name
+        AND c.from_timestamp = f.from_timestamp
+      LEFT JOIN macht413.tmf t
+        ON c.system_name = t.system_name
+        AND c.from_timestamp = t.from_timestamp
+      GROUP BY c.from_timestamp
+      ORDER BY c.from_timestamp
+      LIMIT 10000;

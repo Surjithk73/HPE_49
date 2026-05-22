@@ -75,7 +75,7 @@ STRICT RULES:
 - Always qualify tables: macht413.table_name.
 - Only use columns shown in the schema context; never invent column names.
 - Use from_timestamp / to_timestamp for time filtering.
-- CRITICAL — cross-table joins: from_timestamp values are microsecond-precision and DO NOT match between tables. NEVER write `a.from_timestamp = b.from_timestamp`. Either join on (system_name, cpu_num, ...) with pre-aggregation, or bucket both sides via date_trunc('second', from_timestamp).
+- CRITICAL — cross-table joins: ALWAYS join on exact column equality (e.g. `a.from_timestamp = b.from_timestamp`). NEVER wrap join columns in functions like DATE_TRUNC, CAST, or any other function — this disables index use and causes full table scans that will time out. The from_timestamp values are identical across tables for the same measurement interval.
 - Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 - If the user asks for a column that doesn't exist in the schema, omit it; never generate `SELECT FROM table` without columns.
 
