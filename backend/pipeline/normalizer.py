@@ -16,7 +16,6 @@ class QueryNormalizer:
         'cpu busy': 'cpu_busy_time',
         'disk': 'disc',
         'disks': 'discs',
-        'reads': 'reads_',
         'transaction': 'tmf',
         'transactions': 'tmf',
         'ipu': 'ipu',
@@ -77,8 +76,8 @@ class QueryNormalizer:
             ('file i/o', 3), ('file io', 3), ('logical i/o', 3), ('logical io', 3),
             ('file open', 2), ('file close', 2), ('file opens', 2), ('file closes', 2),
             ('file read', 2), ('file write', 2), ('file reads', 2), ('file writes', 2),
-            # Post-abbreviation forms ("reads" → "reads_" expansion in _expand_abbreviations)
-            ('file reads_', 2), ('file writes_', 2),
+            # Post-abbreviation forms
+            ('file reads', 2), ('file writes', 2),
             ('file system', 2), ('filesystem', 2),
             ('bytes read', 2), ('bytes written', 2),
             ('read count', 1), ('write count', 1),

@@ -30,7 +30,7 @@ examples:
   
   - domain: disc
     query: "Show disk read and write counts per device"
-    sql: "SELECT device_name, SUM(reads_) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;"
+    sql: "SELECT device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;"
   
   - domain: proc
     query: "List all process names with their CPU usage"
@@ -71,9 +71,9 @@ examples:
       SELECT 
         d.device_name,
         d.from_timestamp,
-        d.reads_ + d.writes AS total_ios,
-        CASE WHEN (d.reads_ + d.writes) > 0 
-          THEN (d.cache_hits * 100.0 / (d.reads_ + d.writes)) 
+        d.reads + d.writes AS total_ios,
+        CASE WHEN (d.reads + d.writes) > 0 
+          THEN (d.cache_hits * 100.0 / (d.reads + d.writes)) 
           ELSE 0 
         END AS cache_hit_ratio_pct,
         d.request_qtime / NULLIF(d.delta_time, 0) AS avg_request_queue_length,
@@ -87,7 +87,7 @@ examples:
         ON d.system_name = df.system_name 
         AND d.device_name = df.device_name 
         AND d.from_timestamp = df.from_timestamp
-      WHERE d.reads_ + d.writes > 100
+      WHERE d.reads + d.writes > 100
       ORDER BY cache_hit_ratio_pct ASC, total_ios DESC
       LIMIT 10000;
   
@@ -237,7 +237,7 @@ examples:
         SUM(c.page_requests) AS total_page_requests,
         SUM(c.page_scans) AS total_page_scans,
         COUNT(DISTINCT d.device_name) AS total_disks,
-        SUM(d.reads_ + d.writes) AS total_disk_ios,
+        SUM(d.reads + d.writes) AS total_disk_ios,
         AVG(d.request_qtime / NULLIF(d.delta_time, 0)) AS avg_disk_queue_length,
         SUM(d.ending_free_space) / 1024 / 1024 / 1024 AS total_free_disk_gb,
         COUNT(DISTINCT p.pin) AS active_processes,
@@ -292,15 +292,15 @@ examples:
           ELSE 0 
         END AS cache_4kb_hit_pct,
         d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults AS total_cache_faults,
-        CASE WHEN (d.reads_ + d.writes) > 0 
-          THEN ((d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults) * 100.0 / (d.reads_ + d.writes)) 
+        CASE WHEN (d.reads + d.writes) > 0 
+          THEN ((d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults) * 100.0 / (d.reads + d.writes)) 
           ELSE 0 
         END AS fault_rate_pct,
         (d.c0_blks_dirty_qtime + d.c1_blks_dirty_qtime + d.c2_blks_dirty_qtime + d.c3_blks_dirty_qtime) / NULLIF(d.delta_time, 0) AS avg_dirty_blocks_queued,
-        d.reads_ + d.writes AS total_ios,
+        d.reads + d.writes AS total_ios,
         d.cache_hits AS total_cache_hits
       FROM macht413.disc d
-      WHERE d.reads_ + d.writes > 0
+      WHERE d.reads + d.writes > 0
       ORDER BY fault_rate_pct DESC, total_ios DESC
       LIMIT 10000;
   
