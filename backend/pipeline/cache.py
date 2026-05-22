@@ -1,6 +1,6 @@
 """
 Semantic Cache for QueryCraft
-ChromaDB-backed cache using sentence-transformers embeddings.
+ChromaDB-backed cache using BAAI/bge-large-en-v1.5 embeddings.
 
 Improvements:
 - Background thread model load — API available immediately, cache returns misses until ready
@@ -52,7 +52,7 @@ class SemanticCache:
     """
 
     COLLECTION_NAME = "querycraft_cache"
-    MODEL_NAME = "all-MiniLM-L6-v2"
+    MODEL_NAME = "BAAI/bge-large-en-v1.5"
 
     def __init__(self, persist_path: str = "cache_store",
                  threshold: float = CACHE_SIMILARITY_THRESHOLD):
@@ -74,6 +74,11 @@ class SemanticCache:
             name=self.COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"}   # cosine distance → similarity = 1 - distance
         )
+
+        # Guard against embedding dimension mismatches (e.g. switching from
+        # MiniLM-384d to BGE-large-1024d).  Probe the first stored embedding;
+        # if its dimension doesn't match the current model, drop & recreate.
+        self._check_embedding_dimension()
 
         print(f"[Cache] ChromaDB ready — {self.collection.count()} entries.")
 
@@ -113,6 +118,41 @@ class SemanticCache:
             raise ValueError(f"Threshold must be in (0.0, 1.0], got {value}")
         self._threshold = value
         print(f"[Cache] Similarity threshold updated to {value}")
+
+    # ── Dimension guard ───────────────────────────────────────────────────────
+
+    # Expected embedding dimension for the current model.  BGE-large produces
+    # 1024-dim vectors; update this constant if the model changes again.
+    _EXPECTED_DIM = 1024
+
+    def _check_embedding_dimension(self) -> None:
+        """Drop and recreate the collection if stored embeddings have a
+        different dimension than the current model.  This handles seamless
+        migration when the embedding model is swapped (e.g. MiniLM-384d →
+        BGE-large-1024d) without requiring manual cache deletion."""
+        if self.collection.count() == 0:
+            return  # nothing stored yet — no conflict possible
+
+        try:
+            sample = self.collection.peek(limit=1)
+            stored_embeddings = sample.get("embeddings")
+            if not stored_embeddings or not stored_embeddings[0]:
+                return
+
+            stored_dim = len(stored_embeddings[0])
+            if stored_dim != self._EXPECTED_DIM:
+                print(
+                    f"[Cache] ⚠ Embedding dimension mismatch: stored={stored_dim}, "
+                    f"expected={self._EXPECTED_DIM}. Dropping stale collection..."
+                )
+                self.client.delete_collection(self.COLLECTION_NAME)
+                self.collection = self.client.get_or_create_collection(
+                    name=self.COLLECTION_NAME,
+                    metadata={"hnsw:space": "cosine"},
+                )
+                print("[Cache] Collection recreated (empty).")
+        except Exception as e:
+            print(f"[Cache] Warning: dimension check failed: {e}")
 
     # ── Core operations ───────────────────────────────────────────────────────
 
