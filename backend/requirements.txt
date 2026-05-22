@@ -10,3 +10,4 @@ openpyxl
 python-dotenv
 pyyaml
 pandas
+rank-bm25
