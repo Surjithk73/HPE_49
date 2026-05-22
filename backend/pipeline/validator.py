@@ -389,12 +389,17 @@ class SQLValidator:
         - Max 30 columns in SELECT (across any SELECT statement)
         - Max 3 levels of subquery nesting
         """
-        # 1. Max 9 tables (one per schema table — cross-table analytics is the whole point)
-        tables = list(parsed.find_all(exp.Table))
-        if len(tables) > 9:
+        # 1. Max 9 real schema tables (CTE aliases don't count — a 5-CTE query
+        #    that each reference 1 real table should count as 5, not 10).
+        cte_names = {cte.alias.lower() for cte in parsed.find_all(exp.CTE)}
+        real_tables = [
+            t for t in parsed.find_all(exp.Table)
+            if t.name.lower() not in cte_names
+        ]
+        if len(real_tables) > 9:
             return {
                 'valid': False,
-                'error': f"Query complexity limit exceeded: contains {len(tables)} tables (max 9 allowed)"
+                'error': f"Query complexity limit exceeded: contains {len(real_tables)} tables (max 9 allowed)"
             }
 
         from sqlglot.optimizer.scope import build_scope

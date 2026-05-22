@@ -16,6 +16,8 @@ Other improvements:
 import io
 import os
 import sys
+import traceback
+import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -23,6 +25,14 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+# ── Logging setup ─────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("querycraft")
 
 # ── Pipeline imports ──────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
@@ -315,6 +325,7 @@ def run_query(req: QueryRequest):
                 log_entry["validation_error"] = str(e)
                 log_entry["llm_retries"]      = retry_count
                 _audit.log_query(log_entry)
+                logger.error(f"[/api/query] LLM error: {e}")
                 raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
             finally:
                 _builder.build_retry_prompt = original_build_retry
@@ -343,6 +354,7 @@ def run_query(req: QueryRequest):
             # If this was a cache hit that failed, flag the entry as bad
             if cache_result.hit:
                 _cache.flag_failed(norm_text)
+            logger.error(f"[/api/query] Execution error — SQL: {sql}\nError: {e}")
             raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
         # Step 8 — Chart type
@@ -378,6 +390,8 @@ def run_query(req: QueryRequest):
     except Exception as e:
         log_entry["validation_error"] = str(e)
         _audit.log_query(log_entry)
+        tb = traceback.format_exc()
+        logger.error(f"[/api/query] Unexpected error: {e}\n{tb}")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
@@ -423,6 +437,7 @@ def run_sql(req: SqlRequest):
     except ExecutionError as e:
         log_entry["validation_error"] = str(e)
         _audit.log_query(log_entry)
+        logger.error(f"[/api/sql] Execution error — SQL: {sql}\nError: {e}")
         raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     chart_type = detect_chart_type(result.columns)

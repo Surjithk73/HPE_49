@@ -75,7 +75,8 @@ STRICT RULES:
 - Always qualify tables: macht413.table_name.
 - Only use columns shown in the schema context; never invent column names.
 - Use from_timestamp / to_timestamp for time filtering.
-- CRITICAL — cross-table joins: ALWAYS join on exact column equality (e.g. `a.from_timestamp = b.from_timestamp`). NEVER wrap join columns in functions like DATE_TRUNC, CAST, or any other function — this disables index use and causes full table scans that will time out. The from_timestamp values are identical across tables for the same measurement interval.
+- CRITICAL — cross-table joins on timestamps: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
+- CRITICAL — multi-table aggregation performance: When joining 3 or more tables that each have many rows (proc has 110k rows, file has 61k rows), ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results. Flat multi-table joins with DATE_TRUNC will time out. Pattern: WITH t1 AS (SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name, AGG(...) FROM macht413.table GROUP BY 1,2), ... SELECT ... FROM t1 LEFT JOIN t2 ON t1.system_name=t2.system_name AND t1.ts=t2.ts
 - Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 - If the user asks for a column that doesn't exist in the schema, omit it; never generate `SELECT FROM table` without columns.
 
