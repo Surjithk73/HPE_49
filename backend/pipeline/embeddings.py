@@ -1,9 +1,9 @@
 """
 Shared embedding model for QueryCraft.
 
-Both SemanticCache and SchemaLinker use all-MiniLM-L6-v2. Loading it twice
-wastes ~90MB of RAM and a few seconds of startup. This module owns a single
-instance and hands it out to any caller.
+Both SemanticCache and SchemaLinker use BAAI/bge-large-en-v1.5. Loading it
+twice wastes ~1.3 GB of RAM and several seconds of startup. This module owns
+a single instance and hands it out to any caller.
 
 The model loads in a background thread on first request so callers stay
 non-blocking. Use `is_ready()` to check, or `get()` to fetch (returns None
@@ -14,7 +14,7 @@ from typing import Optional
 
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "BAAI/bge-large-en-v1.5"
 
 _model: Optional[SentenceTransformer] = None
 _ready = threading.Event()
