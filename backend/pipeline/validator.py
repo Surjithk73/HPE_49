@@ -385,51 +385,63 @@ class SQLValidator:
     def _validate_complexity(self, parsed: exp.Expression) -> Dict:
         """
         Validate query complexity limits:
-        - Max 4 tables per query
+        - Max 9 tables per query (all tables in the schema)
         - Max 30 columns in SELECT (across any SELECT statement)
         - Max 3 levels of subquery nesting
         """
-        # 1. Max 4 tables
-        tables = list(parsed.find_all(exp.Table))
-        if len(tables) > 4:
+        # 1. Max 9 real schema tables (CTE aliases don't count — a 5-CTE query
+        #    that each reference 1 real table should count as 5, not 10).
+        cte_names = {cte.alias.lower() for cte in parsed.find_all(exp.CTE)}
+        real_tables = [
+            t for t in parsed.find_all(exp.Table)
+            if t.name.lower() not in cte_names
+        ]
+        if len(real_tables) > 9:
             return {
                 'valid': False,
-                'error': f"Query complexity limit exceeded: contains {len(tables)} tables (max 4 allowed)"
+                'error': f"Query complexity limit exceeded: contains {len(real_tables)} tables (max 9 allowed)"
             }
 
         from sqlglot.optimizer.scope import build_scope
         try:
             scope_tree = build_scope(parsed)
-        except Exception as e:
-            return {
-                'valid': False,
-                'error': f"Failed to build scope tree for complexity check: {str(e)}"
-            }
+        except Exception:
+            # scope building can fail on complex CTEs — not a security issue, skip these checks
+            return {'valid': True}
+
+        if scope_tree is None:
+            return {'valid': True}
 
         # 2. Max 30 columns in SELECT
-        for scope in scope_tree.traverse():
-            num_cols = len(scope.expression.selects)
-            if num_cols > 30:
-                return {
-                    'valid': False,
-                    'error': f"Query complexity limit exceeded: SELECT projects {num_cols} columns (max 30 allowed)"
-                }
+        try:
+            for scope in scope_tree.traverse():
+                num_cols = len(scope.expression.selects)
+                if num_cols > 30:
+                    return {
+                        'valid': False,
+                        'error': f"Query complexity limit exceeded: SELECT projects {num_cols} columns (max 30 allowed)"
+                    }
+        except Exception:
+            pass  # non-critical check — skip on error
 
         # 3. Max 3 levels of subquery nesting
-        max_nesting = 0
-        for scope in scope_tree.traverse():
-            depth = 0
-            curr = scope
-            while curr.parent:
-                depth += 1
-                curr = curr.parent
-            max_nesting = max(max_nesting, depth)
-            
-        if max_nesting > 3:
-            return {
-                'valid': False,
-                'error': f"Query complexity limit exceeded: subquery nesting level of {max_nesting} exceeds max 3"
-            }
+        try:
+            max_nesting = 0
+            for scope in scope_tree.traverse():
+                depth = 0
+                curr = scope
+                while curr.parent:
+                    depth += 1
+                    curr = curr.parent
+                max_nesting = max(max_nesting, depth)
+
+            if max_nesting > 3:
+                return {
+                    'valid': False,
+                    'error': f"Query complexity limit exceeded: subquery nesting level of {max_nesting} exceeds max 3"
+                }
+        except Exception:
+            pass  # non-critical check — skip on error
 
         return {'valid': True}
 

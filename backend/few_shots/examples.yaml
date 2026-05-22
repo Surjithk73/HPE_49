@@ -30,7 +30,7 @@ examples:
   
   - domain: disc
     query: "Show disk read and write counts per device"
-    sql: "SELECT device_name, SUM(reads_) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;"
+    sql: "SELECT device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;"
   
   - domain: proc
     query: "List all process names with their CPU usage"
@@ -71,9 +71,9 @@ examples:
       SELECT 
         d.device_name,
         d.from_timestamp,
-        d.reads_ + d.writes AS total_ios,
-        CASE WHEN (d.reads_ + d.writes) > 0 
-          THEN (d.cache_hits * 100.0 / (d.reads_ + d.writes)) 
+        d.reads + d.writes AS total_ios,
+        CASE WHEN (d.reads + d.writes) > 0 
+          THEN (d.cache_hits * 100.0 / (d.reads + d.writes)) 
           ELSE 0 
         END AS cache_hit_ratio_pct,
         d.request_qtime / NULLIF(d.delta_time, 0) AS avg_request_queue_length,
@@ -86,8 +86,8 @@ examples:
       LEFT JOIN macht413.dfile df 
         ON d.system_name = df.system_name 
         AND d.device_name = df.device_name 
-        AND d.from_timestamp = df.from_timestamp
-      WHERE d.reads_ + d.writes > 100
+        AND DATE_TRUNC('second', d.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)
+      WHERE d.reads + d.writes > 100
       ORDER BY cache_hit_ratio_pct ASC, total_ios DESC
       LIMIT 10000;
   
@@ -118,7 +118,7 @@ examples:
         ON p.system_name = f.system_name 
         AND p.cpu_num = f.cpu_num 
         AND p.pin = f.opener_pin 
-        AND p.from_timestamp = f.from_timestamp
+        AND DATE_TRUNC('second', p.from_timestamp) = DATE_TRUNC('second', f.from_timestamp)
       WHERE p.cpu_busy_time > 0
       ORDER BY cpu_usage_pct DESC, memory_pages DESC
       LIMIT 10000;
@@ -146,11 +146,11 @@ examples:
       LEFT JOIN macht413.proc p 
         ON t.system_name = p.system_name 
         AND t.cpu_num = p.cpu_num 
-        AND t.from_timestamp = p.from_timestamp
+        AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
       LEFT JOIN macht413.disc d 
         ON t.system_name = d.system_name 
         AND t.cpu_num = d.cpu_num 
-        AND t.from_timestamp = d.from_timestamp
+        AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)
       WHERE t.home_trans > 0
       ORDER BY abort_rate_pct DESC, transactions_started DESC
       LIMIT 10000;
@@ -178,12 +178,12 @@ examples:
         AND df.file_name_volume = do.file_name_volume 
         AND df.file_name_subvol = do.file_name_subvol 
         AND df.file_name_filename = do.file_name_filename 
-        AND df.from_timestamp = do.from_timestamp
+        AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', do.from_timestamp)
       LEFT JOIN macht413.proc p 
         ON do.system_name = p.system_name 
         AND do.opener_cpu = p.cpu_num 
         AND do.opener_pin = p.pin 
-        AND do.from_timestamp = p.from_timestamp
+        AND DATE_TRUNC('second', do.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
       WHERE df.requests_blocked > 0
       ORDER BY df.lockwait_time DESC, df.requests_blocked DESC
       LIMIT 10000;
@@ -219,7 +219,7 @@ examples:
         ON o.system_name = p.system_name 
         AND o.cpu_num = p.cpu_num 
         AND o.pin = p.pin 
-        AND o.from_timestamp = p.from_timestamp
+        AND DATE_TRUNC('second', o.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
       WHERE o.rr_processed > 0
       ORDER BY inode_cache_hit_pct ASC, resolution_requests DESC
       LIMIT 10000;
@@ -227,42 +227,70 @@ examples:
   - domain: multi
     query: "Perform comprehensive system health analysis by aggregating CPU, memory, disk, and process metrics to identify overall system bottlenecks and capacity issues"
     sql: |
-      SELECT 
-        c.from_timestamp,
-        COUNT(DISTINCT c.cpu_num) AS total_cpus,
-        AVG(c.cpu_busy_time / NULLIF(c.delta_time, 0)) * 100 AS avg_cpu_utilization_pct,
-        MAX(c.cpu_busy_time / NULLIF(c.delta_time, 0)) * 100 AS max_cpu_utilization_pct,
-        AVG(c.cpu_qtime / NULLIF(c.delta_time, 0)) AS avg_cpu_queue_length,
-        SUM(c.ending_free_mem) AS total_free_memory_pages,
-        SUM(c.page_requests) AS total_page_requests,
-        SUM(c.page_scans) AS total_page_scans,
-        COUNT(DISTINCT d.device_name) AS total_disks,
-        SUM(d.reads_ + d.writes) AS total_disk_ios,
-        AVG(d.request_qtime / NULLIF(d.delta_time, 0)) AS avg_disk_queue_length,
-        SUM(d.ending_free_space) / 1024 / 1024 / 1024 AS total_free_disk_gb,
-        COUNT(DISTINCT p.pin) AS active_processes,
-        SUM(p.messages_sent + p.messages_received) AS total_messages,
-        SUM(t.home_trans) AS total_transactions,
-        SUM(t.aborting_trans) AS total_aborted_transactions,
-        CASE 
-          WHEN AVG(c.cpu_busy_time / NULLIF(c.delta_time, 0)) > 0.85 THEN 'CPU_SATURATED'
-          WHEN SUM(c.page_scans) > SUM(c.page_requests) * 5 THEN 'MEMORY_PRESSURE'
-          WHEN AVG(d.request_qtime / NULLIF(d.delta_time, 0)) > 5 THEN 'DISK_BOTTLENECK'
-          WHEN SUM(d.ending_free_space) / 1024 / 1024 / 1024 < 100 THEN 'LOW_DISK_SPACE'
-          ELSE 'HEALTHY'
-        END AS system_health_status
-      FROM macht413.cpu c
-      LEFT JOIN macht413.disc d 
-        ON c.system_name = d.system_name 
-        AND c.from_timestamp = d.from_timestamp
-      LEFT JOIN macht413.proc p 
-        ON c.system_name = p.system_name 
-        AND c.from_timestamp = p.from_timestamp
-      LEFT JOIN macht413.tmf t 
-        ON c.system_name = t.system_name 
-        AND c.from_timestamp = t.from_timestamp
-      GROUP BY c.from_timestamp
-      ORDER BY c.from_timestamp
+      WITH cpu_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 COUNT(DISTINCT cpu_num) AS total_cpus,
+                 AVG(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS avg_cpu_utilization_pct,
+                 MAX(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS max_cpu_utilization_pct,
+                 AVG(cpu_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_cpu_queue_length,
+                 SUM(ending_free_mem) AS total_free_memory_pages,
+                 SUM(page_requests) AS total_page_requests,
+                 SUM(page_scans) AS total_page_scans
+          FROM macht413.cpu
+          GROUP BY 1, 2
+      ),
+      disc_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 COUNT(DISTINCT device_name) AS total_disks,
+                 SUM(reads + writes) AS total_disk_ios,
+                 AVG(request_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_disk_queue_length,
+                 SUM(ending_free_space) AS total_free_space
+          FROM macht413.disc
+          GROUP BY 1, 2
+      ),
+      proc_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 COUNT(DISTINCT pin) AS active_processes,
+                 SUM(messages_sent + messages_received) AS total_messages
+          FROM macht413.proc
+          GROUP BY 1, 2
+      ),
+      tmf_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 SUM(home_trans) AS total_transactions,
+                 SUM(aborting_trans) AS total_aborted_transactions
+          FROM macht413.tmf
+          GROUP BY 1, 2
+      )
+      SELECT
+          c.ts AS measurement_time,
+          c.total_cpus,
+          c.avg_cpu_utilization_pct,
+          c.max_cpu_utilization_pct,
+          c.avg_cpu_queue_length,
+          c.total_free_memory_pages,
+          c.total_page_requests,
+          c.total_page_scans,
+          d.total_disks,
+          d.total_disk_ios,
+          d.avg_disk_queue_length,
+          d.total_free_space / 1024 / 1024 / 1024 AS total_free_disk_gb,
+          p.active_processes,
+          p.total_messages,
+          t.total_transactions,
+          t.total_aborted_transactions,
+          CASE
+              WHEN c.avg_cpu_utilization_pct > 85 THEN 'CPU_SATURATED'
+              WHEN c.total_page_scans > c.total_page_requests * 5 THEN 'MEMORY_PRESSURE'
+              WHEN d.avg_disk_queue_length > 5 THEN 'DISK_BOTTLENECK'
+              WHEN d.total_free_space / 1024 / 1024 / 1024 < 100 THEN 'LOW_DISK_SPACE'
+              ELSE 'HEALTHY'
+          END AS system_health_status
+      FROM cpu_agg c
+      LEFT JOIN disc_agg d ON c.system_name = d.system_name AND c.ts = d.ts
+      LEFT JOIN proc_agg p ON c.system_name = p.system_name AND c.ts = p.ts
+      LEFT JOIN tmf_agg t  ON c.system_name = t.system_name AND c.ts = t.ts
+      ORDER BY c.ts
       LIMIT 10000;
   
   - domain: multi
@@ -292,15 +320,15 @@ examples:
           ELSE 0 
         END AS cache_4kb_hit_pct,
         d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults AS total_cache_faults,
-        CASE WHEN (d.reads_ + d.writes) > 0 
-          THEN ((d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults) * 100.0 / (d.reads_ + d.writes)) 
+        CASE WHEN (d.reads + d.writes) > 0 
+          THEN ((d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults) * 100.0 / (d.reads + d.writes)) 
           ELSE 0 
         END AS fault_rate_pct,
         (d.c0_blks_dirty_qtime + d.c1_blks_dirty_qtime + d.c2_blks_dirty_qtime + d.c3_blks_dirty_qtime) / NULLIF(d.delta_time, 0) AS avg_dirty_blocks_queued,
-        d.reads_ + d.writes AS total_ios,
+        d.reads + d.writes AS total_ios,
         d.cache_hits AS total_cache_hits
       FROM macht413.disc d
-      WHERE d.reads_ + d.writes > 0
+      WHERE d.reads + d.writes > 0
       ORDER BY fault_rate_pct DESC, total_ios DESC
       LIMIT 10000;
   
@@ -332,7 +360,7 @@ examples:
       LEFT JOIN macht413.cpu c 
         ON p.system_name = c.system_name 
         AND p.cpu_num = c.cpu_num 
-        AND p.from_timestamp = c.from_timestamp
+        AND DATE_TRUNC('second', p.from_timestamp) = DATE_TRUNC('second', c.from_timestamp)
       WHERE p.messages_sent + p.messages_received > 0
       ORDER BY avg_msg_response_time_us DESC, msgs_sent_as_linker DESC
       LIMIT 10000;
@@ -373,11 +401,11 @@ examples:
         AND f.file_name_volume = df.file_name_volume 
         AND f.file_name_subvol = df.file_name_subvol 
         AND f.file_name_filename = df.file_name_filename 
-        AND f.from_timestamp = df.from_timestamp
+        AND DATE_TRUNC('second', f.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)
       LEFT JOIN macht413.disc d 
         ON df.system_name = d.system_name 
         AND df.device_name = d.device_name 
-        AND df.from_timestamp = d.from_timestamp
+        AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)
       WHERE f.reads + f.writes > 0
       ORDER BY logical_reads + logical_writes DESC
       LIMIT 10000;
@@ -557,7 +585,7 @@ examples:
         ON do.system_name = p.system_name
         AND CAST(do.opener_cpu AS BIGINT) = p.cpu_num
         AND do.opener_pin = p.pin
-        AND date_trunc('second', do.from_timestamp) = date_trunc('second', p.from_timestamp)
+        AND DATE_TRUNC('second', do.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
       WHERE do.block_splits > 0
       ORDER BY do.block_splits DESC
       LIMIT 10000;
@@ -689,4 +717,76 @@ examples:
       FROM macht413.file
       GROUP BY opener_program_filename_volume, opener_program_filename_subvol, opener_program_filename_filename
       ORDER BY total_io DESC
+      LIMIT 10000;
+
+  - domain: multi
+    query: "Compare average cpu_busy_time with per-process cpu_busy_time by cpu_num"
+    sql: |
+      WITH cpu_avg AS (
+        SELECT system_name, cpu_num, AVG(cpu_busy_time) AS overall_avg_cpu_busy_time
+        FROM macht413.cpu
+        GROUP BY system_name, cpu_num
+      ),
+      proc_avg AS (
+        SELECT system_name, cpu_num, AVG(cpu_busy_time) AS processes_avg_cpu_busy_time
+        FROM macht413.proc
+        GROUP BY system_name, cpu_num
+      )
+      SELECT
+        ca.system_name,
+        ca.cpu_num,
+        ca.overall_avg_cpu_busy_time,
+        pa.processes_avg_cpu_busy_time,
+        ca.overall_avg_cpu_busy_time - pa.processes_avg_cpu_busy_time AS difference_cpu_vs_proc_busy_time
+      FROM cpu_avg AS ca
+      JOIN proc_avg AS pa ON ca.system_name = pa.system_name AND ca.cpu_num = pa.cpu_num
+      ORDER BY ca.system_name, ca.cpu_num
+      LIMIT 10000;
+
+  - domain: multi
+    query: "For each timestamp interval show total CPU busy time across all CPUs, total disk I/O requests across all devices, total processes running, total file opens, and total TMF transactions — give me a single unified view"
+    sql: |
+      WITH cpu_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 SUM(cpu_busy_time) AS total_cpu_busy_time
+          FROM macht413.cpu
+          GROUP BY 1, 2
+      ),
+      disc_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 SUM(reads + writes) AS total_disk_io_requests
+          FROM macht413.disc
+          GROUP BY 1, 2
+      ),
+      proc_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 COUNT(DISTINCT pin) AS total_processes
+          FROM macht413.proc
+          GROUP BY 1, 2
+      ),
+      file_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 COUNT(DISTINCT opener_pin) AS total_file_opens
+          FROM macht413.file
+          GROUP BY 1, 2
+      ),
+      tmf_agg AS (
+          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
+                 SUM(home_trans + remote_trans) AS total_tmf_transactions
+          FROM macht413.tmf
+          GROUP BY 1, 2
+      )
+      SELECT
+          c.ts AS measurement_time,
+          c.total_cpu_busy_time,
+          d.total_disk_io_requests,
+          p.total_processes,
+          f.total_file_opens,
+          t.total_tmf_transactions
+      FROM cpu_agg c
+      LEFT JOIN disc_agg d ON c.system_name = d.system_name AND c.ts = d.ts
+      LEFT JOIN proc_agg p ON c.system_name = p.system_name AND c.ts = p.ts
+      LEFT JOIN file_agg f ON c.system_name = f.system_name AND c.ts = f.ts
+      LEFT JOIN tmf_agg t  ON c.system_name = t.system_name AND c.ts = t.ts
+      ORDER BY c.ts
       LIMIT 10000;

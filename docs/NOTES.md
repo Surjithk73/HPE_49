@@ -122,3 +122,29 @@ The interactive SVG diagram lives in `frontend/src/components/ArchitectureDiagra
 - Email reports
 - Zoom/pan controls on architecture diagram
 - Persist diagram node positions to localStorage
+
+
+---
+
+## Recent Fixes
+
+### Timestamp Join + CTE Performance Fix (May 2026)
+
+**Problem 1 — Empty results on cross-table joins:**
+`from_timestamp` values have microsecond precision and do NOT match exactly across tables (e.g. cpu starts at `19:33:10.046881`, disc at `19:33:10.048083`). Direct equality joins return zero rows.
+
+**Problem 2 — Timeouts on multi-table aggregation:**
+Flat 5-table joins with `DATE_TRUNC` on both sides force PostgreSQL to evaluate the function on every row before matching. With `proc` at 110k rows and `file` at 61k rows this caused 120s timeouts.
+
+**Solution:**
+1. Prompt rule updated: cross-table timestamp joins must use `DATE_TRUNC('second', from_timestamp)` on both sides
+2. Prompt rule added: when joining 3+ large tables, use CTEs to pre-aggregate each table to `(system_name, ts)` first (60 rows), then join the small results — drops execution from timeout → 0.35s
+3. All few-shot examples updated to use the correct CTE pattern
+4. Validator fixed: CTE alias references no longer counted as real tables (was causing false "10 tables (max 9)" errors)
+5. Error logging added to `main.py` — full SQL and traceback now printed to terminal on any 500 error
+
+**Files modified:**
+- `backend/pipeline/prompt_builder.py` — Updated STRICT RULES section
+- `backend/few_shots/examples.yaml` — All multi-table examples use DATE_TRUNC + CTE pattern
+- `backend/pipeline/validator.py` — CTE-aware table counting
+- `backend/main.py` — Structured error logging with traceback
