@@ -10,6 +10,7 @@ export interface QueryResponse {
   chart_type: 'line' | 'bar' | 'table'
   domain: string
   error?: string
+  debug_prompt?: string
 }
 
 export interface HistoryEntry {

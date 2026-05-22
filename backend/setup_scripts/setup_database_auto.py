@@ -9,7 +9,7 @@ import sys
 import os
 
 # Configuration - UPDATE THESE
-POSTGRES_PASSWORD = "your_postgres_password"   # Replace with your postgres superuser password
+POSTGRES_PASSWORD = "admin"   # Replace with your postgres superuser password
 OWNER_PASSWORD = "your_owner_password"         # Password for nonstop_measure role
 READONLY_PASSWORD = "your_readonly_password"   # Password for querycraft_user role
 

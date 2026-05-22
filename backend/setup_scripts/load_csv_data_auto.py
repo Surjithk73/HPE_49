@@ -7,7 +7,7 @@ import os
 import sys
 
 # Configuration
-POSTGRES_PASSWORD = "your_postgres_password"  # Replace with your postgres superuser password
+POSTGRES_PASSWORD = "admin"  # Replace with your postgres superuser password
 
 # CSV file to table mapping
 CSV_MAPPING = {
