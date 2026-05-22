@@ -1,16 +1,83 @@
 """
 Schema Linker for QueryCraft
 Selects relevant tables and columns based on the query.
+
+Retrieval strategy:
+  1. BM25     — lexical search over per-table corpus documents
+  2. BGE-large — dense vector search (BAAI/bge-large-en-v1.5 via shared embeddings)
+  3. RRF      — Reciprocal Rank Fusion merges both ranked lists into a single score
 """
 from typing import Dict, List, Optional, Tuple
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import re
 import numpy as np
+
+try:
+    from rank_bm25 import BM25Okapi
+except ImportError:
+    BM25Okapi = None  # type: ignore
+    print("[SchemaLinker] Warning: rank_bm25 not installed — BM25 scoring disabled")
 
 try:
     from pipeline import embeddings
 except ImportError:
     import embeddings  # type: ignore
+
+
+# ── Reciprocal Rank Fusion ────────────────────────────────────────────────────
+
+def reciprocal_rank_fusion(
+    ranked_lists: List[List[str]],
+    k: int = 60,
+) -> List[Tuple[str, float]]:
+    """
+    Merge multiple ranked lists using Reciprocal Rank Fusion (RRF).
+
+    For each item, the RRF score is:
+        score(d) = Σ  1 / (k + rank_i(d))
+
+    where rank_i(d) is the 1-based position of d in list i, and k is a
+    smoothing constant (default 60, from the original Cormack et al. paper).
+
+    Args:
+        ranked_lists: List of ranked lists, each containing item identifiers
+                      ordered by decreasing relevance.
+        k:           Smoothing constant; higher k reduces the influence of
+                     high-ranking positions.
+
+    Returns:
+        List of (item, rrf_score) tuples sorted by descending RRF score.
+    """
+    scores: Dict[str, float] = {}
+    for ranked in ranked_lists:
+        for rank_0, item in enumerate(ranked):
+            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank_0 + 1)
+
+    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+
+# ── Tokeniser shared by BM25 index and query ─────────────────────────────────
+
+_STOP_WORDS = frozenset([
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "shall",
+    "should", "may", "might", "can", "could", "to", "of", "in", "for",
+    "on", "with", "at", "by", "from", "as", "into", "about", "between",
+    "through", "during", "after", "before", "above", "below", "up", "down",
+    "out", "off", "over", "under", "and", "but", "or", "nor", "not", "no",
+    "so", "if", "than", "too", "very", "just", "that", "this", "it", "its",
+    "all", "each", "every", "both", "few", "more", "most", "other", "some",
+    "such", "only", "own", "same", "then", "when", "what", "which", "who",
+    "how", "where", "why", "me", "my", "i", "we", "our", "you", "your",
+    "he", "him", "his", "she", "her", "they", "them", "their",
+])
+
+_SPLIT_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _tokenize(text: str) -> List[str]:
+    """Lowercase, split on non-alphanum, drop stop words and single chars."""
+    tokens = _SPLIT_RE.split(text.lower())
+    return [t for t in tokens if t and len(t) > 1 and t not in _STOP_WORDS]
 
 
 class SchemaLinker:
@@ -24,11 +91,10 @@ class SchemaLinker:
             schema: Loaded schema dictionary from SchemaLoader
         """
         self.schema = schema
-        self.vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
 
         # Lazy cache of per-table embeddings. Populated on the first call after
-        # the shared embedding model is ready. Until then we fall back to TF-IDF
-        # so startup queries still work.
+        # the shared embedding model is ready. Until then we fall back to BM25
+        # only so startup queries still work.
         self._table_embeddings: Optional[np.ndarray] = None
         self._table_embedding_names: List[str] = []
 
@@ -36,10 +102,16 @@ class SchemaLinker:
         # (column_names, embedding_matrix) for the queryable, non-key columns.
         self._column_embeddings: Dict[str, Tuple[List[str], np.ndarray]] = {}
 
+        # BM25 index — built lazily on first scoring call.
+        self._bm25: Optional["BM25Okapi"] = None
+        self._bm25_table_names: List[str] = []
+
         # Make sure the shared model is loading. Idempotent — safe to call from
         # multiple components.
         embeddings.start_loading()
-    
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
     def link_schema(self, normalized_text: str, domain_category: str) -> str:
         """
         Select relevant tables and columns for the query.
@@ -70,7 +142,9 @@ class SchemaLinker:
                 schema_context += "\n" + join_section
 
         return schema_context
-    
+
+    # ── Table corpus ──────────────────────────────────────────────────────────
+
     def _build_table_corpus(self) -> Tuple[List[str], List[str]]:
         """Build the per-table document used for scoring (names + texts)."""
         table_names: List[str] = []
@@ -103,6 +177,41 @@ class SchemaLinker:
 
         return table_names, table_texts
 
+    # ── BM25 lexical scoring ──────────────────────────────────────────────────
+
+    def _ensure_bm25_index(self) -> bool:
+        """Build the BM25 index on first use. Returns True on success."""
+        if self._bm25 is not None:
+            return True
+        if BM25Okapi is None:
+            return False
+
+        names, texts = self._build_table_corpus()
+        if not texts:
+            return False
+
+        tokenized_corpus = [_tokenize(t) for t in texts]
+        self._bm25 = BM25Okapi(tokenized_corpus)
+        self._bm25_table_names = names
+        print(f"[SchemaLinker] BM25 index built — {len(names)} tables")
+        return True
+
+    def _bm25_rank(self, query_text: str) -> List[str]:
+        """Return table names ranked by BM25 score (descending)."""
+        if not self._ensure_bm25_index():
+            return []
+        assert self._bm25 is not None
+
+        query_tokens = _tokenize(query_text)
+        if not query_tokens:
+            return list(self._bm25_table_names)
+
+        scores = self._bm25.get_scores(query_tokens)
+        order = np.argsort(scores)[::-1]
+        return [self._bm25_table_names[i] for i in order]
+
+    # ── Vector (embedding) scoring ────────────────────────────────────────────
+
     def _ensure_table_embeddings(self) -> bool:
         """Compute per-table embeddings on first use. Returns True on success."""
         if self._table_embeddings is not None:
@@ -121,44 +230,69 @@ class SchemaLinker:
         self._table_embedding_names = names
         return True
 
+    def _vector_rank(self, query_text: str) -> List[str]:
+        """Return table names ranked by dense vector similarity (descending)."""
+        if not self._ensure_table_embeddings():
+            return []
+        assert self._table_embeddings is not None
+
+        model = embeddings.get()
+        assert model is not None
+        query_vec = np.asarray(model.encode([query_text], normalize_embeddings=True))[0]
+        sims = self._table_embeddings @ query_vec  # rows already normalized
+        order = np.argsort(sims)[::-1]
+        return [self._table_embedding_names[i] for i in order]
+
+    # ── Hybrid scoring (BM25 + Vector + RRF) ──────────────────────────────────
+
     def _score_and_select_tables(self, query_text: str, top_n: int = 3) -> List[str]:
         """
-        Score tables against the query and return the top N.
+        Score tables against the query using hybrid retrieval and return the
+        top N.
 
-        Uses the shared MiniLM model when available (semantic similarity over
-        per-table embeddings); falls back to TF-IDF on cold start so the
-        pipeline keeps working before the model has finished loading.
+        Combines BM25 (lexical) and BAAI/bge-large-en-v1.5 (dense vector)
+        rankings via Reciprocal Rank Fusion. Falls back gracefully when one
+        or both retrieval paths are unavailable (e.g. cold start before the
+        embedding model has finished loading).
         """
-        # Embedding path
-        if self._ensure_table_embeddings():
-            assert self._table_embeddings is not None
-            model = embeddings.get()
-            assert model is not None  # checked inside _ensure_table_embeddings
-            query_vec = np.asarray(model.encode([query_text], normalize_embeddings=True))[0]
-            sims = self._table_embeddings @ query_vec  # rows already normalized
-            top_indices = np.argsort(sims)[::-1][:top_n]
-            selected = [self._table_embedding_names[i] for i in top_indices if sims[i] > 0.25]
-            if not selected and self._table_embedding_names:
-                selected = [self._table_embedding_names[top_indices[0]]]
-            return selected
+        ranked_lists: List[List[str]] = []
 
-        # Fallback: TF-IDF (cold start before model is loaded)
-        table_names, table_texts = self._build_table_corpus()
-        if not table_texts:
-            return []
-        try:
-            all_texts = table_texts + [query_text]
-            tfidf_matrix = self.vectorizer.fit_transform(all_texts)
-            similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])[0]
-            top_indices = np.argsort(similarities)[::-1][:top_n]
-            selected = [table_names[i] for i in top_indices if similarities[i] > 0.1]
-            if not selected and table_names:
-                selected = [table_names[top_indices[0]]]
-            return selected
-        except Exception as e:
-            print(f"Warning: TF-IDF fallback scoring failed: {e}")
-            return [table_names[0]] if table_names else []
+        # Lexical path — BM25
+        bm25_ranked = self._bm25_rank(query_text)
+        if bm25_ranked:
+            ranked_lists.append(bm25_ranked)
+
+        # Semantic path — dense embeddings
+        vector_ranked = self._vector_rank(query_text)
+        if vector_ranked:
+            ranked_lists.append(vector_ranked)
+
+        if not ranked_lists:
+            # Neither retriever is available — return first table as fallback
+            table_names = [
+                name for name, defn in self.schema.items()
+                if isinstance(defn, dict) and 'columns' in defn
+            ]
+            return table_names[:1]
+
+        # Merge with RRF
+        fused = reciprocal_rank_fusion(ranked_lists, k=60)
+
+        # Take top_n; require a minimum RRF score to avoid noise.  With two
+        # lists the theoretical max RRF score for rank-1 is 2/(60+1) ≈ 0.0328.
+        # A threshold of 0.005 filters out items appearing only at the very
+        # bottom of a single list.
+        min_score = 0.005
+        selected = [name for name, score in fused[:top_n] if score >= min_score]
+
+        if not selected:
+            # Safety net — always return at least the top-ranked table
+            selected = [fused[0][0]]
+
+        return selected
     
+    # ── Schema context builder ────────────────────────────────────────────────
+
     def _build_schema_context(self, table_names: List[str], query_text: str) -> str:
         """
         Build filtered schema context with relevant columns.
@@ -270,7 +404,7 @@ class SchemaLinker:
     ) -> List[Tuple[str, Dict]]:
         """Rank candidate columns by semantic relevance to the query.
 
-        Uses cached MiniLM embeddings of `col_name + description` when the
+        Uses cached BGE-large embeddings of `col_name + description` when the
         shared model is ready; falls back to keyword overlap on cold start.
         """
         if not candidates:
@@ -339,7 +473,7 @@ class SchemaLinker:
         reference another selected table. Falls back to the intersection of
         `identity_columns` for pairs without an explicit hint.
         """
-        import re
+        import re as _re
 
         selected = set(table_names)
         lines: List[str] = []
@@ -351,7 +485,7 @@ class SchemaLinker:
                 continue
 
             for hint in table_def.get('join_hints', []) or []:
-                match = re.search(r'JOIN\s+(\w+)', hint)
+                match = _re.search(r'JOIN\s+(\w+)', hint)
                 if not match:
                     continue
                 other = match.group(1)
@@ -423,6 +557,14 @@ if __name__ == "__main__":
         # Initialize components
         normalizer = QueryNormalizer()
         linker = SchemaLinker(schema)
+        
+        # Wait for embedding model (needed for full hybrid scoring)
+        print("\n[Setup] Waiting for embedding model to load...")
+        embeddings.wait(timeout=120)
+        if embeddings.is_ready():
+            print("[Setup] Model ready.\n")
+        else:
+            print("[Setup] Model not ready — will use BM25-only fallback.\n")
         
         # Test cases
         test_queries = [
