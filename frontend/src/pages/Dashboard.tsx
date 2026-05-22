@@ -6,6 +6,7 @@ import SQLPreview from '../components/SQLPreview'
 import ResultsTable from '../components/ResultsTable'
 import ChartView, { type ChartKind } from '../components/ChartView'
 import ReportDownload from '../components/ReportDownload'
+import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
 import { runQuery, runSqlDirect, getHistory, getHealth, runRetryAnalysis, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
 
@@ -230,6 +231,11 @@ export default function Dashboard() {
                   executionTimeMs={result.execution_time_ms}
                   domain={result.domain}
                 />
+
+                {/* Debug: show the exact prompt sent to the LLM */}
+                {result.debug_prompt && (
+                  <PromptDebugPanel prompt={result.debug_prompt} />
+                )}
 
                 {/* Stats + view controls */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>

@@ -136,9 +136,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -290,17 +291,29 @@ def run_query(req: QueryRequest):
         # Step 2 — Cache lookup
         cache_result = _cache.lookup(norm_text)
 
+        # Track the prompt sent to the LLM for debugging
+        debug_prompt = None
+
         if cache_result.hit:
             sql = cache_result.sql
             log_entry["cache_hit"]         = True
             log_entry["generated_sql"]     = sql
             log_entry["validation_passed"] = True
+            debug_prompt = "[Cache Hit] No prompt was sent to the LLM — SQL was served from the semantic cache."
         else:
             # Step 3 — Schema linking
             schema_context = _linker.link_schema(norm_text, domain)
 
             # Step 4 — Prompt building
             prompt = _builder.build_prompt(norm_text, schema_context, _few_shots)
+
+            # Capture the exact prompt for debugging
+            debug_prompt = prompt
+            print("\n" + "=" * 80)
+            print("[DEBUG] Exact prompt sent to Gemini API:")
+            print("=" * 80)
+            print(prompt)
+            print("=" * 80 + "\n")
 
             # Step 5 — LLM generation with retry
             # We monkey-patch the builder temporarily to count retries
@@ -383,6 +396,7 @@ def run_query(req: QueryRequest):
             "cache_hit":         cache_result.hit,
             "chart_type":        chart_type,
             "domain":            domain,
+            "debug_prompt":      debug_prompt,
         }
 
     except HTTPException:
