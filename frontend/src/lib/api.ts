@@ -81,12 +81,22 @@ export async function runSqlDirect(sql: string): Promise<QueryResponse> {
 export async function exportReport(
   sql: string,
   format: 'csv' | 'excel' | 'pdf',
-  queryText: string
+  queryText: string,
+  includeChart?: boolean,
+  includeTable?: boolean,
+  chartTypes?: string[]
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/export`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sql, format, query_text: queryText }),
+    body: JSON.stringify({
+      sql,
+      format,
+      query_text: queryText,
+      include_chart: includeChart,
+      include_table: includeTable,
+      chart_types: chartTypes,
+    }),
   })
   if (!res.ok) throw new Error(`Export failed: ${res.statusText}`)
   const blob = await res.blob()

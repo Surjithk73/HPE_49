@@ -175,6 +175,30 @@ def test_pdf():
     print(f"  Starts with %PDF (Line Chart Data): {ok}")
     checks.append(ok)
 
+    # 1. Customization Test: include_chart=False (Table only)
+    no_chart_data, _ = generate_report("pdf", COLUMNS, ROWS, QUERY, SQL, include_chart=False)
+    ok = no_chart_data[:4] == b"%PDF" and len(no_chart_data) < len(data)
+    print(f"  include_chart=False compiled successfully and is smaller: {ok}")
+    checks.append(ok)
+
+    # 2. Customization Test: include_table=False (Chart only)
+    no_table_data, _ = generate_report("pdf", COLUMNS, ROWS, QUERY, SQL, include_table=False)
+    ok = no_table_data[:4] == b"%PDF"
+    print(f"  include_table=False compiled successfully: {ok}")
+    checks.append(ok)
+
+    # 3. Customization Test: chart_type_override="line" on bar chart columns
+    override_data, _ = generate_report("pdf", COLUMNS, ROWS, QUERY, SQL, chart_type_override="line")
+    ok = override_data[:4] == b"%PDF"
+    print(f"  chart_type_override='line' compiled successfully: {ok}")
+    checks.append(ok)
+
+    # 4. Customization Test: multiple chart types (e.g. line and bar)
+    multi_chart_data, _ = generate_report("pdf", COLUMNS, ROWS, QUERY, SQL, chart_types=["line", "bar"])
+    ok = multi_chart_data[:4] == b"%PDF" and len(multi_chart_data) > len(no_chart_data)
+    print(f"  chart_types=['line', 'bar'] compiled successfully and is larger than table-only: {ok}")
+    checks.append(ok)
+
     # In-memory
     ok = isinstance(data, bytes)
     print(f"  Returns bytes (in-memory): {ok}")

@@ -19,7 +19,7 @@ import sys
 import traceback
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -154,6 +154,10 @@ class ExportRequest(BaseModel):
     sql: str
     format: str                  # "csv" | "excel" | "pdf"
     query_text: Optional[str] = ""
+    include_chart: Optional[bool] = True
+    include_table: Optional[bool] = True
+    chart_types: Optional[List[str]] = None
+    chart_type_override: Optional[str] = None
 
 class ThresholdRequest(BaseModel):
     threshold: float = Field(..., gt=0.0, le=1.0,
@@ -371,7 +375,7 @@ def run_query(req: QueryRequest):
             raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
         # Step 8 — Chart type
-        chart_type = detect_chart_type(result.columns)
+        chart_type = detect_chart_type(result.columns, result.rows)
 
         # Step 9 — Store in cache (only on cache miss, with execution metadata)
         if not cache_result.hit:
@@ -454,7 +458,7 @@ def run_sql(req: SqlRequest):
         logger.error(f"[/api/sql] Execution error — SQL: {sql}\nError: {e}")
         raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
-    chart_type = detect_chart_type(result.columns)
+    chart_type = detect_chart_type(result.columns, result.rows)
 
     log_entry["row_count"]         = result.row_count
     log_entry["execution_time_ms"] = result.execution_time_ms
@@ -497,7 +501,11 @@ def export(req: ExportRequest):
             columns=result.columns,
             rows=result.rows,
             query_text=req.query_text or "",
-            sql=sql
+            sql=sql,
+            include_chart=req.include_chart if req.include_chart is not None else True,
+            include_table=req.include_table if req.include_table is not None else True,
+            chart_types=req.chart_types,
+            chart_type_override=req.chart_type_override
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")

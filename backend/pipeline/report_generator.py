@@ -124,16 +124,16 @@ def export_excel(columns: List[str], rows: List[Dict]) -> bytes:
     return buf.read()
 
 
-def _generate_chart_image(columns: List[str], rows: List[Dict]) -> Optional[bytes]:
+def _generate_chart_image(columns: List[str], rows: List[Dict], chart_type: str) -> Optional[bytes]:
     """
-    Generate a chart image using Matplotlib and return PNG bytes.
-    Returns None if no chart should be generated (e.g. chart type is "table").
+    Generate a chart image of the specified chart_type ("bar" or "line") using Matplotlib and return PNG bytes.
+    Returns None if generation is not possible or chart_type is invalid.
     """
-    if not _HAS_MATPLOTLIB or not rows or not columns:
+    if not _HAS_MATPLOTLIB or not rows or not columns or not chart_type:
         return None
 
-    chart_type = detect_chart_type(columns)
-    if chart_type == "table":
+    chart_type = chart_type.lower().strip()
+    if chart_type not in ("bar", "line"):
         return None
 
     # Identify X and Y columns
@@ -249,7 +249,11 @@ def _generate_chart_image(columns: List[str], rows: List[Dict]) -> Optional[byte
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
 def export_pdf(columns: List[str], rows: List[Dict],
-               query_text: str = "", sql: str = "") -> bytes:
+               query_text: str = "", sql: str = "",
+               include_chart: bool = True,
+               include_table: bool = True,
+               chart_types: Optional[List[str]] = None,
+               chart_type_override: Optional[str] = None) -> bytes:
     """
     Export results as PDF bytes.
 
@@ -260,19 +264,47 @@ def export_pdf(columns: List[str], rows: List[Dict],
         rows:       List of row dicts
         query_text: Original user query (shown in report header)
         sql:        Generated SQL (shown in report)
+        include_chart: Whether to include chart in the PDF
+        include_table: Whether to include data table in the PDF
+        chart_types: List of chart types to include
+        chart_type_override: Override for chart type (backwards compatibility)
 
     Returns:
         PDF file bytes
     """
+    resolved_chart_types = []
+    if include_chart:
+        actual_chart_types = chart_types
+        if actual_chart_types is None and chart_type_override is not None:
+            actual_chart_types = [chart_type_override]
+
+        if actual_chart_types:
+            for ct in actual_chart_types:
+                if not ct:
+                    continue
+                ct_lower = ct.lower().strip()
+                if ct_lower == "auto":
+                    detected = detect_chart_type(columns, rows)
+                    if detected in ("bar", "line"):
+                        resolved_chart_types.append(detected)
+                else:
+                    resolved_chart_types.append(ct_lower)
+        else:
+            detected = detect_chart_type(columns, rows)
+            if detected in ("bar", "line"):
+                resolved_chart_types.append(detected)
+
     if _PDF_BACKEND == "weasyprint":
-        return _pdf_weasyprint(columns, rows, query_text, sql)
+        return _pdf_weasyprint(columns, rows, query_text, sql, resolved_chart_types, include_table)
     elif _PDF_BACKEND == "reportlab":
-        return _pdf_reportlab(columns, rows, query_text, sql)
+        return _pdf_reportlab(columns, rows, query_text, sql, resolved_chart_types, include_table)
     else:
         raise RuntimeError("No PDF backend available. Install reportlab: pip install reportlab")
 
 
-def _pdf_weasyprint(columns, rows, query_text, sql) -> bytes:
+def _pdf_weasyprint(columns, rows, query_text, sql,
+                    resolved_chart_types: List[str],
+                    include_table: bool = True) -> bytes:
     """Generate PDF using WeasyPrint (HTML → PDF)."""
     # Build HTML table rows
     header_cells = "".join(f"<th>{c}</th>" for c in columns)
@@ -282,14 +314,24 @@ def _pdf_weasyprint(columns, rows, query_text, sql) -> bytes:
         data_rows += f"<tr>{cells}</tr>\n"
 
     chart_html = ""
-    chart_bytes = _generate_chart_image(columns, rows)
-    if chart_bytes:
-        base64_data = base64.b64encode(chart_bytes).decode('utf-8')
-        chart_html = f"""
-        <div style="text-align: center; margin: 20px 0;">
-            <img src="data:image/png;base64,{base64_data}" style="max-width: 100%; max-height: 350px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;"/>
-        </div>
-        """
+    for ct in resolved_chart_types:
+        chart_bytes = _generate_chart_image(columns, rows, ct)
+        if chart_bytes:
+            base64_data = base64.b64encode(chart_bytes).decode('utf-8')
+            chart_html += f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <img src="data:image/png;base64,{base64_data}" style="max-width: 100%; max-height: 350px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;"/>
+            </div>
+            """
+
+    table_html = ""
+    if include_table:
+        table_html = f"""
+  <h3>Results ({len(rows)} rows)</h3>
+  <table>
+    <thead><tr>{header_cells}</tr></thead>
+    <tbody>{data_rows}</tbody>
+  </table>"""
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -300,10 +342,9 @@ def _pdf_weasyprint(columns, rows, query_text, sql) -> bytes:
   h1   {{ color: #1F4E79; font-size: 18px; }}
   h3   {{ color: #333; font-size: 13px; margin-top: 16px; }}
   pre  {{ background: #f4f4f4; padding: 8px; border-radius: 4px;
-          font-size: 10px; white-space: pre-wrap; word-break: break-all; }}
-  table {{ border-collapse: collapse; width: 100%; margin-top: 12px; }}
-  th   {{ background: #1F4E79; color: white; padding: 6px 8px; text-align: left; }}
-  td   {{ border: 1px solid #ddd; padding: 5px 8px; }}
+          font-size: 10px; white-space: pre-wrap; word-break: break-all; overflow-wrap: break-word; }}
+  table {{ border-collapse: collapse; width: 100%; margin-top: 12px; table-layout: fixed; }}
+  th, td {{ border: 1px solid #ddd; padding: 5px 8px; word-wrap: break-word; word-break: break-all; overflow-wrap: break-word; }}
   tr:nth-child(even) {{ background: #f9f9f9; }}
 </style>
 </head>
@@ -314,20 +355,22 @@ def _pdf_weasyprint(columns, rows, query_text, sql) -> bytes:
   <h3>Generated SQL</h3>
   <pre>{sql}</pre>
   {chart_html}
-  <h3>Results ({len(rows)} rows)</h3>
-  <table>
-    <thead><tr>{header_cells}</tr></thead>
-    <tbody>{data_rows}</tbody>
-  </table>
+  {table_html}
 </body>
 </html>"""
 
     return weasyprint.HTML(string=html).write_pdf()
 
 
-def _pdf_reportlab(columns, rows, query_text, sql) -> bytes:
+def _pdf_reportlab(columns, rows, query_text, sql,
+                    resolved_chart_types: List[str],
+                    include_table: bool = True) -> bytes:
     """Generate PDF using reportlab (pure Python, no GTK needed)."""
     buf = io.BytesIO()
+
+    # XML escape helper
+    def _escape_xml(text: str) -> str:
+        return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
     # Use landscape if many columns
     pagesize = landscape(A4) if len(columns) > 6 else A4
@@ -341,9 +384,33 @@ def _pdf_reportlab(columns, rows, query_text, sql) -> bytes:
     h3_style    = ParagraphStyle("h3", parent=styles["Heading3"],
                                  textColor=colors.HexColor("#333333"), fontSize=11)
     body_style  = styles["BodyText"]
+    
+    # Code style with wordWrap enabled to prevent SQL overflow
     code_style  = ParagraphStyle("code", parent=styles["Code"],
                                  fontSize=8, leading=10,
-                                 backColor=colors.HexColor("#F4F4F4"))
+                                 backColor=colors.HexColor("#F4F4F4"),
+                                 wordWrap='CJK')
+
+    # Table styles with wordWrap enabled to prevent text cell overflow
+    table_header_style = ParagraphStyle(
+        "TableHeader",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+        alignment=1, # Center
+        wordWrap='CJK'
+    )
+    table_cell_style = ParagraphStyle(
+        "TableCell",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#333333"),
+        wordWrap='CJK'
+    )
 
     story = []
 
@@ -360,66 +427,75 @@ def _pdf_reportlab(columns, rows, query_text, sql) -> bytes:
     # SQL block
     if sql:
         story.append(Paragraph("Generated SQL", h3_style))
-        story.append(Preformatted(sql, code_style))
+        # Escape HTML entities, replace newlines and multiple spaces for Paragraph rendering
+        formatted_sql = _escape_xml(sql).replace('\n', '<br/>').replace('  ', '&nbsp;&nbsp;')
+        story.append(Paragraph(formatted_sql, code_style))
         story.append(Spacer(1, 0.3*cm))
 
-    # Chart image
-    chart_bytes = _generate_chart_image(columns, rows)
-    if chart_bytes:
-        try:
-            from reportlab.platypus import Image as RLImage
-            img_flowable = RLImage(io.BytesIO(chart_bytes), width=16*cm, height=8*cm)
-            story.append(img_flowable)
-            story.append(Spacer(1, 0.4*cm))
-        except Exception as e:
-            print(f"[ReportGenerator] ReportLab image embedding failed: {e}")
+    # Chart images
+    for ct in resolved_chart_types:
+        chart_bytes = _generate_chart_image(columns, rows, ct)
+        if chart_bytes:
+            try:
+                from reportlab.platypus import Image as RLImage
+                img_flowable = RLImage(io.BytesIO(chart_bytes), width=16*cm, height=8*cm)
+                story.append(img_flowable)
+                story.append(Spacer(1, 0.4*cm))
+            except Exception as e:
+                print(f"[ReportGenerator] ReportLab image embedding failed: {e}")
 
     # Results table
-    story.append(Paragraph(f"Results ({len(rows)} rows)", h3_style))
-    story.append(Spacer(1, 0.2*cm))
+    if include_table:
+        story.append(Paragraph(f"Results ({len(rows)} rows)", h3_style))
+        story.append(Spacer(1, 0.2*cm))
 
-    if rows:
-        # Build table data: header + rows (cap at 500 rows in PDF)
-        display_rows = rows[:500]
-        table_data = [columns]
-        for row in display_rows:
-            table_data.append([str(row.get(c, "")) for c in columns])
-
-        # Column widths — distribute evenly
-        page_w = pagesize[0] - 3*cm
-        col_w  = page_w / len(columns)
-        col_widths = [col_w] * len(columns)
-
-        tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
-        tbl.setStyle(TableStyle([
-            # Header
-            ("BACKGROUND",  (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
-            ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
-            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE",    (0, 0), (-1, 0), 8),
-            ("ALIGN",       (0, 0), (-1, 0), "CENTER"),
+        if rows:
+            # Build table data: header + rows (cap at 500 rows in PDF)
+            display_rows = rows[:500]
+            table_data = []
+            
+            # Header row
+            table_data.append([Paragraph(_escape_xml(c), table_header_style) for c in columns])
+            
             # Data rows
-            ("FONTSIZE",    (0, 1), (-1, -1), 7),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-             [colors.white, colors.HexColor("#F9F9F9")]),
-            ("GRID",        (0, 0), (-1, -1), 0.4, colors.HexColor("#DDDDDD")),
-            ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING",  (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ]))
-        story.append(tbl)
+            for row in display_rows:
+                row_cells = []
+                for c in columns:
+                    val = row.get(c, "")
+                    row_cells.append(Paragraph(_escape_xml(val), table_cell_style))
+                table_data.append(row_cells)
 
-        if len(rows) > 500:
-            story.append(Spacer(1, 0.2*cm))
-            story.append(Paragraph(
-                f"Note: PDF shows first 500 of {len(rows)} rows. "
-                "Download CSV or Excel for full dataset.",
-                body_style
-            ))
-    else:
-        story.append(Paragraph("No results returned.", body_style))
+            # Column widths — distribute evenly
+            page_w = pagesize[0] - 3*cm
+            col_w  = page_w / len(columns)
+            col_widths = [col_w] * len(columns)
+
+            tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+            tbl.setStyle(TableStyle([
+                # Header
+                ("BACKGROUND",  (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+                ("ALIGN",       (0, 0), (-1, 0), "CENTER"),
+                # Data rows
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+                 [colors.white, colors.HexColor("#F9F9F9")]),
+                ("GRID",        (0, 0), (-1, -1), 0.4, colors.HexColor("#DDDDDD")),
+                ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING",  (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(tbl)
+
+            if len(rows) > 500:
+                story.append(Spacer(1, 0.2*cm))
+                story.append(Paragraph(
+                    f"Note: PDF shows first 500 of {len(rows)} rows. "
+                    "Download CSV or Excel for full dataset.",
+                    body_style
+                ))
+        else:
+            story.append(Paragraph("No results returned.", body_style))
 
     doc.build(story)
     buf.seek(0)
@@ -428,7 +504,11 @@ def _pdf_reportlab(columns, rows, query_text, sql) -> bytes:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 def generate_report(format: str, columns: List[str], rows: List[Dict],
-                    query_text: str = "", sql: str = "") -> Tuple[bytes, str]:
+                    query_text: str = "", sql: str = "",
+                    include_chart: bool = True,
+                    include_table: bool = True,
+                    chart_types: Optional[List[str]] = None,
+                    chart_type_override: Optional[str] = None) -> Tuple[bytes, str]:
     """
     Generate a report in the requested format.
 
@@ -438,6 +518,10 @@ def generate_report(format: str, columns: List[str], rows: List[Dict],
         rows:       List of row dicts
         query_text: Original user query
         sql:        Generated SQL
+        include_chart: Whether to include chart in the PDF
+        include_table: Whether to include data table in the PDF
+        chart_types: List of chart types to include
+        chart_type_override: Override for chart type (backwards compatibility)
 
     Returns:
         (file_bytes, mime_type)
@@ -454,7 +538,7 @@ def generate_report(format: str, columns: List[str], rows: List[Dict],
         return export_excel(columns, rows), MIME_EXCEL
 
     elif fmt == "pdf":
-        return export_pdf(columns, rows, query_text, sql), MIME_PDF
+        return export_pdf(columns, rows, query_text, sql, include_chart, include_table, chart_types, chart_type_override), MIME_PDF
 
     else:
         raise ValueError(f"Unsupported format: '{format}'. Use 'csv', 'excel', or 'pdf'.")
