@@ -4,10 +4,30 @@ Exports query results as CSV, Excel, or PDF — all in-memory, no disk writes.
 """
 import csv
 import io
-from typing import Dict, List, Tuple
+import base64
+from typing import Dict, List, Tuple, Optional
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
+
+# Headless matplotlib configuration for thread safety
+_HAS_MATPLOTLIB = False
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    _HAS_MATPLOTLIB = True
+except ImportError:
+    pass
+
+try:
+    from pipeline.executor import detect_chart_type
+except ImportError:
+    try:
+        from executor import detect_chart_type
+    except ImportError:
+        def detect_chart_type(columns: List[str]) -> str:
+            return "table"
 
 # PDF: try WeasyPrint first (requires GTK on Windows), fall back to reportlab
 _PDF_BACKEND = None
@@ -104,6 +124,129 @@ def export_excel(columns: List[str], rows: List[Dict]) -> bytes:
     return buf.read()
 
 
+def _generate_chart_image(columns: List[str], rows: List[Dict]) -> Optional[bytes]:
+    """
+    Generate a chart image using Matplotlib and return PNG bytes.
+    Returns None if no chart should be generated (e.g. chart type is "table").
+    """
+    if not _HAS_MATPLOTLIB or not rows or not columns:
+        return None
+
+    chart_type = detect_chart_type(columns)
+    if chart_type == "table":
+        return None
+
+    # Identify X and Y columns
+    columns_lower = [c.lower() for c in columns]
+    x_col = None
+
+    # Try to find a timestamp column for X-axis
+    for i, col in enumerate(columns_lower):
+        if 'timestamp' in col:
+            x_col = columns[i]
+            break
+
+    # Fallback to first column as X-axis
+    if not x_col and columns:
+        x_col = columns[0]
+
+    if not x_col:
+        return None
+
+    # Identify numeric Y columns (excluding the X column)
+    y_cols = []
+    # Limit data to first 30 rows for readable chart
+    plot_data = rows[:30]
+
+    for col in columns:
+        if col == x_col:
+            continue
+        # Check if the column contains numeric values that we can plot
+        is_numeric = False
+        for r in plot_data:
+            val = r.get(col)
+            if val is not None:
+                try:
+                    float(val)
+                    is_numeric = True
+                    break
+                except (ValueError, TypeError):
+                    pass
+        if is_numeric:
+            y_cols.append(col)
+
+    if not y_cols:
+        return None
+
+    try:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        primary_color = "#1F4E79"
+
+        # Extract X values
+        x_vals = []
+        for r in plot_data:
+            val = r.get(x_col, "")
+            # Shorten timestamps for visibility
+            if isinstance(val, str) and len(val) > 19 and 'T' in val:
+                x_vals.append(val.split('T')[1][:8])
+            else:
+                x_vals.append(str(val))
+
+        if chart_type == "line":
+            for y_col in y_cols:
+                y_vals = []
+                for r in plot_data:
+                    try:
+                        y_vals.append(float(r.get(y_col, 0)))
+                    except (ValueError, TypeError):
+                        y_vals.append(0.0)
+                ax.plot(x_vals, y_vals, label=y_col, marker='o', linewidth=2, color=primary_color)
+        elif chart_type == "bar":
+            import numpy as np
+            n_series = len(y_cols)
+            x_indices = np.arange(len(plot_data))
+            bar_width = 0.8 / n_series
+
+            for idx, y_col in enumerate(y_cols):
+                y_vals = []
+                for r in plot_data:
+                    try:
+                        y_vals.append(float(r.get(y_col, 0)))
+                    except (ValueError, TypeError):
+                        y_vals.append(0.0)
+                offset = (idx - (n_series - 1) / 2) * bar_width
+                ax.bar(x_indices + offset, y_vals, bar_width, label=y_col, color=primary_color if idx == 0 else None)
+
+            ax.set_xticks(x_indices)
+            ax.set_xticklabels(x_vals)
+
+        # Customize labels and style
+        ax.set_title(f"{chart_type.capitalize()} Chart", fontsize=12, fontweight='bold', color='#333333')
+        ax.set_xlabel(x_col, fontsize=10, fontweight='bold')
+        if len(y_cols) == 1:
+            ax.set_ylabel(y_cols[0], fontsize=10, fontweight='bold')
+
+        ax.grid(True, linestyle='--', alpha=0.5, which='both', axis='y')
+        ax.set_axisbelow(True)
+
+        if len(x_vals) > 5:
+            plt.xticks(rotation=45, ha='right')
+
+        if len(y_cols) > 1:
+            ax.legend(loc='best')
+
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=300)
+        plt.close(fig)
+        buf.seek(0)
+        return buf.read()
+    except Exception as e:
+        print(f"[ReportGenerator] Failed to generate chart: {e}")
+        return None
+
+
 # ── PDF ───────────────────────────────────────────────────────────────────────
 def export_pdf(columns: List[str], rows: List[Dict],
                query_text: str = "", sql: str = "") -> bytes:
@@ -138,6 +281,16 @@ def _pdf_weasyprint(columns, rows, query_text, sql) -> bytes:
         cells = "".join(f"<td>{row.get(c, '')}</td>" for c in columns)
         data_rows += f"<tr>{cells}</tr>\n"
 
+    chart_html = ""
+    chart_bytes = _generate_chart_image(columns, rows)
+    if chart_bytes:
+        base64_data = base64.b64encode(chart_bytes).decode('utf-8')
+        chart_html = f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{base64_data}" style="max-width: 100%; max-height: 350px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;"/>
+        </div>
+        """
+
     html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -160,6 +313,7 @@ def _pdf_weasyprint(columns, rows, query_text, sql) -> bytes:
   <p>{query_text}</p>
   <h3>Generated SQL</h3>
   <pre>{sql}</pre>
+  {chart_html}
   <h3>Results ({len(rows)} rows)</h3>
   <table>
     <thead><tr>{header_cells}</tr></thead>
@@ -208,6 +362,17 @@ def _pdf_reportlab(columns, rows, query_text, sql) -> bytes:
         story.append(Paragraph("Generated SQL", h3_style))
         story.append(Preformatted(sql, code_style))
         story.append(Spacer(1, 0.3*cm))
+
+    # Chart image
+    chart_bytes = _generate_chart_image(columns, rows)
+    if chart_bytes:
+        try:
+            from reportlab.platypus import Image as RLImage
+            img_flowable = RLImage(io.BytesIO(chart_bytes), width=16*cm, height=8*cm)
+            story.append(img_flowable)
+            story.append(Spacer(1, 0.4*cm))
+        except Exception as e:
+            print(f"[ReportGenerator] ReportLab image embedding failed: {e}")
 
     # Results table
     story.append(Paragraph(f"Results ({len(rows)} rows)", h3_style))

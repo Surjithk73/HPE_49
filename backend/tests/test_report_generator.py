@@ -155,12 +155,24 @@ def test_pdf():
 
     # Starts with %PDF
     ok = data[:4] == b"%PDF"
-    print(f"  Starts with %PDF: {ok}  ({data[:8]})")
+    print(f"  Starts with %PDF (Bar Chart Data): {ok}  ({data[:8]})")
     checks.append(ok)
 
     # Non-empty (at least 1 KB)
     ok = len(data) > 1000
     print(f"  Non-empty ({len(data):,} bytes): {ok}")
+    checks.append(ok)
+
+    # Line Chart Data Test
+    line_columns = ["from_timestamp", "cpu_busy_time"]
+    line_rows = [
+        {"from_timestamp": "2023-03-16T19:36:04.940147", "cpu_busy_time": 100000},
+        {"from_timestamp": "2023-03-16T19:36:09.940299", "cpu_busy_time": 150000},
+        {"from_timestamp": "2023-03-16T19:36:14.940450", "cpu_busy_time": 120000},
+    ]
+    line_data, line_mime = generate_report("pdf", line_columns, line_rows, "Show busy time over time", "SELECT from_timestamp, cpu_busy_time FROM cpu")
+    ok = line_mime == MIME_PDF and line_data[:4] == b"%PDF"
+    print(f"  Starts with %PDF (Line Chart Data): {ok}")
     checks.append(ok)
 
     # In-memory
