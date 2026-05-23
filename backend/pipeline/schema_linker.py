@@ -102,6 +102,8 @@ class SchemaLinker:
         # (column_names, embedding_matrix) for the queryable, non-key columns.
         self._column_embeddings: Dict[str, Tuple[List[str], np.ndarray]] = {}
 
+        self._load_precomputed_embeddings()
+
         # BM25 index — built lazily on first scoring call.
         self._bm25: Optional["BM25Okapi"] = None
         self._bm25_table_names: List[str] = []
@@ -109,6 +111,24 @@ class SchemaLinker:
         # Make sure the shared model is loading. Idempotent — safe to call from
         # multiple components.
         embeddings.start_loading()
+
+    def _load_precomputed_embeddings(self):
+        """Load precomputed embeddings from npz file if available."""
+        import os
+        npz_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'schema_store', 'schema_embeddings.npz')
+        if os.path.exists(npz_path):
+            try:
+                data = np.load(npz_path, allow_pickle=True)
+                self._table_embedding_names = data['table_names'].tolist()
+                self._table_embeddings = data['table_embeddings']
+                for t_name in self._table_embedding_names:
+                    col_names_key = f"{t_name}_col_names"
+                    col_emb_key = f"{t_name}_col_embeddings"
+                    if col_names_key in data and col_emb_key in data:
+                        self._column_embeddings[t_name] = (data[col_names_key].tolist(), data[col_emb_key])
+                print(f"[SchemaLinker] Loaded precomputed embeddings from {npz_path}")
+            except Exception as e:
+                print(f"[SchemaLinker] Failed to load precomputed embeddings: {e}")
 
     # ── Public API ────────────────────────────────────────────────────────────
 
