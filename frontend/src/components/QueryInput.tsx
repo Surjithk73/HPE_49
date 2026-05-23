@@ -21,7 +21,7 @@ const NL_SUGGESTIONS = [
 
 const SQL_SUGGESTIONS = [
   'SELECT cpu_num, AVG(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS avg_cpu_pct FROM macht413.cpu GROUP BY cpu_num ORDER BY cpu_num',
-  'SELECT device_name, SUM(reads_) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC',
+  'SELECT device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC',
   'SELECT process_name, cpu_busy_time, pres_pages_end FROM macht413.proc ORDER BY cpu_busy_time DESC LIMIT 20',
 ]
 
