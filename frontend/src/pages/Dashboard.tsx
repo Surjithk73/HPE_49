@@ -6,6 +6,7 @@ import SQLPreview from '../components/SQLPreview'
 import ResultsTable from '../components/ResultsTable'
 import ChartView, { type ChartKind } from '../components/ChartView'
 import ReportDownload from '../components/ReportDownload'
+import AIExplanation from '../components/AIExplanation'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
 import { runQuery, runSqlDirect, getHistory, getHealth, runRetryAnalysis, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
@@ -304,6 +305,8 @@ export default function Dashboard() {
                   ? <ChartView chartType={chartKind} columns={result.columns} rows={result.rows} />
                   : <ResultsTable columns={result.columns} rows={result.rows} />
                 }
+
+                <AIExplanation sql={result.sql} queryText={currentQuery} columns={result.columns} rows={result.rows} />
 
                 {/* Download */}
                 <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '16px' }}>

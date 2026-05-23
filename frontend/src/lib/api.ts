@@ -167,3 +167,15 @@ export async function runRetryAnalysis(): Promise<RetryAnalysisReport> {
     method: 'POST',
   })
 }
+
+export async function explainResults(
+  sql: string,
+  queryText: string,
+  columns: string[],
+  rows: Record<string, unknown>[]
+): Promise<{ explanation: string }> {
+  return request<{ explanation: string }>('/api/explain', {
+    method: 'POST',
+    body: JSON.stringify({ sql, query_text: queryText, columns, rows }),
+  })
+}

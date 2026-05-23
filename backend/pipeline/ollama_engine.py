@@ -121,6 +121,70 @@ class OllamaEngine(BaseLLMEngine):
 
         return self._extract_sql(text)
 
+    def generate_text(self, prompt: str) -> str:
+        """
+        Generate conversational/analytical text by calling Ollama's /api/generate endpoint.
+
+        Args:
+            prompt: Complete prompt string
+
+        Returns:
+            Generated text response
+
+        Raises:
+            LLMError: If the call fails or returns no text
+        """
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.3,
+                "top_p": 0.9,
+            },
+        }
+
+        body = json.dumps(payload).encode("utf-8")
+        req = urlrequest.Request(
+            f"{self.url}/api/generate",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urlrequest.urlopen(req, timeout=self.timeout) as resp:
+                raw = resp.read().decode("utf-8")
+        except HTTPError as e:
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", errors="replace")[:300]
+            except Exception:
+                pass
+            raise LLMError(
+                f"Ollama HTTP {e.code} from {self.url}/api/generate "
+                f"(model={self.model_name}). {detail}"
+            )
+        except URLError as e:
+            raise LLMError(
+                f"Could not reach Ollama at {self.url}: {e.reason}. "
+                f"Is the server running? (`ollama serve`)"
+            )
+        except Exception as e:
+            raise LLMError(f"Ollama request failed: {e}")
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise LLMError(f"Ollama returned non-JSON response: {e}")
+
+        text = data.get("response")
+        if not text:
+            err = data.get("error") or "empty response"
+            raise LLMError(f"Ollama returned no text: {err}")
+
+        return text.strip()
+
 
 # Standalone smoke test — requires a running Ollama server with the configured
 # model pulled. Won't run during normal test suites.

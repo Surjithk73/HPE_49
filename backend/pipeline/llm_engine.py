@@ -39,6 +39,9 @@ class BaseLLMEngine:
     def generate_sql(self, prompt: str) -> str:  # pragma: no cover - abstract
         raise NotImplementedError
 
+    def generate_text(self, prompt: str) -> str:  # pragma: no cover - abstract
+        raise NotImplementedError
+
     def generate_sql_with_retry(self, prompt: str, validator, prompt_builder, max_retries: int = 2) -> str:
         """
         Generate SQL with automatic retry on validation failure.
@@ -152,6 +155,30 @@ class LLMEngine(BaseLLMEngine):
 
         except Exception as e:
             raise LLMError(f"Failed to generate SQL: {str(e)}")
+
+    def generate_text(self, prompt: str) -> str:
+        """
+        Generate conversational/analytical text from a prompt.
+
+        Args:
+            prompt: Complete prompt string
+
+        Returns:
+            Generated text response
+
+        Raises:
+            LLMError: If generation fails
+        """
+        try:
+            response = self.model.generate_content(prompt)
+
+            if not response or not response.text:
+                raise LLMError("Empty response from LLM")
+
+            return response.text.strip()
+
+        except Exception as e:
+            raise LLMError(f"Failed to generate text: {str(e)}")
 
 
 def make_llm_engine() -> "BaseLLMEngine":
