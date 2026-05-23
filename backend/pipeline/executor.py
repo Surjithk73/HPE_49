@@ -8,6 +8,7 @@ Improvements:
   handshake cost on every query.  Pool size: min=2, max=10.
 """
 import time
+import re
 from typing import Dict, List, Optional
 import psycopg2
 from psycopg2 import pool as psycopg2_pool
@@ -78,6 +79,7 @@ class QueryExecutor:
         min_conn: int = _POOL_MIN_CONN,
         max_conn: int = _POOL_MAX_CONN,
         allowed_users: List[str] = None,
+        max_query_cost: float = None,
     ):
         """
         Initialize the executor and create the connection pool.
@@ -100,6 +102,7 @@ class QueryExecutor:
         self.password = password or DB_PASSWORD
         self.timeout  = timeout  or QUERY_TIMEOUT_SECONDS
         self.allowed_users = allowed_users or ALLOWED_DB_USERS
+        self.max_query_cost = max_query_cost or float(os.getenv("MAX_QUERY_COST", "25000.0"))
 
         # Enforce read-only user checks dynamically
         if self.user not in self.allowed_users:
@@ -130,6 +133,22 @@ class QueryExecutor:
             )
         except psycopg2.Error as e:
             raise ExecutionError(f"Failed to create connection pool: {e}")
+
+    def _estimate_cost(self, cursor, sql: str) -> float:
+        """Run EXPLAIN and extract the total start-up + run cost of the query."""
+        try:
+            cursor.execute(f"EXPLAIN {sql}")
+            explain_rows = cursor.fetchall()
+            if not explain_rows:
+                return 0.0
+            first_line = explain_rows[0][0]
+            match = re.search(r'cost=\d+(?:\.\d+)?\.\.(\d+(?:\.\d+)?)', first_line)
+            if match:
+                return float(match.group(1))
+            return 0.0
+        except Exception as e:
+            print(f"[Executor] Warning: Cost estimation failed: {e}")
+            return 0.0
 
     def close(self) -> None:
         """Close all connections in the pool.  Call on application shutdown."""
@@ -169,6 +188,14 @@ class QueryExecutor:
             connection.autocommit = True
 
             cursor = connection.cursor()
+
+            # Cost Estimation Check
+            if self.max_query_cost is not None:
+                cost = self._estimate_cost(cursor, sql)
+                if cost > self.max_query_cost:
+                    raise ExecutionError(
+                        f"Query cost estimation ({cost}) exceeds the maximum query cost limit ({self.max_query_cost}). Query rejected."
+                    )
 
             cursor.execute(sql)
 

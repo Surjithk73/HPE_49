@@ -4,6 +4,7 @@ backend/audit/query_log.db
 backend/__pycache__/
 backend/**/__pycache__/
 backend/cache_store/
+backend/tests/cache_store_test_*/
 
 # Frontend
 frontend/node_modules/

@@ -14,6 +14,7 @@ class QueryNormalizer:
         'procs': 'processes',
         'util': 'utilization',
         'cpu busy': 'cpu_busy_time',
+        'cpu time': 'cpu_busy_time',
         'disk': 'disc',
         'disks': 'discs',
         'transaction': 'tmf',
