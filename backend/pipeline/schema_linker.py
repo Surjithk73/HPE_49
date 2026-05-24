@@ -257,7 +257,8 @@ class SchemaLinker:
         assert self._table_embeddings is not None
 
         model = embeddings.get()
-        assert model is not None
+        if model is None:
+            return []
         query_vec = np.asarray(model.encode([query_text], normalize_embeddings=True))[0]
         sims = self._table_embeddings @ query_vec  # rows already normalized
         order = np.argsort(sims)[::-1]
