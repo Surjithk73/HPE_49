@@ -564,7 +564,7 @@ examples:
 
   - domain: disc
     query: "Show disk read and write counts per device"
-    sql: "SELECT device_name, SUM(reads_) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;"
+    sql: "SELECT device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;"
 ```
 
 ---
@@ -593,7 +593,7 @@ class LLMEngine:
 ```bash
 cd querycraft/backend
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+ 
 ```
 
 ### Terminal 2 — Frontend

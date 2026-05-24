@@ -247,6 +247,38 @@ def test_history():
     return ok
 
 
+def test_explain():
+    print("\n" + "=" * 80)
+    print("TEST 11: POST /api/explain")
+    print("=" * 80)
+
+    body = {
+        "sql": "SELECT cpu_num, cpu_busy_time FROM macht413.cpu LIMIT 10",
+        "query_text": "show cpu busy time per cpu",
+        "columns": ["cpu_num", "cpu_busy_time"],
+        "rows": [
+            {"cpu_num": 0, "cpu_busy_time": 1000},
+            {"cpu_num": 1, "cpu_busy_time": 1200},
+            {"cpu_num": 2, "cpu_busy_time": 900}
+        ]
+    }
+    r = _post("/api/explain", body)
+    print(f"  Status: {r.status_code}")
+
+    ok = False
+    if r.status_code == 200:
+        data = r.json()
+        print(f"  Explanation key exists: {'explanation' in data}")
+        if 'explanation' in data:
+            print(f"  Explanation snippet: {data['explanation'][:80]}...")
+            ok = len(data['explanation']) > 0
+    else:
+        print(f"  Error message: {r.text}")
+
+    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    return ok
+
+
 def run_all_tests():
     print("\n" + "=" * 80)
     print("PHASE 8 — API ENDPOINT TESTS")
@@ -271,6 +303,7 @@ def run_all_tests():
     results.append(("POST /api/export (excel)",  test_export_excel()))
     results.append(("POST /api/export (pdf)",    test_export_pdf()))
     results.append(("GET /api/history",          test_history()))
+    results.append(("POST /api/explain",          test_explain()))
 
     print("\n" + "=" * 80)
     print("TEST SUMMARY")

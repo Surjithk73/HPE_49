@@ -44,7 +44,7 @@ All 10 build phases (0–10) are complete. The system is production-ready for lo
 
 ## Known Issues / Gotchas
 
-1. **`reads_` trailing underscore** — The `disc` table uses `reads_` (not `reads`) to avoid a PostgreSQL reserved word conflict. The normalizer handles this automatically, but be aware when writing raw SQL.
+1. **`reads` column** — Historical documentation may refer to `reads_` with a trailing underscore. However, the database table uses the standard column name `reads` (without any trailing underscore), and SQL queries should use `reads` directly.
 
 2. **`disc` not `disk`** — HPE NonStop uses `disc`. The normalizer expands `disk` → `disc` automatically.
 

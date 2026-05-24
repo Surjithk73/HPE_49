@@ -41,7 +41,14 @@ def main():
     print("\n" + "=" * 80)
     print(" " * 8 + "PHASES 2, 3, 4, 5, 6 & 7 - COMPREHENSIVE TEST SUITE")
     print("=" * 80)
-    
+
+    # Wait for shared embedding model thread to load
+    print("Waiting for embedding model to load...")
+    import pipeline.embeddings as embeddings
+    embeddings.start_loading()
+    embeddings.wait(timeout=60)
+    print("Embedding model ready. Running tests...\n")
+
     results = []
     
     print("\n" + "▶" * 40)

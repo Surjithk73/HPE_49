@@ -132,9 +132,9 @@ def test_with_few_shots():
     print(prompt[:600] + "..." if len(prompt) > 600 else prompt)
     
     # Verify few-shot section is present
-    assert "EXAMPLE QUERIES:" in prompt
-    assert "-- Query: Show average CPU busy time per CPU" in prompt
-    assert "-- SQL: SELECT cpu_num" in prompt
+    assert "EXAMPLES (follow this INPUT/OUTPUT pattern exactly):" in prompt
+    assert "INPUT: Show average CPU busy time per CPU" in prompt
+    assert "OUTPUT:\nSELECT cpu_num" in prompt
     
     print("\n✓ Few-shot examples correctly included in prompt")
     print("=" * 80)

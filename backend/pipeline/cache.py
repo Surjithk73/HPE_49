@@ -10,6 +10,8 @@ Improvements:
 import hashlib
 import sys
 import os
+import re
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -18,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 try:
     from config import CACHE_SIMILARITY_THRESHOLD
 except (ValueError, ImportError):
-    CACHE_SIMILARITY_THRESHOLD = 0.95
+    CACHE_SIMILARITY_THRESHOLD = 0.90
 
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -27,6 +29,83 @@ try:
     from pipeline import embeddings
 except ImportError:
     import embeddings  # type: ignore
+
+
+def stem_word(word: str) -> str:
+    """
+    Minimal stemmer to handle common plural nouns in DB contexts:
+    e.g., processes -> process, disks -> disk, cpus -> cpu, files -> file.
+    """
+    word = word.lower().strip()
+    if len(word) <= 3:
+        return word
+    if word.endswith('sses'):
+        return word[:-2]  # processes -> process
+    if word.endswith('ies'):
+        return word[:-3] + 'y'  # queries -> query
+    if word.endswith('es') and not word.endswith('ees') and not word.endswith('ses'):
+        return word[:-2]
+    if word.endswith('s') and not word.endswith('ss'):
+        return word[:-1]
+    return word
+
+
+def extract_entities(text: str) -> dict:
+    """
+    Extract numbers, quoted values, and key entity terms from query text.
+    Enforces exact matches to prevent false cache hits.
+    """
+    text = text.lower().strip()
+
+    # 1. Extract standalone numbers (both integers and decimals)
+    number_matches = re.findall(r'\b\d+(?:\.\d+)?\b', text)
+    numbers = []
+    for num_str in number_matches:
+        try:
+            if '.' in num_str:
+                numbers.append(float(num_str))
+            else:
+                numbers.append(int(num_str))
+        except ValueError:
+            pass
+    numbers = sorted(numbers)
+
+    # 2. Extract quoted strings
+    quoted_strings = re.findall(r'["\'](.*?)["\']', text)
+    quoted_strings = sorted([q.strip() for q in quoted_strings if q.strip()])
+
+    STOP_WORDS = {
+        'list', 'show', 'display', 'get', 'find', 'select', 'give', 'run', 'execute',
+        'the', 'a', 'an', 'of', 'to', 'for', 'by', 'with', 'on', 'at', 'from', 'in', 'about',
+        'how', 'what', 'where', 'who', 'which', 'why', 'whose',
+        'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+        'and', 'or', 'but', 'if', 'then', 'else', 'when',
+        'per', 'each', 'every', 'grouped', 'group', 'order', 'sort', 'sorted',
+        'top', 'bottom', 'limit', 'first', 'last',
+        'average', 'mean', 'sum', 'count', 'counts', 'min', 'max', 'minimum', 'maximum', 'total', 'avg',
+        'name', 'names', 'time', 'times', 'statistics', 'stats', 'data', 'info', 'information',
+        'value', 'values', 'metric', 'metrics', 'record', 'records',
+        'number', 'numbers', 'num', 'nums', 'detail', 'details', 'busy', 'usage', 'query', 'queries',
+        'database', 'table', 'tables', 'column', 'columns', 'row', 'rows'
+    }
+
+    # Extract all words starting with a letter
+    all_words = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', text)
+
+    entity_words = set()
+    for w in all_words:
+        if w in STOP_WORDS:
+            continue
+        stemmed = stem_word(w)
+        if stemmed not in STOP_WORDS:
+            entity_words.add(stemmed)
+
+    return {
+        "numbers": numbers,
+        "quoted": quoted_strings,
+        "entities": sorted(list(entity_words))
+    }
+
 
 
 class CacheResult:
@@ -136,7 +215,7 @@ class SemanticCache:
         try:
             sample = self.collection.peek(limit=1)
             stored_embeddings = sample.get("embeddings")
-            if not stored_embeddings or not stored_embeddings[0]:
+            if stored_embeddings is None or len(stored_embeddings) == 0 or len(stored_embeddings[0]) == 0:
                 return
 
             stored_dim = len(stored_embeddings[0])
@@ -202,6 +281,30 @@ class SemanticCache:
                 print(f"[Cache] Skipping flagged entry (execution_success=false) for: {normalized_text[:60]}")
                 return CacheResult(hit=False, confidence=round(confidence, 4))
 
+            # SOTA 1: Enforce exact match on numbers, quoted values, and entity terms
+            lookup_ent = extract_entities(normalized_text)
+            stored_numbers_str = meta.get("cache_numbers")
+            stored_quoted_str = meta.get("cache_quoted")
+            stored_entities_str = meta.get("cache_entities")
+
+            if stored_numbers_str is not None:
+                stored_numbers = json.loads(stored_numbers_str)
+                stored_quoted = json.loads(stored_quoted_str)
+                stored_entities = json.loads(stored_entities_str)
+            else:
+                # Fallback for legacy cache entries
+                stored_query = meta.get("query", "")
+                stored_val = extract_entities(stored_query)
+                stored_numbers = stored_val["numbers"]
+                stored_quoted = stored_val["quoted"]
+                stored_entities = stored_val["entities"]
+
+            if (lookup_ent["numbers"] != stored_numbers or
+                lookup_ent["quoted"] != stored_quoted or
+                lookup_ent["entities"] != stored_entities):
+                print(f"[Cache] Rejecting hit due to mismatch. Lookup: {lookup_ent}, Stored: {{'numbers': {stored_numbers}, 'quoted': {stored_quoted}, 'entities': {stored_entities}}}")
+                return CacheResult(hit=False, confidence=round(confidence, 4))
+
             return CacheResult(hit=True, sql=sql, confidence=round(confidence, 4))
 
         return CacheResult(hit=False, confidence=round(confidence, 4))
@@ -234,11 +337,15 @@ class SemanticCache:
         embedding = self.model.encode([normalized_text]).tolist()
 
         # Build metadata — ChromaDB only supports str/int/float/bool values
+        entities = extract_entities(normalized_text)
         metadata: dict = {
             "sql":               sql,
             "query":             normalized_text,
             "validated_at":      datetime.now(timezone.utc).isoformat(),
             "execution_success": "true" if execution_success else "false",
+            "cache_numbers":     json.dumps(entities["numbers"]),
+            "cache_quoted":      json.dumps(entities["quoted"]),
+            "cache_entities":    json.dumps(entities["entities"]),
         }
         if row_count is not None:
             metadata["row_count"] = row_count

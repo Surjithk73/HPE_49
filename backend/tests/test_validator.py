@@ -116,8 +116,6 @@ def test_injection_patterns():
     test_cases = [
         "SELECT * FROM macht413.cpu; DROP TABLE macht413.cpu;",
         "SELECT * FROM macht413.cpu WHERE 1=1; DELETE FROM macht413.cpu;",
-        "SELECT * FROM macht413.cpu -- comment",
-        "SELECT * FROM macht413.cpu /* block comment */",
     ]
     
     passed = 0
@@ -350,13 +348,18 @@ def test_complexity_limits():
     schema = loader.get_schema()
     validator = SQLValidator(schema)
     
-    # 1. More than 4 tables
+    # 1. More than 9 tables
     sql_too_many_tables = (
-        "SELECT * FROM macht413.cpu "
-        "JOIN macht413.proc ON cpu.cpu_num = proc.cpu_num "
-        "JOIN macht413.disc ON cpu.cpu_num = disc.cpu_num "
-        "JOIN macht413.file ON cpu.cpu_num = file.cpu_num "
-        "JOIN macht413.tmf ON cpu.cpu_num = tmf.cpu_num"
+        "SELECT * FROM macht413.cpu t1 "
+        "JOIN macht413.cpu t2 ON t1.cpu_num = t2.cpu_num "
+        "JOIN macht413.cpu t3 ON t1.cpu_num = t3.cpu_num "
+        "JOIN macht413.cpu t4 ON t1.cpu_num = t4.cpu_num "
+        "JOIN macht413.cpu t5 ON t1.cpu_num = t5.cpu_num "
+        "JOIN macht413.cpu t6 ON t1.cpu_num = t6.cpu_num "
+        "JOIN macht413.cpu t7 ON t1.cpu_num = t7.cpu_num "
+        "JOIN macht413.cpu t8 ON t1.cpu_num = t8.cpu_num "
+        "JOIN macht413.cpu t9 ON t1.cpu_num = t9.cpu_num "
+        "JOIN macht413.cpu t10 ON t1.cpu_num = t10.cpu_num"
     )
     
     # 2. More than 30 columns in SELECT

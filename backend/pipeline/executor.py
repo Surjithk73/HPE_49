@@ -8,6 +8,7 @@ Improvements:
   handshake cost on every query.  Pool size: min=2, max=10.
 """
 import time
+import re
 from typing import Dict, List, Optional
 import psycopg2
 from psycopg2 import pool as psycopg2_pool
@@ -78,6 +79,7 @@ class QueryExecutor:
         min_conn: int = _POOL_MIN_CONN,
         max_conn: int = _POOL_MAX_CONN,
         allowed_users: List[str] = None,
+        max_query_cost: float = None,
     ):
         """
         Initialize the executor and create the connection pool.
@@ -100,6 +102,7 @@ class QueryExecutor:
         self.password = password or DB_PASSWORD
         self.timeout  = timeout  or QUERY_TIMEOUT_SECONDS
         self.allowed_users = allowed_users or ALLOWED_DB_USERS
+        self.max_query_cost = max_query_cost or float(os.getenv("MAX_QUERY_COST", "25000.0"))
 
         # Enforce read-only user checks dynamically
         if self.user not in self.allowed_users:
@@ -130,6 +133,22 @@ class QueryExecutor:
             )
         except psycopg2.Error as e:
             raise ExecutionError(f"Failed to create connection pool: {e}")
+
+    def _estimate_cost(self, cursor, sql: str) -> float:
+        """Run EXPLAIN and extract the total start-up + run cost of the query."""
+        try:
+            cursor.execute(f"EXPLAIN {sql}")
+            explain_rows = cursor.fetchall()
+            if not explain_rows:
+                return 0.0
+            first_line = explain_rows[0][0]
+            match = re.search(r'cost=\d+(?:\.\d+)?\.\.(\d+(?:\.\d+)?)', first_line)
+            if match:
+                return float(match.group(1))
+            return 0.0
+        except Exception as e:
+            print(f"[Executor] Warning: Cost estimation failed: {e}")
+            return 0.0
 
     def close(self) -> None:
         """Close all connections in the pool.  Call on application shutdown."""
@@ -169,6 +188,14 @@ class QueryExecutor:
             connection.autocommit = True
 
             cursor = connection.cursor()
+
+            # Cost Estimation Check
+            if self.max_query_cost is not None:
+                cost = self._estimate_cost(cursor, sql)
+                if cost > self.max_query_cost:
+                    raise ExecutionError(
+                        f"Query cost estimation ({cost}) exceeds the maximum query cost limit ({self.max_query_cost}). Query rejected."
+                    )
 
             cursor.execute(sql)
 
@@ -230,29 +257,72 @@ class QueryExecutor:
         return f"{sql.rstrip(';')} LIMIT {MAX_ROWS}"
 
 
-def detect_chart_type(columns: List[str]) -> str:
+def detect_chart_type(columns: List[str], rows: List[Dict]) -> str:
     """
-    Detect appropriate chart type based on result columns.
+    Detect appropriate chart type based on result columns and data rows.
 
     Args:
         columns: List of column names
+        rows:    List of result row dictionaries
 
     Returns:
         Chart type: "line", "bar", or "table"
     """
+    if not rows or not columns:
+        return "table"
+
+    # Rule 1: Single value or KPI metric (1 row or 1 column) -> table
+    if len(rows) <= 1 or len(columns) <= 1:
+        return "table"
+
+    # Identify X-axis column
     columns_lower = [col.lower() for col in columns]
-
-    # Timestamp columns → line chart
-    for col in columns_lower:
+    x_col = None
+    for i, col in enumerate(columns_lower):
         if 'timestamp' in col:
-            return "line"
+            x_col = columns[i]
+            break
+    if not x_col:
+        x_col = columns[0]
 
-    # Categorical columns → bar chart
+    # Verify if there is at least one numeric Y-axis column (excluding X-axis)
+    has_numeric_y = False
+    for col in columns:
+        if col == x_col:
+            continue
+        # Scan rows to see if we have numbers
+        for r in rows[:10]:  # check first 10 rows
+            val = r.get(col)
+            if val is not None:
+                try:
+                    float(val)
+                    has_numeric_y = True
+                    break
+                except (ValueError, TypeError):
+                    pass
+        if has_numeric_y:
+            break
+
+    if not has_numeric_y:
+        return "table"
+
+    # Rule 2: High cardinality (unreadable bar charts) -> table
+    # If there's no timestamp (meaning it's categorical) and rows > 50, default to table
+    has_timestamp = any('timestamp' in col for col in columns_lower)
+    if not has_timestamp and len(rows) > 50:
+        return "table"
+
+    # Rule 3: Time Series -> line chart
+    if has_timestamp:
+        return "line"
+
+    # Rule 4: Categorical columns -> bar chart
     categorical = ['cpu_num', 'system_name', 'device_name', 'process_name', 'file_name']
     for col in columns_lower:
         if any(cat in col for cat in categorical):
             return "bar"
 
+    # Default fallback
     return "table"
 
 
@@ -284,20 +354,24 @@ if __name__ == "__main__":
                 print(f"  Columns: {result.columns}")
                 if result.rows:
                     print(f"  First row: {result.rows[0]}")
-                print(f"  Chart type: {detect_chart_type(result.columns)}")
+                print(f"  Chart type: {detect_chart_type(result.columns, result.rows)}")
             except ExecutionError as e:
                 print(f"  ✗ {e}")
 
         # Chart type detection
         print("\n── Chart type detection ──────────────────────────────────────")
         chart_tests = [
-            (["cpu_num", "avg_busy_time"],       "bar"),
-            (["from_timestamp", "cpu_busy_time"], "line"),
-            (["count"],                           "table"),
-            (["system_name", "total"],            "bar"),
+            (["cpu_num", "avg_busy_time"], 
+             [{"cpu_num": 1, "avg_busy_time": 100}, {"cpu_num": 2, "avg_busy_time": 200}], "bar"),
+            (["from_timestamp", "cpu_busy_time"], 
+             [{"from_timestamp": "2023-03-16T19:36:04", "cpu_busy_time": 100}, {"from_timestamp": "2023-03-16T19:36:09", "cpu_busy_time": 200}], "line"),
+            (["count"], 
+             [{"count": 1}], "table"),
+            (["system_name", "total"], 
+             [{"system_name": "A", "total": 10}, {"system_name": "B", "total": 20}], "bar"),
         ]
-        for cols, expected in chart_tests:
-            got    = detect_chart_type(cols)
+        for cols, test_rows, expected in chart_tests:
+            got    = detect_chart_type(cols, test_rows)
             status = "✓" if got == expected else "✗"
             print(f"  {status} {cols} → {got} (expected: {expected})")
 

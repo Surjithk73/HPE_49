@@ -19,7 +19,7 @@ import sys
 import traceback
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -154,10 +154,20 @@ class ExportRequest(BaseModel):
     sql: str
     format: str                  # "csv" | "excel" | "pdf"
     query_text: Optional[str] = ""
+    include_chart: Optional[bool] = True
+    include_table: Optional[bool] = True
+    chart_types: Optional[List[str]] = None
+    chart_type_override: Optional[str] = None
 
 class ThresholdRequest(BaseModel):
     threshold: float = Field(..., gt=0.0, le=1.0,
                              description="Cosine similarity threshold (0 < value ≤ 1)")
+
+class ExplainRequest(BaseModel):
+    sql: str
+    query_text: str
+    columns: List[str]
+    rows: List[dict]
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -371,7 +381,7 @@ def run_query(req: QueryRequest):
             raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
         # Step 8 — Chart type
-        chart_type = detect_chart_type(result.columns)
+        chart_type = detect_chart_type(result.columns, result.rows)
 
         # Step 9 — Store in cache (only on cache miss, with execution metadata)
         if not cache_result.hit:
@@ -454,7 +464,7 @@ def run_sql(req: SqlRequest):
         logger.error(f"[/api/sql] Execution error — SQL: {sql}\nError: {e}")
         raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
-    chart_type = detect_chart_type(result.columns)
+    chart_type = detect_chart_type(result.columns, result.rows)
 
     log_entry["row_count"]         = result.row_count
     log_entry["execution_time_ms"] = result.execution_time_ms
@@ -497,7 +507,11 @@ def export(req: ExportRequest):
             columns=result.columns,
             rows=result.rows,
             query_text=req.query_text or "",
-            sql=sql
+            sql=sql,
+            include_chart=req.include_chart if req.include_chart is not None else True,
+            include_table=req.include_table if req.include_table is not None else True,
+            chart_types=req.chart_types,
+            chart_type_override=req.chart_type_override
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
@@ -584,3 +598,42 @@ def set_threshold(req: ThresholdRequest):
         "threshold": _cache.get_threshold(),
         "message":   f"Cache similarity threshold set to {req.threshold}",
     }
+
+
+# POST /api/explain
+@app.post("/api/explain")
+def explain_results(req: ExplainRequest):
+    """Explain query execution results and identify outliers using LLM."""
+    if not _llm_engine:
+        raise HTTPException(status_code=500, detail="LLM Engine not initialized")
+
+    # Save token usage by truncating rows to 50
+    limit = 50
+    truncated_rows = req.rows[:limit]
+
+    import json
+    rows_json = json.dumps(truncated_rows, indent=2)
+
+    prompt = f"""You are a senior database performance analyst and system administrator for HPE NonStop databases.
+Analyze the following query execution results to explain what they mean for the system's performance and health, and highlight any outliers, unusual values, anomalies, or potential issues.
+
+Context:
+- Original User Question: {req.query_text}
+- Executed SQL: {req.sql}
+
+Results (truncated to first {limit} rows if larger):
+Columns: {", ".join(req.columns)}
+Data Rows:
+{rows_json}
+
+Provide a concise analysis (approx. 2-3 short paragraphs or bullet points).
+Identify any outlier values or performance metrics that are high, low, or typical, and explain their significance to the system.
+Do not assume context that is not present in the columns.
+"""
+    try:
+        explanation = _llm_engine.generate_text(prompt)
+        return {"explanation": explanation}
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=f"LLM explanation generation failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected explanation generation error: {str(e)}")

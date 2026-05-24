@@ -149,19 +149,27 @@ def test_chart_type_detection():
     print("=" * 80)
     
     test_cases = [
-        (["cpu_num", "avg_busy_time"], "bar"),
-        (["from_timestamp", "cpu_busy_time"], "line"),
-        (["to_timestamp", "value"], "line"),
-        (["system_name", "total"], "bar"),
-        (["device_name", "reads"], "bar"),
-        (["process_name", "cpu_time"], "bar"),
-        (["count"], "table"),
-        (["sum", "avg"], "table"),
+        (["cpu_num", "avg_busy_time"], 
+         [{"cpu_num": 0, "avg_busy_time": 100}, {"cpu_num": 1, "avg_busy_time": 200}], "bar"),
+        (["from_timestamp", "cpu_busy_time"], 
+         [{"from_timestamp": "2023-03-16T19:36:04", "cpu_busy_time": 100}, {"from_timestamp": "2023-03-16T19:36:09", "cpu_busy_time": 200}], "line"),
+        (["to_timestamp", "value"], 
+         [{"to_timestamp": "2023-03-16T19:36:04", "value": 100}, {"to_timestamp": "2023-03-16T19:36:09", "value": 200}], "line"),
+        (["system_name", "total"], 
+         [{"system_name": "A", "total": 10}, {"system_name": "B", "total": 20}], "bar"),
+        (["device_name", "reads"], 
+         [{"device_name": "A", "reads": 10}, {"device_name": "B", "reads": 20}], "bar"),
+        (["process_name", "cpu_time"], 
+         [{"process_name": "A", "cpu_time": 10}, {"process_name": "B", "cpu_time": 20}], "bar"),
+        (["count"], 
+         [{"count": 1}], "table"),
+        (["sum", "avg"], 
+         [{"sum": 100, "avg": 50}], "table"),
     ]
     
     passed = 0
-    for columns, expected in test_cases:
-        result = detect_chart_type(columns)
+    for columns, test_rows, expected in test_cases:
+        result = detect_chart_type(columns, test_rows)
         if result == expected:
             print(f"✓ {columns} → {result}")
             passed += 1

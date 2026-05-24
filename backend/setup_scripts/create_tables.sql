@@ -820,3 +820,13 @@ CREATE TABLE IF NOT EXISTS macht413.udef (
     value BIGINT
 );
 
+-- Composite indexes for common filters and joins
+CREATE INDEX IF NOT EXISTS idx_cpu_lookup ON macht413.cpu (system_name, cpu_num, from_timestamp);
+CREATE INDEX IF NOT EXISTS idx_proc_lookup ON macht413.proc (system_name, cpu_num, pin, from_timestamp);
+CREATE INDEX IF NOT EXISTS idx_file_lookup ON macht413.file (system_name, cpu_num, opener_pin, from_timestamp);
+CREATE INDEX IF NOT EXISTS idx_disc_lookup ON macht413.disc (system_name, device_name, from_timestamp);
+
+-- Expression indexes for DATE_TRUNC joins
+CREATE INDEX IF NOT EXISTS idx_cpu_trunc_ts ON macht413.cpu (system_name, DATE_TRUNC('second', from_timestamp));
+CREATE INDEX IF NOT EXISTS idx_proc_trunc_ts ON macht413.proc (system_name, DATE_TRUNC('second', from_timestamp));
+CREATE INDEX IF NOT EXISTS idx_file_trunc_ts ON macht413.file (system_name, DATE_TRUNC('second', from_timestamp));

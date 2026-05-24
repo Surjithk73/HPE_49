@@ -81,12 +81,22 @@ export async function runSqlDirect(sql: string): Promise<QueryResponse> {
 export async function exportReport(
   sql: string,
   format: 'csv' | 'excel' | 'pdf',
-  queryText: string
+  queryText: string,
+  includeChart?: boolean,
+  includeTable?: boolean,
+  chartTypes?: string[]
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/export`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sql, format, query_text: queryText }),
+    body: JSON.stringify({
+      sql,
+      format,
+      query_text: queryText,
+      include_chart: includeChart,
+      include_table: includeTable,
+      chart_types: chartTypes,
+    }),
   })
   if (!res.ok) throw new Error(`Export failed: ${res.statusText}`)
   const blob = await res.blob()
@@ -155,5 +165,17 @@ export interface RetryAnalysisReport {
 export async function runRetryAnalysis(): Promise<RetryAnalysisReport> {
   return request<RetryAnalysisReport>('/api/admin/retry-analysis', {
     method: 'POST',
+  })
+}
+
+export async function explainResults(
+  sql: string,
+  queryText: string,
+  columns: string[],
+  rows: Record<string, unknown>[]
+): Promise<{ explanation: string }> {
+  return request<{ explanation: string }>('/api/explain', {
+    method: 'POST',
+    body: JSON.stringify({ sql, query_text: queryText, columns, rows }),
   })
 }

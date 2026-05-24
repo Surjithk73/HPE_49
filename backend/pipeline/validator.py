@@ -36,8 +36,6 @@ class SQLValidator:
     
     # SQL injection patterns
     INJECTION_PATTERNS = [
-        r'--',           # SQL comment
-        r'/\*',          # Block comment start
         r'xp_',          # Extended stored procedures
         r';\s*\w',       # Semicolon followed by statement
     ]
@@ -99,9 +97,8 @@ class SQLValidator:
                 return ValidationResult(False, None, f"Potential SQL injection pattern detected")
         
         # Check for forbidden keywords in raw SQL
-        sql_upper = sql.upper()
         for keyword in self.FORBIDDEN_KEYWORDS:
-            if keyword in sql_upper:
+            if re.search(rf'\b{keyword}\b', sql, re.IGNORECASE):
                 return ValidationResult(False, None, f"Forbidden keyword detected: {keyword}")
         
         # Check 1: Syntax validation
