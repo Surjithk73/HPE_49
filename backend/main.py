@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from config import (
     SCHEMA_YAML_PATH, FEW_SHOTS_PATH, AUDIT_LOG_PATH,
-    GEMINI_MODEL, MAX_ROWS, LLM_PROVIDER, OLLAMA_MODEL,
+    MAX_ROWS, OLLAMA_MODEL,
 )
 from pipeline.schema_loader import load_schema
 from pipeline.normalizer import QueryNormalizer
@@ -91,9 +91,9 @@ async def lifespan(app: FastAPI):
     _validator  = SQLValidator(_schema)
     print("[QueryCraft] Pipeline components ready")
 
-    # LLM engine — provider chosen by LLM_PROVIDER (gemini|ollama)
+    # LLM engine — local Ollama-hosted model (see pipeline/ollama_engine.py)
     _llm_engine = make_llm_engine()
-    print(f"[QueryCraft] LLM engine ready — provider: {LLM_PROVIDER}, model: {_llm_engine.model_name}")
+    print(f"[QueryCraft] LLM engine ready — model: {_llm_engine.model_name}")
 
     # Executor — creates the connection pool
     _executor = QueryExecutor()
@@ -206,8 +206,7 @@ def health():
         "db_connected":      db_ok,
         "cache_ready":       cache_ok,
         "cache_model_ready": _cache.is_model_ready if _cache else False,
-        "llm_provider":      LLM_PROVIDER,
-        "llm_model":         (_llm_engine.model_name if _llm_engine else None) or GEMINI_MODEL,
+        "llm_model":         (_llm_engine.model_name if _llm_engine else None) or OLLAMA_MODEL,
         "cache_entries":     _cache.count() if _cache else 0,
         "schema_tables":     len(_schema) if _schema else 0,
     }
@@ -314,13 +313,20 @@ def run_query(req: QueryRequest):
             # Step 3 — Schema linking
             schema_context = _linker.link_schema(norm_text, domain)
 
-            # Step 4 — Prompt building
-            prompt = _builder.build_prompt(norm_text, schema_context, _few_shots)
+            # Step 4 — Prompt building. Select up to 5 few-shots whose domain
+            # matches the detected query domain; fall back to the first 5
+            # overall if fewer than 5 match. Caps prompt size — passing all
+            # ~30 examples balloons the prompt past 8k tokens and stalls
+            # local LLM inference.
+            selected_shots = [s for s in _few_shots if s.get("domain") == domain][:5]
+            if not selected_shots:
+                selected_shots = _few_shots[:5]
+            prompt = _builder.build_prompt(norm_text, schema_context, selected_shots)
 
             # Capture the exact prompt for debugging
             debug_prompt = prompt
             print("\n" + "=" * 80)
-            print("[DEBUG] Exact prompt sent to Gemini API:")
+            print("[DEBUG] Exact prompt sent to LLM:")
             print("=" * 80)
             print(prompt)
             print("=" * 80 + "\n")
@@ -366,19 +372,57 @@ def run_query(req: QueryRequest):
             log_entry["generated_sql"]     = sql
             log_entry["validation_passed"] = True
 
-        # Step 7 — Execute
+        # Step 7 — Execute, with up to 2 LLM retries on Postgres errors
+        # (only when we have an original prompt to retry from — i.e. cache miss).
         execution_success = False
-        try:
-            result = _executor.execute(sql)
-            execution_success = True
-        except ExecutionError as e:
-            log_entry["validation_error"] = str(e)
-            _audit.log_query(log_entry)
-            # If this was a cache hit that failed, flag the entry as bad
-            if cache_result.hit:
-                _cache.flag_failed(norm_text)
-            logger.error(f"[/api/query] Execution error — SQL: {sql}\nError: {e}")
-            raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+        result = None
+        EXEC_MAX_RETRIES = 0 if cache_result.hit else 2
+        exec_attempt = 0
+        while True:
+            try:
+                result = _executor.execute(sql)
+                execution_success = True
+                break
+            except ExecutionError as e:
+                if exec_attempt >= EXEC_MAX_RETRIES:
+                    log_entry["validation_error"] = str(e)
+                    if not cache_result.hit:
+                        log_entry["llm_retries"] = retry_count
+                    _audit.log_query(log_entry)
+                    if cache_result.hit:
+                        _cache.flag_failed(norm_text)
+                    logger.error(f"[/api/query] Execution error — SQL: {sql}\nError: {e}")
+                    raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+                exec_attempt += 1
+                retry_count += 1
+                logger.warning(
+                    f"[/api/query] Execution failed (exec-retry {exec_attempt}/{EXEC_MAX_RETRIES}); "
+                    f"asking LLM to fix. Error: {e}"
+                )
+                exec_retry_prompt = _builder.build_retry_prompt(
+                    original_prompt=prompt,
+                    failed_sql=sql,
+                    error=f"PostgreSQL execution error: {e}",
+                )
+                try:
+                    sql = _llm_engine.generate_sql_with_retry(
+                        prompt=exec_retry_prompt,
+                        validator=_validator,
+                        prompt_builder=_builder,
+                        max_retries=1,
+                    )
+                except LLMError as le:
+                    log_entry["validation_error"] = (
+                        f"Exec retry LLM error: {le}; original execution error: {e}"
+                    )
+                    log_entry["llm_retries"] = retry_count
+                    _audit.log_query(log_entry)
+                    logger.error(f"[/api/query] LLM retry after exec error failed: {le}")
+                    raise HTTPException(status_code=500, detail=f"LLM retry failed: {le}")
+
+                log_entry["generated_sql"] = sql
+                log_entry["llm_retries"] = retry_count
 
         # Step 8 — Chart type
         chart_type = detect_chart_type(result.columns, result.rows)

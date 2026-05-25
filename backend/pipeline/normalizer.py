@@ -86,7 +86,8 @@ class QueryNormalizer:
         'proc': [
             ('process', 3), ('processes', 3), ('proc', 3), ('procs', 3),
             ('zmsproc', 3), ('pin', 3), ('process name', 3),
-            ('program', 2), ('program file', 2),
+            ('program', 3), ('programs', 3), ('program name', 3),
+            ('program file', 2), ('executable', 2), ('binary', 2),
             ('thread', 2), ('threads', 2),
             ('checkpoint', 2), ('ancestor', 2), ('creator', 2),
             ('parent process', 2), ('child process', 2),

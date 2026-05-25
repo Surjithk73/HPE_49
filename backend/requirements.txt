@@ -4,7 +4,6 @@ psycopg2-binary
 sqlglot
 sentence-transformers
 chromadb
-google-generativeai
 weasyprint
 openpyxl
 python-dotenv

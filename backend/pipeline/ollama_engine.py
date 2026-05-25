@@ -70,6 +70,11 @@ class OllamaEngine(BaseLLMEngine):
             "model": self.model_name,
             "prompt": prompt,
             "stream": False,
+            # Keep the model resident in Ollama for the lifetime of the server.
+            # Big local models (~15GB F16) cold-load in ~3 min on partial GPU
+            # offload; the 5-min default keepalive guarantees a reload on any
+            # short idle gap.
+            "keep_alive": -1,
             # Deterministic-ish settings suited to SQL generation. Ollama
             # silently ignores unknown options, so this stays safe across
             # model backends (llama.cpp, etc.).
@@ -138,6 +143,7 @@ class OllamaEngine(BaseLLMEngine):
             "model": self.model_name,
             "prompt": prompt,
             "stream": False,
+            "keep_alive": -1,
             "options": {
                 "temperature": 0.3,
                 "top_p": 0.9,

@@ -10,7 +10,8 @@ from pipeline.normalizer import QueryNormalizer
 from pipeline.schema_linker import SchemaLinker
 from pipeline.prompt_builder import PromptBuilder
 from pipeline.validator import SQLValidator
-from pipeline.llm_engine import LLMEngine, LLMError
+from pipeline.llm_engine import LLMError
+from pipeline.ollama_engine import OllamaEngine
 
 
 def test_full_pipeline_with_llm():
@@ -31,7 +32,7 @@ def test_full_pipeline_with_llm():
         linker = SchemaLinker(schema)
         builder = PromptBuilder()
         validator = SQLValidator(schema)
-        llm_engine = LLMEngine()
+        llm_engine = OllamaEngine()
         print("✓ All components initialized")
         
         # Test query
@@ -117,7 +118,7 @@ def test_multiple_queries():
     linker = SchemaLinker(schema)
     builder = PromptBuilder()
     validator = SQLValidator(schema)
-    llm_engine = LLMEngine()
+    llm_engine = OllamaEngine()
     
     test_queries = [
         "Show total CPU busy time",
@@ -176,8 +177,7 @@ if __name__ == "__main__":
     # Test 2: Retry logic (informational)
     results.append(("Retry Logic", test_retry_logic()))
     
-    # Test 3: Multiple queries (rate limit aware - only 2 queries)
-    print("\n⚠ Rate Limit Warning: Testing with only 2 queries to stay within limits")
+    # Test 3: Multiple queries
     results.append(("Multiple Queries", test_multiple_queries()))
     
     # Summary

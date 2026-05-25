@@ -4,7 +4,7 @@
 
 QueryCraft lets analysts query HPE NonStop server performance data using plain English. Type a question, get back a SQL query, results table or chart, and a downloadable report — no SQL knowledge required.
 
-**Stack:** FastAPI · React · PostgreSQL · Google Gemini API · ChromaDB  
+**Stack:** FastAPI · React · PostgreSQL · Ollama (local `gemma4-sql`) · ChromaDB  
 **Database:** `macht413` schema · 9 tables · 212,689 rows of real HPE NonStop measurement data
 
 ---
@@ -19,8 +19,9 @@ Install these before anything else:
 | Python | 3.10+ | |
 | Node.js | 18+ LTS | |
 | Git | Any | |
+| Ollama | Latest | Install from https://ollama.com/download. `ollama serve` must be running and the `gemma4-sql` model must be available locally (`ollama list`). |
 
-You also need a **Google Gemini API key** — get one free at https://aistudio.google.com/app/apikey
+SQL generation runs against the local `gemma4-sql` Ollama model — no external API calls.
 
 ---
 
@@ -134,9 +135,10 @@ DB_NAME=querycraft_db
 DB_USER=querycraft_user
 DB_PASSWORD=your_readonly_password
 
-# Gemini API — get key from https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.0-flash
+# Ollama — local LLM for SQL generation. `ollama serve` must be running.
+OLLAMA_MODEL=gemma4-sql
+OLLAMA_URL=http://localhost:11434
+OLLAMA_TIMEOUT_SECONDS=120
 
 # App settings (defaults are fine)
 MAX_ROWS=10000
@@ -202,7 +204,7 @@ Expected response:
   "db_connected": true,
   "cache_ready": true,
   "cache_model_ready": true,
-  "llm_model": "gemini-2.0-flash",
+  "llm_model": "gemma4-sql",
   "cache_entries": 0,
   "schema_tables": 9
 }
@@ -237,7 +239,7 @@ After running a query, use the Download buttons in the UI to export as:
 
 ### Cache management
 
-Repeated or semantically similar queries are served from the local ChromaDB cache (0.95 cosine similarity threshold) — no Gemini API call needed. Manage the cache at http://localhost:5173/cache
+Repeated or semantically similar queries are served from the local ChromaDB cache (0.95 cosine similarity threshold) — no LLM call needed. Manage the cache at http://localhost:5173/cache
 
 ---
 
@@ -255,7 +257,8 @@ HPE_49/
 │   │   ├── cache.py                   # ChromaDB semantic cache
 │   │   ├── schema_linker.py           # TF-IDF table/column selection
 │   │   ├── prompt_builder.py          # LLM prompt assembly
-│   │   ├── llm_engine.py              # Gemini API + retry logic
+│   │   ├── llm_engine.py              # Base class + retry logic
+│   │   ├── ollama_engine.py           # Ollama HTTP client (local `gemma4-sql`)
 │   │   ├── validator.py               # SQLGlot security + correctness checks
 │   │   ├── executor.py                # psycopg2 connection pool + execution
 │   │   └── report_generator.py        # CSV / Excel / PDF export
@@ -318,8 +321,10 @@ Interactive docs: http://localhost:8000/docs
 - Queries will work immediately but won't benefit from cache hits until the model is ready
 
 **LLM returns errors / no SQL generated**
-- Check `GEMINI_API_KEY` is valid and has quota remaining
-- Check internet connection (Gemini API is the only external call)
+- Check `ollama serve` is running: `curl http://localhost:11434/api/tags`
+- Check the model is available: `ollama list | grep gemma4-sql`
+- If `OLLAMA_URL` in `.env` is non-default, verify it's reachable from the backend
+- First call after `ollama serve` starts can be slow (model cold-load) — bump `OLLAMA_TIMEOUT_SECONDS` if you hit a timeout
 - Look at backend terminal for the specific error
 
 **Frontend shows "Backend unreachable"**

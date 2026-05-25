@@ -1,23 +1,12 @@
 """
-LLM Engine for QueryCraft
-Handles interaction with Gemini API for SQL generation.
+LLM Engine base for QueryCraft.
+
+Holds the provider-agnostic base class (retry loop + SQL extraction) and the
+factory used by the rest of the pipeline. The only concrete backend is
+OllamaEngine in pipeline/ollama_engine.py — SQL is generated against a local
+Ollama server, no external API.
 """
 import re
-import sys
-import os
-
-# Add parent directory to path for config import
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-try:
-    from config import GEMINI_API_KEY, GEMINI_MODEL
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except (ValueError, ImportError) as e:
-    GEMINI_AVAILABLE = False
-    GEMINI_API_KEY = None
-    GEMINI_MODEL = "gemini-3.1-flash-lite"
-    print(f"Warning: Gemini API not configured: {e}")
 
 
 class LLMError(Exception):
@@ -112,162 +101,7 @@ class BaseLLMEngine:
         return text
 
 
-class LLMEngine(BaseLLMEngine):
-    """Handles SQL generation using Gemini API."""
-
-    def __init__(self, api_key: str = None, model: str = None):
-        """
-        Initialize the LLM engine.
-
-        Args:
-            api_key: Gemini API key (defaults to config value)
-            model: Model name (defaults to config value)
-        """
-        self.api_key = api_key or GEMINI_API_KEY
-        self.model_name = model or GEMINI_MODEL
-
-        if not self.api_key:
-            raise LLMError("Gemini API key not configured. Set GEMINI_API_KEY in .env file")
-
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(self.model_name)
-
-    def generate_sql(self, prompt: str) -> str:
-        """
-        Generate SQL from a prompt.
-
-        Args:
-            prompt: Complete prompt string
-
-        Returns:
-            Raw SQL string
-
-        Raises:
-            LLMError: If generation fails
-        """
-        try:
-            response = self.model.generate_content(prompt)
-
-            if not response or not response.text:
-                raise LLMError("Empty response from LLM")
-
-            return self._extract_sql(response.text)
-
-        except Exception as e:
-            raise LLMError(f"Failed to generate SQL: {str(e)}")
-
-    def generate_text(self, prompt: str) -> str:
-        """
-        Generate conversational/analytical text from a prompt.
-
-        Args:
-            prompt: Complete prompt string
-
-        Returns:
-            Generated text response
-
-        Raises:
-            LLMError: If generation fails
-        """
-        try:
-            response = self.model.generate_content(prompt)
-
-            if not response or not response.text:
-                raise LLMError("Empty response from LLM")
-
-            return response.text.strip()
-
-        except Exception as e:
-            raise LLMError(f"Failed to generate text: {str(e)}")
-
-
 def make_llm_engine() -> "BaseLLMEngine":
-    """
-    Factory that returns the configured LLM engine.
-
-    Reads LLM_PROVIDER from config:
-      - 'gemini' (default) -> LLMEngine
-      - 'ollama'           -> OllamaEngine (imported lazily so Gemini-only
-                              setups don't need to load the Ollama module)
-    """
-    try:
-        from config import LLM_PROVIDER
-    except (ValueError, ImportError):
-        LLM_PROVIDER = "gemini"
-
-    if LLM_PROVIDER == "ollama":
-        from pipeline.ollama_engine import OllamaEngine
-        return OllamaEngine()
-    return LLMEngine()
-
-
-# Test the LLM engine (requires API key)
-if __name__ == "__main__":
-    print("Testing LLM Engine...")
-    print("=" * 80)
-    
-    if not GEMINI_AVAILABLE or not GEMINI_API_KEY:
-        print("✗ Gemini API not configured")
-        print("To test the LLM engine:")
-        print("1. Set GEMINI_API_KEY in backend/.env")
-        print("2. Run: python llm_engine.py")
-        sys.exit(1)
-    
-    try:
-        # Initialize engine
-        engine = LLMEngine()
-        print(f"✓ LLM Engine initialized with model: {engine.model_name}")
-        
-        # Test prompt
-        test_prompt = """You are a SQL expert for HPE NonStop performance monitoring systems.
-Generate a single valid PostgreSQL SELECT query for the schema 'macht413'.
-
-STRICT RULES:
-- Output ONLY the raw SQL query. No explanation, no markdown, no backticks.
-- Only SELECT statements. No INSERT, UPDATE, DELETE, DROP, ALTER, or any DDL.
-- Always qualify table names: macht413.table_name
-- Always include LIMIT 10000 unless a smaller limit is specified.
-
-SCHEMA CONTEXT:
--- Table: macht413.cpu
-CREATE TABLE macht413.cpu (
-    system_name TEXT,
-    cpu_num BIGINT,
-    cpu_busy_time BIGINT
-);
-
-USER REQUEST:
-Show average CPU busy time per CPU
-
-SQL:"""
-        
-        print("\n" + "-" * 80)
-        print("Test Prompt:")
-        print(test_prompt[:200] + "...")
-        print("-" * 80)
-        
-        # Generate SQL
-        print("\nGenerating SQL...")
-        sql = engine.generate_sql(test_prompt)
-        
-        print("\n" + "-" * 80)
-        print("Generated SQL:")
-        print(sql)
-        print("-" * 80)
-        
-        # Verify it looks like SQL
-        if 'SELECT' in sql.upper() and 'FROM' in sql.upper():
-            print("\n✓ Response looks like valid SQL")
-        else:
-            print("\n✗ Response doesn't look like SQL")
-        
-        print("\n" + "=" * 80)
-        print("✓ LLM Engine test complete!")
-        print("=" * 80)
-        
-    except LLMError as e:
-        print(f"\n✗ LLM Error: {e}")
-    except Exception as e:
-        print(f"\n✗ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
+    """Return the configured LLM engine. Ollama is the only backend."""
+    from pipeline.ollama_engine import OllamaEngine
+    return OllamaEngine()

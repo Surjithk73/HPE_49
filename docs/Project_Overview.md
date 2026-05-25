@@ -165,9 +165,10 @@ DB_NAME=querycraft_db
 DB_USER=querycraft_user
 DB_PASSWORD=your_readonly_password
 
-# Gemini API
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.1-flash-lite
+# Ollama — local LLM for SQL generation
+OLLAMA_MODEL=gemma4-sql
+OLLAMA_URL=http://localhost:11434
+OLLAMA_TIMEOUT_SECONDS=120
 
 # App settings
 MAX_ROWS=10000
@@ -191,7 +192,7 @@ FEW_SHOTS_PATH=few_shots/examples.yaml
 | SQL parsing + validation | sqlglot |
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
 | Vector cache | chromadb |
-| LLM | Gemini API (google-generativeai) |
+| LLM | Local Ollama (`gemma4-sql`, stdlib HTTP client) |
 | PDF export | weasyprint |
 | Excel export | openpyxl |
 | CSV export | Python standard library |
@@ -208,7 +209,6 @@ psycopg2-binary
 sqlglot
 sentence-transformers
 chromadb
-google-generativeai
 weasyprint
 openpyxl
 python-dotenv
@@ -283,13 +283,13 @@ SQL:
 - Input: filtered schema context, few-shot examples, normalized query
 - Output: assembled prompt string
 
-#### Step 5 — LLM Engine (`pipeline/llm_engine.py`)
+#### Step 5 — LLM Engine (`pipeline/llm_engine.py` + `pipeline/ollama_engine.py`)
 
-- Uses `google-generativeai` Python package
-- Model: value from `GEMINI_MODEL` env var (`gemini-3.1-flash-lite`)
-- Sends assembled prompt
-- Extracts only the SQL text from response (strip markdown fences if present)
-- Future: swap to Ollama by changing this file only — all other pipeline unchanged
+- Base class `BaseLLMEngine` in `pipeline/llm_engine.py` owns the retry loop and SQL extraction (markdown-fence stripping)
+- Concrete `OllamaEngine` in `pipeline/ollama_engine.py` talks to a local Ollama server over `POST /api/generate` (stdlib `urllib` + `json`, no extra deps)
+- Model: value from `OLLAMA_MODEL` env var (default example: `gemma4-sql`)
+- Deterministic options: `temperature=0.0`, `top_p=0.9` for SQL generation
+- Requires `ollama serve` running and the model pulled (`ollama list`)
 - Input: prompt string
 - Output: raw SQL string from model
 
@@ -569,18 +569,27 @@ examples:
 
 ---
 
-## 9. LLM Engine — Gemini API
+## 9. LLM Engine — Local Ollama
 
-**Current model:** `gemini-3.1-flash-lite`  
-**Package:** `google-generativeai`  
-**Future replacement:** Ollama with local SQLCoder model — swap `pipeline/llm_engine.py` only.
+**Current model:** `gemma4-sql` (locally fine-tuned, served by Ollama)  
+**Backend:** Ollama HTTP API at `OLLAMA_URL` (default `http://localhost:11434`)  
+**Concrete engine:** `pipeline/ollama_engine.py` — uses only Python stdlib (`urllib`, `json`); no external SDK.  
+**Sampling:** `temperature=0.0`, `top_p=0.9` for deterministic SQL output.
 
-LLM engine interface contract (must be preserved when switching):
+Preconditions:
+- `ollama serve` is running locally
+- `gemma4-sql` is available locally (`ollama list` shows it)
+
+LLM engine interface contract (any swap-in must preserve this):
 
 ```python
-class LLMEngine:
+class BaseLLMEngine:
+    model_name: str
     def generate_sql(self, prompt: str) -> str:
         # Returns raw SQL string or raises LLMError
+        ...
+    def generate_text(self, prompt: str) -> str:
+        # Used by /api/explain for natural-language result explanations
         ...
 ```
 
@@ -620,7 +629,7 @@ Build components strictly in this order. Do not proceed to next step until curre
 4. **Query normalizer** — standalone, unit-testable, no external dependencies
 5. **Schema linker** — reads YAML, scores tables/columns against query, returns filtered context
 6. **Prompt builder** — assembles prompt from parts, verify output looks correct manually
-7. **LLM engine** — Gemini API call, verify SQL comes back for sample prompt
+7. **LLM engine** — Ollama call to `gemma4-sql`, verify SQL comes back for sample prompt
 8. **SQL validator** — sqlglot-based, test with good and bad SQL inputs
 9. **Query executor** — psycopg2, read-only connection, test with hardcoded SELECT
 10. **Semantic cache** — ChromaDB setup, embed + store + retrieve test
@@ -636,7 +645,7 @@ Build components strictly in this order. Do not proceed to next step until curre
 
 | Decision | Choice | Reason |
 |---|---|---|
-| LLM | Gemini API (swappable) | Available now; Ollama later |
+| LLM | Local Ollama (`gemma4-sql`) | Fully offline; no external API |
 | SQL validation | sqlglot AST parsing | Reliable, not regex-based |
 | Cache | ChromaDB + sentence-transformers | Zero-config, local |
 | DB connection | Read-only role only | Security requirement |
@@ -662,4 +671,4 @@ Build components strictly in this order. Do not proceed to next step until curre
 ---
 
 *QueryCraft — HPE NonStop Performance Report Generator*  
-*Schema: macht413 | Tables: 10 | LLM: Gemini API | Stack: FastAPI + React*
+*Schema: macht413 | Tables: 10 | LLM: Local Ollama (`gemma4-sql`) | Stack: FastAPI + React*

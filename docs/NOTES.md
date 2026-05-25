@@ -12,7 +12,7 @@ All 10 build phases (0–10) are complete. The system is production-ready for lo
 - Backend: FastAPI on port 8000
 - Frontend: React/Vite on port 5173
 - Database: PostgreSQL `querycraft_db`, schema `macht413`, 212,689 rows across 9 tables
-- LLM: Gemini API (`gemini-3.1-flash-lite` — configured in `.env`)
+- LLM: Local Ollama (`gemma4-sql` — configured in `.env`, served by `ollama serve`)
 - Cache: ChromaDB in `backend/cache_store/`, similarity threshold 0.95 (code) — note: some older docs say 0.85, the actual value in `config.py` is 0.95
 - Audit log: SQLite at `backend/audit/query_log.db`
 
@@ -94,10 +94,11 @@ Direct validator tests (33/33 passed): DELETE, DROP, ALTER, INSERT, UPDATE, TRUN
 
 ## LLM Notes
 
-- Model: `gemini-3.1-flash-lite` (set in `.env`)
+- Model: `gemma4-sql` (local, set via `OLLAMA_MODEL` in `.env`)
+- Backend: Ollama HTTP API at `OLLAMA_URL` (default `http://localhost:11434`); `ollama serve` must be running and the model pulled (`ollama list`)
 - Retry logic: max 2 retries on validation failure, with error feedback to LLM
-- Interface is swappable — to migrate to Ollama, only `pipeline/llm_engine.py` needs to change
-- The `LLMEngine.generate_sql(prompt)` method is the only public contract the pipeline uses
+- Concrete engine: `pipeline/ollama_engine.py` (stdlib `urllib` + `json`, no extra deps); shared base class lives in `pipeline/llm_engine.py`
+- The `BaseLLMEngine.generate_sql(prompt)` method is the only public contract the pipeline uses
 
 ---
 

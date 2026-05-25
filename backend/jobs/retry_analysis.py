@@ -33,14 +33,14 @@ class Bucket:
 # Order matters: first match wins. Quota errors are very chatty so check first.
 BUCKETS: List[Bucket] = [
     Bucket(
-        key="quota",
-        label="LLM quota / rate-limit exhaustion",
-        pattern=re.compile(r"\b429\b|quota|rate.?limit|RESOURCE_EXHAUSTED", re.IGNORECASE),
-        fix_surface="env / model config",
+        key="ollama_unreachable",
+        label="Ollama server unreachable or model missing",
+        pattern=re.compile(r"Could not reach Ollama|Ollama HTTP 404|Ollama returned no text|Ollama model not configured", re.IGNORECASE),
+        fix_surface="env / Ollama server",
         recommendation=(
-            "Not a prompt issue. Check GEMINI_MODEL in backend/.env — free-tier accounts "
-            "often have zero quota on gemini-2.0-flash. Switch to gemini-2.5-flash or "
-            "another model with available quota."
+            "Not a prompt issue. Make sure `ollama serve` is running and the model "
+            "set in OLLAMA_MODEL (backend/.env) is pulled — check with `ollama list`. "
+            "If OLLAMA_URL points to a non-default host, verify it's reachable."
         ),
     ),
     Bucket(
