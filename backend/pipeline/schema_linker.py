@@ -213,16 +213,12 @@ class SchemaLinker:
                 parts.append(str(table_def['entity_type']))
             if 'purpose' in table_def:
                 parts.append(str(table_def['purpose']))
-            if 'entity_type' in table:
-                parts.append(str(table['entity_type']))
-            if 'purpose' in table:
-                parts.append(str(table['purpose']))
-            for ident in table.get('identity_columns', []) or []:
+            for ident in table_def.get('identity_columns', []) or []:
                 parts.append(str(ident))
 
             # Include both column names AND descriptions so literal token
             # matches (e.g. user types "cpu_busy_time") have something to hit.
-            for col_name, col_data in table['columns'].items():
+            for col_name, col_data in table_def['columns'].items():
                 if not col_data.get('queryable', False):
                     continue
 
