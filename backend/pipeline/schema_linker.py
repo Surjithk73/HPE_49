@@ -135,27 +135,60 @@ class SchemaLinker:
     def link_schema(self, normalized_text: str, domain_category: str) -> str:
         """
         Select relevant tables and columns for the query.
-        
+
+        For single-domain queries the domain classifier's choice is used
+        directly.  For multi-domain queries hybrid retrieval selects the top
+        tables.  In both cases a lightweight confidence check is applied: if
+        the selected table produces an empty column set (e.g. the domain
+        classifier fired on a keyword that doesn't actually match any column
+        in the query), the linker falls back to hybrid retrieval so the query
+        still gets a useful schema context rather than an empty one.
+
         Args:
             normalized_text: Normalized query text
             domain_category: Domain category from normalizer
-            
+
         Returns:
             Filtered schema context as DDL string
         """
         # Step 1: Select relevant tables
         if domain_category != 'multi':
-            # Single domain - use that table only
             selected_tables = [domain_category]
         else:
-            # Multi-domain - score all tables
-            selected_tables = self._score_and_select_tables(normalized_text)
-        
+            # Multi-domain: select up to 4 tables (raised from 3 to handle
+            # queries that genuinely span 4 tables, e.g. cpu+proc+disc+tmf)
+            selected_tables = self._score_and_select_tables(normalized_text, top_n=4)
+
         # Step 2: Build filtered schema context
         schema_context = self._build_schema_context(selected_tables, normalized_text)
 
-        # Step 3: Inject join hints when multiple tables are in play, so the
-        # LLM doesn't have to guess the join keys.
+        # Step 3: Fallback — if single-domain produced a very thin context
+        # (only key columns, no domain-specific columns), the classifier may
+        # have fired on a generic keyword.  Re-run hybrid retrieval and use
+        # whichever result is richer.
+        if domain_category != 'multi' and len(selected_tables) == 1:
+            # Count non-key, non-comment lines in the DDL as a proxy for
+            # domain-specific column coverage
+            domain_lines = [
+                l for l in schema_context.split('\n')
+                if l.strip() and not l.strip().startswith('--')
+                and 'CREATE TABLE' not in l and l.strip() != ');'
+            ]
+            # If fewer than 4 domain-specific columns surfaced, try hybrid
+            if len(domain_lines) < 4:
+                hybrid_tables = self._score_and_select_tables(normalized_text, top_n=2)
+                if hybrid_tables and hybrid_tables[0] != domain_category:
+                    hybrid_context = self._build_schema_context(hybrid_tables, normalized_text)
+                    hybrid_lines = [
+                        l for l in hybrid_context.split('\n')
+                        if l.strip() and not l.strip().startswith('--')
+                        and 'CREATE TABLE' not in l and l.strip() != ');'
+                    ]
+                    if len(hybrid_lines) > len(domain_lines):
+                        selected_tables = hybrid_tables
+                        schema_context = hybrid_context
+
+        # Step 4: Inject join hints when multiple tables are in play
         if len(selected_tables) > 1:
             join_section = self._build_join_hints(selected_tables)
             if join_section:
@@ -266,7 +299,7 @@ class SchemaLinker:
 
     # ── Hybrid scoring (BM25 + Vector + RRF) ──────────────────────────────────
 
-    def _score_and_select_tables(self, query_text: str, top_n: int = 3) -> List[str]:
+    def _score_and_select_tables(self, query_text: str, top_n: int = 4) -> List[str]:
         """
         Score tables against the query using hybrid retrieval and return the
         top N.
@@ -312,110 +345,279 @@ class SchemaLinker:
 
         return selected
     
+    # ── Counter-type formula hints ────────────────────────────────────────────
+
+    # Maps counter_type → the correct SQL formula fragment to append as a
+    # comment in the DDL.  These are universal across ALL tables because
+    # delta_time is a shared header column with identical semantics everywhere.
+    #
+    # The hint is intentionally terse so it fits on one comment line without
+    # blowing up the context window.  The prompt rules reinforce the same
+    # formulas at a higher level.
+    _COUNTER_FORMULA: Dict[str, str] = {
+        # Busy counters: value is microseconds busy → divide by delta_time for %
+        "Busy":          "% = col*100.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        # Queue counters: value is cumulative queue time → divide by delta_time for AQL
+        "Queue":         "AQL = col*1.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        # Queue-Busy: time queue was non-empty → divide by delta_time for %
+        "Queue-Busy":    "% = col*100.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        # Incrementing: event count → divide by delta_time (µs) for per-second rate
+        "Incrementing":  "rate/s = col*1000000.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        # Accumulating: byte/block count → divide by delta_time for throughput/s
+        "Accumulating":  "throughput/s = col*1000000.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        # Response-time: cumulative time → divide by transaction count for avg
+        "Response-time": "avg = col/NULLIF(transaction_count,0)",
+        # Lockwait: cumulative lock wait → divide by requests_blocked for avg
+        "Lockwait":      "avg_us = col/NULLIF(requests_blocked,0)",
+        # Snapshot: point-in-time value — no formula needed, use directly
+        "Snapshot":      "point-in-time value; use directly, no rate conversion",
+    }
+
+    @staticmethod
+    def _build_col_comment(col_def: Dict) -> str:
+        """
+        Build the full inline comment for a column in the DDL output.
+
+        Combines description, unit, and a formula hint derived from
+        counter_type so the LLM always knows how to use the column correctly.
+        """
+        parts = []
+
+        desc = (col_def.get('description') or '').strip()
+        if desc:
+            parts.append(desc[:120])
+
+        unit = col_def.get('unit')
+        if unit:
+            parts.append(f"unit={unit}")
+
+        counter_type = (col_def.get('counter_type') or '').strip()
+        if counter_type:
+            formula = SchemaLinker._COUNTER_FORMULA.get(counter_type, '')
+            if formula:
+                parts.append(f"[{counter_type}] {formula}")
+            else:
+                parts.append(f"[{counter_type}]")
+
+        return ' | '.join(parts) if parts else ''
+
+    # ── Related-table injection ───────────────────────────────────────────────
+
+    # When a single-domain query targets one of these tables, automatically
+    # include a minimal reference block from the companion table so the LLM
+    # has the correct denominator columns available.
+    #
+    # Key   = primary table selected by the domain classifier
+    # Value = companion table to inject (key columns + delta_time only)
+    _COMPANION_TABLES: Dict[str, str] = {
+        'proc':  'cpu',    # proc % calculations need cpu.delta_time as reference
+        'dfile': 'disc',   # dfile physical I/O context needs disc device info
+        'dopen': 'dfile',  # dopen opener context needs dfile file-level stats
+        'file':  'dfile',  # file logical I/O pairs with dfile physical I/O
+        'ossns': 'proc',   # ossns process stats pair with proc for CPU context
+        'tmf':   'proc',   # tmf transaction stats pair with proc for process context
+    }
+
+    def _inject_companion_table(self, primary_table: str, query_text: str) -> str:
+        """
+        Return a minimal DDL block for the companion table of primary_table.
+
+        Only includes identity columns, time columns, and delta_time so the
+        LLM has the correct denominator without flooding the context window.
+        Returns empty string if no companion is defined or companion is already
+        in the selected tables.
+        """
+        companion = self._COMPANION_TABLES.get(primary_table)
+        if not companion or companion not in self.schema:
+            return ''
+
+        table_def = self.schema[companion]
+        identity_cols = set(table_def.get('identity_columns', []) or [])
+        time_cols = set(table_def.get('time_columns', []) or [])
+        always_include = identity_cols | time_cols | {'delta_time'}
+
+        col_lines = []
+        for col_name, col_def in table_def.get('columns', {}).items():
+            if not isinstance(col_def, dict):
+                continue
+            if not col_def.get('queryable', True):
+                continue
+            if col_name not in always_include:
+                continue
+
+            sanitized = col_name.replace('.', '_').replace('{N}', '0')
+            col_type = self._map_type(col_def.get('type', 'string'))
+            comment = self._build_col_comment(col_def)
+            line = f"    {sanitized} {col_type}"
+            if comment:
+                line += f"  -- {comment}"
+            col_lines.append(line)
+
+        if not col_lines:
+            return ''
+
+        ddl = (
+            f"-- Reference table: macht413.{companion} "
+            f"(included for correct denominator columns)\n"
+            f"CREATE TABLE macht413.{companion} (\n"
+            + ',\n'.join(col_lines)
+            + "\n);\n"
+        )
+        return ddl
+
     # ── Schema context builder ────────────────────────────────────────────────
 
     def _build_schema_context(self, table_names: List[str], query_text: str) -> str:
         """
         Build filtered schema context with relevant columns.
-        
+
+        Each column comment now includes:
+          - description (truncated)
+          - unit (if present)
+          - counter_type + correct formula hint
+
+        For single-domain queries, a minimal companion table block is appended
+        so the LLM always has the correct denominator columns available.
+
         Args:
             table_names: List of table names to include
             query_text: Query text for column relevance scoring
-            
+
         Returns:
             DDL-style schema context string
         """
         context_parts = []
-        
+
         for table_name in table_names:
             if table_name not in self.schema:
                 continue
-            
+
             table_def = self.schema[table_name]
-            
+
             # Get relevant columns
             columns = self._select_relevant_columns(table_name, table_def, query_text)
-            
+
             if not columns:
                 continue
-            
+
             # Build CREATE TABLE DDL
             ddl = f"-- Table: macht413.{table_name}\n"
-            
+
             if 'purpose' in table_def:
                 ddl += f"-- Purpose: {table_def['purpose'][:200]}...\n"
-            
+
             ddl += f"CREATE TABLE macht413.{table_name} (\n"
-            
+
             col_lines = []
             for col_name, col_def in columns:
                 col_type = self._map_type(col_def.get('type', 'string'))
-                desc = col_def.get('description', '')
-                
+
                 # Sanitize column name
                 sanitized_name = col_name.replace('.', '_').replace('{N}', '0')
-                
+
+                # Build rich comment: description + unit + counter formula
+                comment = self._build_col_comment(col_def)
+
                 col_line = f"    {sanitized_name} {col_type}"
-                if desc:
-                    col_line += f"  -- {desc[:100]}"
-                
+                if comment:
+                    col_line += f"  -- {comment}"
+
                 col_lines.append(col_line)
-            
+
             ddl += ',\n'.join(col_lines)
             ddl += "\n);\n"
-            
+
             context_parts.append(ddl)
-        
-        return '\n'.join(context_parts)
+
+        schema_str = '\n'.join(context_parts)
+
+        # For single-domain queries, inject the companion table reference block
+        # so the LLM has the correct denominator columns without needing to
+        # guess or join to a table it wasn't told about.
+        if len(table_names) == 1:
+            companion_ddl = self._inject_companion_table(table_names[0], query_text)
+            if companion_ddl:
+                schema_str += '\n' + companion_ddl
+
+        return schema_str
     
-    def _select_relevant_columns(self, table_name: str, table_def: Dict, 
+    def _select_relevant_columns(self, table_name: str, table_def: Dict,
                                   query_text: str, max_cols: int = 20) -> List[Tuple[str, Dict]]:
         """
-        Select most relevant columns for the query.
-        
-        Args:
-            table_name: Name of the table
-            table_def: Table definition
-            query_text: Query text
-            max_cols: Maximum columns to return
-            
-        Returns:
-            List of (column_name, column_def) tuples
+        Select the most relevant columns for the query.
+
+        Selection priority (highest → lowest):
+          1. Structural key columns — always included (system_name, cpu_num,
+             from_timestamp, to_timestamp, delta_time, identity columns).
+          2. Exact-name matches — any column whose name (with underscores
+             replaced by spaces) appears verbatim in the query text.  These
+             are guaranteed to be included before semantic ranking runs,
+             regardless of how the embedding model scores them.
+          3. Semantic / BM25 ranking — remaining slots filled by the hybrid
+             column ranker.
+
+        The max_cols cap is applied after all three tiers so that exact-name
+        matches are never displaced by lower-priority columns.
         """
         columns = table_def.get('columns', {})
-        
-        # Always include these key columns if present
-        key_columns = ['system_name', 'cpu_num', 'from_timestamp', 'to_timestamp', 
-                       'delta_time', 'device_name', 'process_name', 'file_name']
-        
-        selected = []
-        remaining = []
-        
+
+        # Tier 1: structural key columns — always include
+        key_columns = {'system_name', 'cpu_num', 'from_timestamp', 'to_timestamp',
+                       'delta_time', 'device_name', 'process_name', 'file_name'}
+
+        # Also treat identity_columns from the schema as keys
+        for ident in table_def.get('identity_columns', []) or []:
+            key_columns.add(ident.lower())
+
+        # Tier 2: exact-name matches — column name (normalised) appears in query
+        query_lower = query_text.lower()
+        # Build a set of query tokens for fast lookup
+        query_tokens = set(re.split(r'[^a-z0-9_]+', query_lower))
+
+        selected_keys: List[Tuple[str, Dict]] = []
+        exact_matches: List[Tuple[str, Dict]] = []
+        remaining: List[Tuple[str, Dict]] = []
+
         for col_name, col_def in columns.items():
             if not isinstance(col_def, dict):
                 continue
-            
-            # Skip non-queryable columns
             if not col_def.get('queryable', True):
                 continue
-            
-            # Check if it's a key column
-            is_key = any(key in col_name.lower() for key in key_columns)
-            
+
+            col_lower = col_name.lower()
+
+            # Tier 1 check
+            is_key = any(key in col_lower for key in key_columns)
             if is_key:
-                selected.append((col_name, col_def))
+                selected_keys.append((col_name, col_def))
+                continue
+
+            # Tier 2 check: exact token match (handles both "cpu_busy_time" and
+            # "cpu busy time" phrasings in the query)
+            col_token = col_lower.replace('.', '_')
+            col_spaced = col_lower.replace('_', ' ').replace('.', ' ')
+            is_exact = (
+                col_token in query_tokens
+                or col_spaced in query_lower
+                or col_lower in query_lower
+            )
+            if is_exact:
+                exact_matches.append((col_name, col_def))
             else:
                 remaining.append((col_name, col_def))
-        
-        # Score remaining columns by relevance
-        if remaining:
-            remaining_slots = max(0, max_cols - len(selected))
-            if remaining_slots:
-                ranked = self._rank_columns_by_relevance(table_name, remaining, query_text)
-                for col_name, col_def in ranked[:remaining_slots]:
-                    selected.append((col_name, col_def))
 
-        return selected[:max_cols]
+        # Fill remaining slots with semantic / BM25 ranking
+        used = len(selected_keys) + len(exact_matches)
+        remaining_slots = max(0, max_cols - used)
+        ranked_remaining: List[Tuple[str, Dict]] = []
+        if remaining and remaining_slots > 0:
+            ranked_remaining = self._rank_columns_by_relevance(
+                table_name, remaining, query_text
+            )[:remaining_slots]
+
+        # Combine: keys first, then exact matches, then ranked remainder
+        result = selected_keys + exact_matches + ranked_remaining
+        return result[:max_cols]
 
     def _rank_columns_by_relevance(
         self,
@@ -423,14 +625,53 @@ class SchemaLinker:
         candidates: List[Tuple[str, Dict]],
         query_text: str,
     ) -> List[Tuple[str, Dict]]:
-        """Rank candidate columns by semantic relevance to the query.
+        """Rank candidate columns by relevance to the query.
 
-        Uses cached BGE-large embeddings of `col_name + description` when the
-        shared model is ready; falls back to keyword overlap on cold start.
+        Uses hybrid retrieval — BM25 (lexical) + BGE-large (dense vector) —
+        merged with Reciprocal Rank Fusion, mirroring the table-level strategy.
+
+        BM25 catches exact column name / description token matches (e.g. the
+        user typed "cpu_busy_time" verbatim).  Dense embeddings handle semantic
+        paraphrases (e.g. "processor utilization" → cpu_busy_time).  RRF
+        combines both without needing to tune relative weights.
+
+        Falls back to keyword overlap when neither retriever is available
+        (cold start before the embedding model has loaded).
         """
         if not candidates:
             return []
 
+        ranked_lists: List[List[str]] = []
+        col_names = [name for name, _ in candidates]
+        by_name = {name: defn for name, defn in candidates}
+
+        # ── BM25 lexical path ─────────────────────────────────────────────────
+        if BM25Okapi is not None:
+            # Build a tiny per-column corpus: "col_name_with_spaces description unit"
+            col_docs = []
+            for col_name, col_def in candidates:
+                parts = [col_name.replace('_', ' ').replace('.', ' ')]
+                desc = col_def.get('description', '')
+                if desc:
+                    parts.append(desc)
+                unit = col_def.get('unit')
+                if unit:
+                    parts.append(str(unit))
+                col_docs.append(' '.join(parts))
+
+            tokenized_corpus = [_tokenize(doc) for doc in col_docs]
+            query_tokens = _tokenize(query_text)
+
+            if query_tokens and any(tokenized_corpus):
+                try:
+                    bm25_col = BM25Okapi(tokenized_corpus)
+                    scores = bm25_col.get_scores(query_tokens)
+                    order = np.argsort(scores)[::-1]
+                    ranked_lists.append([col_names[i] for i in order])
+                except Exception:
+                    pass  # BM25 failure is non-fatal — dense path still runs
+
+        # ── Dense vector path ─────────────────────────────────────────────────
         model = embeddings.get()
         if model is not None:
             names, matrix = self._ensure_column_embeddings(table_name, candidates, model)
@@ -438,10 +679,19 @@ class SchemaLinker:
                 qv = np.asarray(model.encode([query_text], normalize_embeddings=True))[0]
                 sims = matrix @ qv
                 order = np.argsort(sims)[::-1]
-                by_name = {name: defn for name, defn in candidates}
-                return [(names[i], by_name[names[i]]) for i in order if names[i] in by_name]
+                ranked_lists.append([names[i] for i in order if names[i] in by_name])
 
-        # Fallback: keyword overlap (original behavior)
+        # ── Merge with RRF ────────────────────────────────────────────────────
+        if len(ranked_lists) >= 2:
+            fused = reciprocal_rank_fusion(ranked_lists, k=60)
+            return [(name, by_name[name]) for name, _ in fused if name in by_name]
+
+        if len(ranked_lists) == 1:
+            # Only one retriever available — use it directly
+            return [(name, by_name[name]) for name in ranked_lists[0] if name in by_name]
+
+        # ── Fallback: keyword overlap ─────────────────────────────────────────
+        # Reached only when both BM25 and the embedding model are unavailable.
         query_words = set(query_text.lower().split())
         scored = []
         for col_name, col_def in candidates:

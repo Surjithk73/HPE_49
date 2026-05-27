@@ -15,6 +15,53 @@ const FORMATS: { id: Format; label: string; icon: typeof FileText }[] = [
   { id: 'pdf',   label: 'PDF',   icon: File             },
 ]
 
+/**
+ * Capture the currently visible Recharts chart as a base64 PNG.
+ *
+ * Recharts renders an SVG inside a div with class "recharts-wrapper".
+ * We serialize that SVG to a data URL, draw it onto an offscreen canvas,
+ * and return the PNG bytes as a base64 string.
+ *
+ * Returns null if no chart is visible or capture fails — the PDF will
+ * fall back to the server-side matplotlib chart in that case.
+ */
+async function captureChartImage(): Promise<string | null> {
+  try {
+    const wrapper = document.querySelector('.recharts-wrapper') as HTMLElement | null
+    if (!wrapper) return null
+
+    const svg = wrapper.querySelector('svg')
+    if (!svg) return null
+
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(svgBlob)
+
+    return await new Promise<string | null>((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        // Use the actual rendered dimensions for crisp output
+        canvas.width  = svg.clientWidth  || 800
+        canvas.height = svg.clientHeight || 360
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { URL.revokeObjectURL(url); resolve(null); return }
+        // White background so the chart is readable on the PDF white page
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        URL.revokeObjectURL(url)
+        // Strip the "data:image/png;base64," prefix — backend expects raw base64
+        resolve(canvas.toDataURL('image/png').split(',')[1])
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null) }
+      img.src = url
+    })
+  } catch {
+    return null
+  }
+}
+
 export default function ReportDownload({ sql, queryText }: Props) {
   const [loading, setLoading] = useState<Format | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,7 +97,12 @@ export default function ReportDownload({ sql, queryText }: Props) {
       const chartTypes = includeChart
         ? (chartMode === 'auto' ? ['auto'] : customCharts)
         : []
-      await exportReport(sql, 'pdf', queryText, includeChart, includeTable, chartTypes)
+
+      // Capture the UI chart so the PDF matches exactly what the user sees.
+      // Falls back to server-side matplotlib if capture fails or chart is hidden.
+      const chartImageBase64 = includeChart ? await captureChartImage() : null
+
+      await exportReport(sql, 'pdf', queryText, includeChart, includeTable, chartTypes, chartImageBase64 ?? undefined)
     } catch (e: any) {
       setError(e.message)
     } finally {

@@ -84,7 +84,8 @@ export async function exportReport(
   queryText: string,
   includeChart?: boolean,
   includeTable?: boolean,
-  chartTypes?: string[]
+  chartTypes?: string[],
+  chartImageBase64?: string   // PNG captured from the UI chart (PDF only)
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/export`, {
     method: 'POST',
@@ -96,6 +97,7 @@ export async function exportReport(
       include_chart: includeChart,
       include_table: includeTable,
       chart_types: chartTypes,
+      chart_image_base64: chartImageBase64 ?? null,
     }),
   })
   if (!res.ok) throw new Error(`Export failed: ${res.statusText}`)
@@ -165,6 +167,13 @@ export interface RetryAnalysisReport {
 export async function runRetryAnalysis(): Promise<RetryAnalysisReport> {
   return request<RetryAnalysisReport>('/api/admin/retry-analysis', {
     method: 'POST',
+  })
+}
+
+export async function setModel(model: string): Promise<{ model: string; previous_model: string }> {
+  return request<{ model: string; previous_model: string }>('/api/model', {
+    method: 'POST',
+    body: JSON.stringify({ model }),
   })
 }
 

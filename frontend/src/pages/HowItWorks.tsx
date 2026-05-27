@@ -142,21 +142,21 @@ export default function HowItWorks() {
               {
                 num: '02',
                 title: 'Semantic Cache Check',
-                desc: 'Converts the normalized query to an embedding vector using all-MiniLM-L6-v2 and searches ChromaDB for semantically similar past queries. Returns cached SQL immediately if cosine similarity ≥ 95%, skipping the LLM entirely.',
+                desc: 'Converts the normalized query to an embedding vector using BAAI/bge-large-en-v1.5 (1024-dim) and searches ChromaDB for semantically similar past queries. Returns cached SQL immediately if cosine similarity ≥ 95%, skipping the LLM entirely. Entity extraction (numbers, quoted values, key terms) enforces exact match on top of cosine similarity to prevent false hits.',
                 tech: 'cache.py + ChromaDB',
                 color: '#f59e0b'
               },
               {
                 num: '03',
                 title: 'Schema Linking',
-                desc: 'On a cache miss, analyzes the query to identify relevant database tables and columns using TF-IDF scoring against the enriched schema. Selects the top 1–3 tables and up to 20 relevant columns per table to keep the LLM prompt focused.',
+                desc: 'On a cache miss, uses hybrid retrieval (BM25 lexical + BGE-large dense vector + Reciprocal Rank Fusion) to identify relevant tables and columns. Selects top 1–3 tables and up to 20 relevant columns per table. For single-domain queries, automatically injects a companion reference table (e.g. cpu for proc queries) so the LLM always has the correct denominator columns.',
                 tech: 'schema_linker.py',
                 color: '#8b5cf6'
               },
               {
                 num: '04',
                 title: 'Prompt Building',
-                desc: 'Constructs a comprehensive prompt for the LLM including filtered schema DDL, 14 few-shot NL→SQL examples, and strict generation rules. Optimizes for accurate, safe SQL generation.',
+                desc: 'Constructs a comprehensive prompt including filtered schema DDL with counter-type formula hints per column, 48 few-shot NL→SQL examples, counter math rules (correct denominator formulas for all 7 counter types), and cross-table join rules.',
                 tech: 'prompt_builder.py',
                 color: '#10b981'
               },
@@ -269,8 +269,8 @@ export default function HowItWorks() {
               {
                 icon: Code2,
                 title: 'Few-Shot Learning',
-                desc: '14 hand-crafted examples teach the LLM complex multi-table JOINs, aggregations, and HPE NonStop-specific query patterns.',
-                stats: '4 simple + 10 complex examples'
+                desc: '48 hand-crafted examples teach the LLM complex multi-table JOINs, aggregations, counter-type math formulas, and HPE NonStop-specific query patterns.',
+                stats: '14 simple + 34 complex/pattern examples'
               },
               {
                 icon: Database,
@@ -453,7 +453,7 @@ export default function HowItWorks() {
               { label: 'Avg Response Time', value: '~1.2s', desc: 'Including LLM generation' },
               { label: 'Cache Response', value: '~200ms', desc: 'Semantic cache hits' },
               { label: 'Database Rows', value: '212,689', desc: 'Across 9 tables' },
-              { label: 'Few-Shot Examples', value: '14', desc: '4 simple + 10 complex' },
+              { label: 'Few-Shot Examples', value: '48', desc: '14 simple + 34 complex/pattern' },
               { label: 'Schema Columns', value: '600+', desc: 'Fully documented' }
             ].map((stat, idx) => (
               <div key={idx} style={{

@@ -157,7 +157,7 @@ cd backend
 pip install -r requirements.txt
 ```
 
-> First run will download the `all-MiniLM-L6-v2` embedding model (~90MB) from HuggingFace. This only happens once — it's cached locally after that. The API is available immediately while the model loads in the background.
+> First run will download the `BAAI/bge-large-en-v1.5` embedding model (~1.3GB) from HuggingFace. This only happens once — it's cached locally after that. The API is available immediately while the model loads in the background.
 
 **Frontend:**
 ```bash
@@ -327,7 +327,7 @@ Interactive docs: http://localhost:8000/docs
 - Check no firewall is blocking localhost:8000
 
 **Embedding model download hangs on first start**
-- Needs internet access on first run to download `all-MiniLM-L6-v2` (~90MB)
+- Needs internet access on first run to download `BAAI/bge-large-en-v1.5` (~1.3GB)
 - After first download it's cached at `~/.cache/huggingface/hub/` and works offline
 
 ---

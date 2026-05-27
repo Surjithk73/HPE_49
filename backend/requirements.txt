@@ -9,6 +9,5 @@ weasyprint
 openpyxl
 python-dotenv
 pyyaml
-pandas
 rank-bm25
 matplotlib

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X } from 'lucide-react'
+import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import QueryInput, { type InputMode } from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
@@ -9,7 +9,7 @@ import ReportDownload from '../components/ReportDownload'
 import AIExplanation from '../components/AIExplanation'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
-import { runQuery, runSqlDirect, getHistory, getHealth, runRetryAnalysis, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
+import { runQuery, runSqlDirect, getHistory, getHealth, runRetryAnalysis, setModel, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -34,6 +34,34 @@ export default function Dashboard() {
   const [retryError, setRetryError] = useState<string | null>(null)
   const [retryOpen, setRetryOpen] = useState(false)
 
+  // Model switcher state
+  const AVAILABLE_MODELS = [
+    { id: 'gemini-3.1-flash-lite',  label: 'Gemini 3.1 Flash Lite',  badge: 'fast'    },
+    { id: 'gemini-2.0-flash',       label: 'Gemini 2.0 Flash',        badge: 'balanced' },
+    { id: 'gemini-2.5-flash',       label: 'Gemini 2.5 Flash',        badge: 'smart'   },
+    { id: 'gemini-3.5-flash',       label: 'Gemini 3.5 Flash',        badge: 'latest'  },
+    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash',          badge: 'preview' },
+  ]
+  const [activeModel, setActiveModel] = useState<string>(
+    health?.llm_model ?? 'gemini-3.1-flash-lite'
+  )
+  const [modelSwitching, setModelSwitching] = useState(false)
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+
+  const handleModelSwitch = async (modelId: string) => {
+    setModelDropdownOpen(false)
+    if (modelId === activeModel || modelSwitching) return
+    setModelSwitching(true)
+    try {
+      const res = await setModel(modelId)
+      setActiveModel(res.model)
+    } catch {
+      // silently ignore — model stays unchanged
+    } finally {
+      setModelSwitching(false)
+    }
+  }
+
   const handleRetryAnalysis = async () => {
     setRetryOpen(true)
     setRetryLoading(true)
@@ -49,7 +77,10 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    getHealth().then(setHealth).catch(() => setHealthFailed(true))
+    getHealth().then(h => {
+      setHealth(h)
+      if (h.llm_model) setActiveModel(h.llm_model)
+    }).catch(() => setHealthFailed(true))
   }, [])
 
   const refreshHistory = useCallback(async () => {
@@ -70,12 +101,21 @@ export default function Dashboard() {
         setChartKind('line')
         setViewMode('chart')
       } else if (res.chart_type === 'bar') {
-        // Use stacked bar if multiple numeric columns (like CPU utilization breakdown)
+        // Only use stacked-bar when the numeric columns are clearly parts of a
+        // whole (their names contain 'pct', 'percent', 'ratio', or 'share').
+        // For independent metrics (cpu_busy_time, intr_busy_time, etc.) a
+        // grouped bar is more honest — stacked bars imply the values sum to 100%.
         const numericCols = res.columns.filter(c => {
           const s = res.rows[0]?.[c]
           return typeof s === 'number' || (!isNaN(Number(s)) && s !== '')
         })
-        setChartKind(numericCols.length > 2 ? 'stacked-bar' : 'bar')
+        const partsOfWhole = numericCols.length > 2 && numericCols.every(c => {
+          const cl = c.toLowerCase()
+          return cl.includes('pct') || cl.includes('percent') ||
+                 cl.includes('ratio') || cl.includes('share') ||
+                 cl.includes('fraction')
+        })
+        setChartKind(partsOfWhole ? 'stacked-bar' : 'bar')
         setViewMode('chart')
       } else {
         setViewMode('table')
@@ -178,6 +218,114 @@ export default function Dashboard() {
               <BookOpen size={14} />
               How It Works
             </Link>
+
+            {/* ── Model selector ── */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setModelDropdownOpen(o => !o)}
+                disabled={modelSwitching}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 14px', borderRadius: '8px',
+                  border: `1px solid ${modelDropdownOpen ? 'rgba(59,130,246,0.5)' : '#2a2a2a'}`,
+                  background: modelDropdownOpen ? 'rgba(59,130,246,0.08)' : '#161616',
+                  color: '#f0f0f0', fontSize: '12px', cursor: modelSwitching ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', fontWeight: 500, transition: 'all 0.15s',
+                  opacity: modelSwitching ? 0.6 : 1,
+                }}
+              >
+                <Cpu size={13} style={{ color: '#3b82f6' }} />
+                <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {AVAILABLE_MODELS.find(m => m.id === activeModel)?.label ?? activeModel}
+                </span>
+                <ChevronDown
+                  size={11}
+                  style={{
+                    color: '#555',
+                    transform: modelDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s',
+                  }}
+                />
+              </button>
+
+              {modelDropdownOpen && (
+                <>
+                  {/* Click-away backdrop */}
+                  <div
+                    onClick={() => setModelDropdownOpen(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                    zIndex: 50, minWidth: '220px',
+                    background: '#111', border: '1px solid #2a2a2a',
+                    borderRadius: '10px', overflow: 'hidden',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                    animation: 'slideDown 0.15s ease-out',
+                  }}>
+                    <div style={{
+                      padding: '8px 12px 6px',
+                      fontSize: '10px', fontWeight: 600, color: '#444',
+                      letterSpacing: '0.08em', textTransform: 'uppercase',
+                      borderBottom: '1px solid #1c1c1c',
+                    }}>
+                      Select Model
+                    </div>
+                    {AVAILABLE_MODELS.map(m => {
+                      const isActive = m.id === activeModel
+                      const badgeColor: Record<string, string> = {
+                        fast:     'rgba(16,185,129,0.15)',
+                        balanced: 'rgba(59,130,246,0.15)',
+                        smart:    'rgba(168,85,247,0.15)',
+                        latest:   'rgba(251,191,36,0.15)',
+                        preview:  'rgba(239,68,68,0.15)',
+                      }
+                      const badgeText: Record<string, string> = {
+                        fast:     '#34d399',
+                        balanced: '#60a5fa',
+                        smart:    '#c084fc',
+                        latest:   '#fbbf24',
+                        preview:  '#f87171',
+                      }
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => handleModelSwitch(m.id)}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center',
+                            justifyContent: 'space-between', gap: '8px',
+                            padding: '10px 12px', border: 'none',
+                            background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent',
+                            color: isActive ? '#f0f0f0' : '#888',
+                            fontSize: '12px', cursor: 'pointer',
+                            fontFamily: 'inherit', textAlign: 'left',
+                            transition: 'background 0.1s',
+                            borderLeft: isActive ? '2px solid #3b82f6' : '2px solid transparent',
+                          }}
+                          onMouseEnter={e => {
+                            if (!isActive) (e.currentTarget as HTMLElement).style.background = '#1c1c1c'
+                          }}
+                          onMouseLeave={e => {
+                            if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+                          }}
+                        >
+                          <span style={{ fontWeight: isActive ? 600 : 400 }}>{m.label}</span>
+                          <span style={{
+                            fontSize: '10px', padding: '2px 7px', borderRadius: '999px',
+                            background: badgeColor[m.badge] ?? 'rgba(255,255,255,0.05)',
+                            color: badgeText[m.badge] ?? '#888',
+                            fontWeight: 600, letterSpacing: '0.04em',
+                          }}>
+                            {m.badge}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+            {/* ── end model selector ── */}
             
             {healthFailed && (
               <div style={{
@@ -198,8 +346,6 @@ export default function Dashboard() {
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <Database size={11} /> {health.schema_tables} tables
                 </span>
-                <span style={{ color: '#2a2a2a' }}>·</span>
-                <span style={{ color: '#444' }}>{health.llm_model}</span>
               </div>
             )}
           </div>
@@ -471,6 +617,14 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   )
 }

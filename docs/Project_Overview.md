@@ -189,7 +189,7 @@ FEW_SHOTS_PATH=few_shots/examples.yaml
 | API framework | FastAPI |
 | PostgreSQL driver | psycopg2 |
 | SQL parsing + validation | sqlglot |
-| Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
+| Embeddings | sentence-transformers (`BAAI/bge-large-en-v1.5`) |
 | Vector cache | chromadb |
 | LLM | Gemini API (google-generativeai) |
 | PDF export | weasyprint |
@@ -231,7 +231,7 @@ pandas
 #### Step 2 — Semantic Cache (`pipeline/cache.py`)
 
 - Backed by ChromaDB collection named `querycraft_cache`
-- Embedding model: `all-MiniLM-L6-v2` via sentence-transformers
+- Embedding model: `BAAI/bge-large-en-v1.5` via sentence-transformers (1024-dim)
 - On each query:
   - Embed normalized text
   - Query ChromaDB for nearest neighbor

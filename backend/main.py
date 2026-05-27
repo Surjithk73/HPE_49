@@ -158,10 +158,17 @@ class ExportRequest(BaseModel):
     include_table: Optional[bool] = True
     chart_types: Optional[List[str]] = None
     chart_type_override: Optional[str] = None
+    # Base64-encoded PNG captured from the UI chart (sent by the frontend).
+    # When present, this image is embedded directly in the PDF instead of
+    # regenerating a server-side matplotlib chart — ensures PDF matches the UI.
+    chart_image_base64: Optional[str] = None
 
 class ThresholdRequest(BaseModel):
     threshold: float = Field(..., gt=0.0, le=1.0,
                              description="Cosine similarity threshold (0 < value ≤ 1)")
+
+class ModelRequest(BaseModel):
+    model: str = Field(..., description="Gemini model name to switch to")
 
 class ExplainRequest(BaseModel):
     sql: str
@@ -284,6 +291,7 @@ def run_query(req: QueryRequest):
         "validation_passed": False,
         "validation_error":  None,
         "cache_hit":         False,
+        "cache_confidence":  None,
         "row_count":         None,
         "execution_time_ms": None,
         "export_format":     None,
@@ -300,6 +308,9 @@ def run_query(req: QueryRequest):
 
         # Step 2 — Cache lookup
         cache_result = _cache.lookup(norm_text)
+        # Always record the confidence score so near-misses are visible in
+        # the audit log — this lets you tune the threshold with real data.
+        log_entry["cache_confidence"] = cache_result.confidence
 
         # Track the prompt sent to the LLM for debugging
         debug_prompt = None
@@ -319,11 +330,13 @@ def run_query(req: QueryRequest):
 
             # Capture the exact prompt for debugging
             debug_prompt = prompt
-            print("\n" + "=" * 80)
-            print("[DEBUG] Exact prompt sent to Gemini API:")
-            print("=" * 80)
-            print(prompt)
-            print("=" * 80 + "\n")
+            # Only print the full prompt to terminal when DEBUG_PROMPTS=true
+            if os.getenv("DEBUG_PROMPTS", "").lower() == "true":
+                print("\n" + "=" * 80)
+                print("[DEBUG] Exact prompt sent to Gemini API:")
+                print("=" * 80)
+                print(prompt)
+                print("=" * 80 + "\n")
 
             # Step 5 — LLM generation with retry
             # We monkey-patch the builder temporarily to count retries
@@ -406,7 +419,9 @@ def run_query(req: QueryRequest):
             "cache_hit":         cache_result.hit,
             "chart_type":        chart_type,
             "domain":            domain,
-            "debug_prompt":      debug_prompt,
+            # debug_prompt is only included when DEBUG_PROMPTS=true in .env
+            # to avoid leaking the full prompt in production responses.
+            **({"debug_prompt": debug_prompt} if os.getenv("DEBUG_PROMPTS", "").lower() == "true" else {}),
         }
 
     except HTTPException:
@@ -511,7 +526,8 @@ def export(req: ExportRequest):
             include_chart=req.include_chart if req.include_chart is not None else True,
             include_table=req.include_table if req.include_table is not None else True,
             chart_types=req.chart_types,
-            chart_type_override=req.chart_type_override
+            chart_type_override=req.chart_type_override,
+            chart_image_base64=req.chart_image_base64,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
@@ -597,6 +613,88 @@ def set_threshold(req: ThresholdRequest):
         "status":    "updated",
         "threshold": _cache.get_threshold(),
         "message":   f"Cache similarity threshold set to {req.threshold}",
+    }
+
+
+# ── Model switcher ────────────────────────────────────────────────────────────
+
+# Models the UI is allowed to switch to.  Only Gemini models are listed here;
+# Ollama switching is handled by restarting with a different .env.
+ALLOWED_GEMINI_MODELS = [
+    "gemini-3.1-flash-lite",    # default — fast, low cost
+    "gemini-2.0-flash",         # stronger reasoning
+    "gemini-2.5-flash",         # latest generation
+    "gemini-3.5-flash",         # latest 3.x series
+    "gemini-3-flash-preview",   # gemini-3-flash (preview name on API)
+]
+
+
+# GET /api/model
+@app.get("/api/model")
+def get_model():
+    """Return the currently active LLM model name and the list of available models."""
+    return {
+        "current_model":   _llm_engine.model_name if _llm_engine else None,
+        "available_models": ALLOWED_GEMINI_MODELS,
+        "provider":        LLM_PROVIDER,
+    }
+
+
+# POST /api/model
+@app.post("/api/model")
+def switch_model(req: ModelRequest):
+    """
+    Hot-swap the active Gemini model at runtime.
+
+    No server restart required.  The new model takes effect immediately
+    for all subsequent queries.  Cache entries are not invalidated — cached
+    SQL is model-agnostic.
+
+    Body:
+        { "model": "gemini-2.5-flash" }
+
+    Only Gemini models are supported via this endpoint.  To switch to Ollama,
+    update LLM_PROVIDER in .env and restart the server.
+    """
+    global _llm_engine
+
+    if LLM_PROVIDER != "gemini":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model switching is only supported for LLM_PROVIDER=gemini. "
+                   f"Current provider: {LLM_PROVIDER}"
+        )
+
+    requested = req.model.strip()
+    if requested not in ALLOWED_GEMINI_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{requested}' is not in the allowed list. "
+                   f"Allowed: {ALLOWED_GEMINI_MODELS}"
+        )
+
+    previous = _llm_engine.model_name if _llm_engine else None
+
+    if previous == requested:
+        return {
+            "status":         "unchanged",
+            "model":          requested,
+            "previous_model": previous,
+            "message":        f"Already using {requested}",
+        }
+
+    try:
+        from pipeline.llm_engine import LLMEngine
+        _llm_engine = LLMEngine(model=requested)
+        logger.info(f"[/api/model] Switched from {previous} → {requested}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to initialise model '{requested}': {e}")
+
+    return {
+        "status":         "switched",
+        "model":          requested,
+        "previous_model": previous,
+        "message":        f"Model switched to {requested}",
     }
 
 

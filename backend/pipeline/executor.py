@@ -102,7 +102,7 @@ class QueryExecutor:
         self.password = password or DB_PASSWORD
         self.timeout  = timeout  or QUERY_TIMEOUT_SECONDS
         self.allowed_users = allowed_users or ALLOWED_DB_USERS
-        self.max_query_cost = max_query_cost or float(os.getenv("MAX_QUERY_COST", "25000.0"))
+        self.max_query_cost = max_query_cost or float(os.getenv("MAX_QUERY_COST", "200000.0"))
 
         # Enforce read-only user checks dynamically
         if self.user not in self.allowed_users:
@@ -135,19 +135,32 @@ class QueryExecutor:
             raise ExecutionError(f"Failed to create connection pool: {e}")
 
     def _estimate_cost(self, cursor, sql: str) -> float:
-        """Run EXPLAIN and extract the total start-up + run cost of the query."""
+        """
+        Run EXPLAIN and extract the planner's total estimated cost.
+
+        For simple queries the cost is on the first line.  For CTE queries
+        PostgreSQL may report the top-level node cost on the first line as
+        well, but the individual CTE scan costs can be lower.  We take the
+        first line's upper-bound cost (after the '..') which represents the
+        total plan cost — the right value to compare against the limit.
+
+        Returns 0.0 on any failure so the query is allowed through rather
+        than incorrectly blocked.
+        """
         try:
             cursor.execute(f"EXPLAIN {sql}")
             explain_rows = cursor.fetchall()
             if not explain_rows:
                 return 0.0
+            # The first EXPLAIN line always contains the top-level node cost
+            # in the form:  <NodeType>  (cost=startup..total ...)
             first_line = explain_rows[0][0]
             match = re.search(r'cost=\d+(?:\.\d+)?\.\.(\d+(?:\.\d+)?)', first_line)
             if match:
                 return float(match.group(1))
             return 0.0
         except Exception as e:
-            print(f"[Executor] Warning: Cost estimation failed: {e}")
+            print(f"[Executor] Warning: Cost estimation failed (query allowed through): {e}")
             return 0.0
 
     def close(self) -> None:
@@ -194,7 +207,10 @@ class QueryExecutor:
                 cost = self._estimate_cost(cursor, sql)
                 if cost > self.max_query_cost:
                     raise ExecutionError(
-                        f"Query cost estimation ({cost}) exceeds the maximum query cost limit ({self.max_query_cost}). Query rejected."
+                        f"Query is too complex to execute safely (estimated cost {cost:,.0f} "
+                        f"exceeds limit {self.max_query_cost:,.0f}). "
+                        f"Try narrowing the query — add a WHERE clause, reduce the number of "
+                        f"tables joined, or ask for a smaller time range."
                     )
 
             cursor.execute(sql)
@@ -307,9 +323,10 @@ def detect_chart_type(columns: List[str], rows: List[Dict]) -> str:
         return "table"
 
     # Rule 2: High cardinality (unreadable bar charts) -> table
-    # If there's no timestamp (meaning it's categorical) and rows > 50, default to table
+    # If there's no timestamp (meaning it's categorical) and rows > 200, default to table.
+    # 200 matches the ChartView render cap so the cutoff is consistent.
     has_timestamp = any('timestamp' in col for col in columns_lower)
-    if not has_timestamp and len(rows) > 50:
+    if not has_timestamp and len(rows) > 200:
         return "table"
 
     # Rule 3: Time Series -> line chart

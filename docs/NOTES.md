@@ -38,7 +38,9 @@ All 10 build phases (0–10) are complete. The system is production-ready for lo
 ## Schema Stats
 
 - `enriched_schema.yaml`: 9 tables, 601 total columns, 487 queryable columns (114 internal filtered)
-- `few_shots/examples.yaml`: 14 examples (4 simple + 10 complex multi-table)
+- `few_shots/examples.yaml`: 48 examples (14 simple/single-table + 34 complex/counter-pattern)
+- Embedding model: `BAAI/bge-large-en-v1.5` (1024-dim, ~1.3GB) — shared singleton loaded in background thread
+- Schema retrieval: Hybrid BM25 (lexical) + BGE-large (dense vector) + Reciprocal Rank Fusion
 
 ---
 
@@ -52,10 +54,10 @@ All 10 build phases (0–10) are complete. The system is production-ready for lo
 
 4. **Cache threshold discrepancy** — Fixed. `.env` was set to `0.85` but `config.py` defaulted to `0.95`. Both are now aligned at `0.95`. The `HowItWorks.tsx` UI text has also been updated to say "95%".
 
-5. **Dead dependencies:**
-   - Frontend: `axios` is installed but `api.ts` uses native `fetch`
-   - Frontend: `@reduxjs/toolkit` is installed but plain React state is used
-   - Backend: `pandas` is in `requirements.txt` but not imported anywhere in the pipeline
+5. **Dead dependencies (resolved):**
+   - Frontend: `axios` removed from `package.json` — `api.ts` uses native `fetch`
+   - Frontend: `@reduxjs/toolkit` removed — plain React state is used
+   - Backend: `pandas` removed from `requirements.txt` — not used anywhere in the pipeline
 
 6. **Chart view caps at 200 rows** — `ChartView.tsx` only renders the first 200 rows for performance. This is not communicated clearly to users.
 

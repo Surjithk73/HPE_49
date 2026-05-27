@@ -75,8 +75,43 @@ STRICT RULES:
 - Always qualify tables: macht413.table_name.
 - Only use columns shown in the schema context; never invent column names.
 - Use from_timestamp / to_timestamp for time filtering.
+
+COUNTER MATH RULES (apply to every table — delta_time is in microseconds):
+- delta_time is the SAME value for every row in the same measurement interval.
+  NEVER use SUM(delta_time) as a denominator — it inflates by row count and produces near-zero results.
+  When grouping rows (GROUP BY cpu_num, device_name, etc.) always use MAX(delta_time) as the denominator.
+- [Busy counter]       percentage  = col * 100.0 / NULLIF(MAX(delta_time), 0)
+- [Queue counter]      avg queue   = col * 1.0   / NULLIF(MAX(delta_time), 0)
+- [Queue-Busy counter] percentage  = col * 100.0 / NULLIF(MAX(delta_time), 0)
+- [Incrementing counter] rate/sec  = col * 1000000.0 / NULLIF(MAX(delta_time), 0)
+- [Accumulating counter] bytes/sec = col * 1000000.0 / NULLIF(MAX(delta_time), 0)
+- [Response-time counter] avg time = col / NULLIF(transaction_count_col, 0)
+- [Lockwait counter]  avg wait µs  = col / NULLIF(requests_blocked, 0)
+- [Snapshot counter]  use directly — no rate conversion needed.
+- The column comments in SCHEMA CONTEXT show each column's counter type and formula.
+  Always follow the formula shown there.
+
+AGGREGATION RULES:
+- When computing process-category breakdowns from macht413.proc grouped by cpu_num,
+  use SUM(CASE WHEN ...) for the numerator and MAX(delta_time) for the denominator.
+- When a query asks for "percentage of interval" or "utilization %", always divide
+  the Busy/Queue counter by MAX(delta_time), never by SUM(delta_time).
+- For cache hit ratios: hits * 100.0 / NULLIF(hits + misses, 0) — do NOT involve delta_time.
+- For lock wait averages: lockwait_time / NULLIF(requests_blocked, 0).
+
+CROSS-TABLE RULES:
 - CRITICAL — cross-table joins on timestamps: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
 - CRITICAL — multi-table aggregation performance: When joining 3 or more tables that each have many rows (proc has 110k rows, file has 61k rows), ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results. Flat multi-table joins with DATE_TRUNC will time out. Pattern: WITH t1 AS (SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name, AGG(...) FROM macht413.table GROUP BY 1,2), ... SELECT ... FROM t1 LEFT JOIN t2 ON t1.system_name=t2.system_name AND t1.ts=t2.ts
+
+- PROCESS NAME CONVENTIONS in macht413.proc: ALL processes in this dataset start
+  with '$'. There are NO processes without a '$' prefix — do NOT use
+  "NOT LIKE '$%'" to identify user processes; it will return zero rows.
+  Disk processes match LIKE '$DATA%' OR '$SSD%' OR '$AUDIT%'.
+  Core system processes are: $SYSTEM, $MONITOR, $MSENGER, $VIRTUAL, $NULL,
+  $OSS, $SWAP, $SWAP01, $SWAP23, $SWAP34, $NCP, $TMP.
+  User/application processes are everything else (e.g. $BEER, $CHAMP, $GANESH).
+  When categorising processes, always use explicit IN() or LIKE patterns based
+  on the actual names above — never assume generic HPE naming conventions.
 - Intent Mapping: If a user asks for a metric using non-technical terms (e.g., "bottleneck", "sluggish"), map their intent to the closest matching column provided in the SCHEMA CONTEXT. If absolutely no logical match exists, use the most relevant primary metric for that table (e.g., cpu_busy_time for cpu).
 - Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 

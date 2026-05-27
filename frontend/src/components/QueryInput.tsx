@@ -11,6 +11,8 @@ interface Props {
   initialMode?: InputMode
 }
 
+const MAX_QUERY_LENGTH = 2000   // characters — prevents runaway API calls
+
 const NL_SUGGESTIONS = [
   'Show average CPU busy time per CPU',
   'List disk reads and writes per device',
@@ -52,6 +54,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
   const handleSubmit = () => {
     const q = value.trim()
     if (!q || loading) return
+    if (q.length > MAX_QUERY_LENGTH) return   // guard — button is also disabled
     onSubmit(q, mode)
   }
 
@@ -141,6 +144,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
           rows={isSql ? 5 : 3}
           disabled={loading}
           spellCheck={false}
+          maxLength={MAX_QUERY_LENGTH}
           style={{
             width: '100%',
             resize: isSql ? 'vertical' : 'none',
@@ -171,21 +175,37 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           borderTop: '1px solid #1c1c1c', padding: '8px 16px',
         }}>
-          <span style={{ fontSize: '11px', color: '#333' }}>
-            {isSql ? 'Only SELECT statements · Ctrl+Enter to run' : 'Ctrl+Enter to run'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '11px', color: '#333' }}>
+              {isSql ? 'Only SELECT statements · Ctrl+Enter to run' : 'Ctrl+Enter to run'}
+            </span>
+            {/* Character counter — turns amber near limit, red at limit */}
+            {value.length > 0 && (
+              <span style={{
+                fontSize: '10px',
+                color: value.length >= MAX_QUERY_LENGTH
+                  ? '#ef4444'
+                  : value.length >= MAX_QUERY_LENGTH * 0.85
+                    ? '#fbbf24'
+                    : '#333',
+                transition: 'color 0.2s',
+              }}>
+                {value.length}/{MAX_QUERY_LENGTH}
+              </span>
+            )}
+          </div>
           <button
             onClick={handleSubmit}
-            disabled={!value.trim() || loading}
+            disabled={!value.trim() || loading || value.length > MAX_QUERY_LENGTH}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               padding: '6px 14px', borderRadius: '7px',
-              background: !value.trim() || loading
+              background: !value.trim() || loading || value.length > MAX_QUERY_LENGTH
                 ? '#1a1a1a'
                 : isSql ? '#059669' : '#3b82f6',
-              color: !value.trim() || loading ? '#444' : '#fff',
+              color: !value.trim() || loading || value.length > MAX_QUERY_LENGTH ? '#444' : '#fff',
               border: 'none',
-              cursor: !value.trim() || loading ? 'not-allowed' : 'pointer',
+              cursor: !value.trim() || loading || value.length > MAX_QUERY_LENGTH ? 'not-allowed' : 'pointer',
               fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
               transition: 'background 0.15s',
             }}

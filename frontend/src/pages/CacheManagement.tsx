@@ -1,208 +1,399 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Database, Trash2, RefreshCw, Cpu, AlertTriangle, X, CheckCircle2, Loader2 } from 'lucide-react'
 import { getCache, deleteCacheEntry, clearCache, type CacheEntry } from '../lib/api'
 
+// ── Confirm dialog (replaces browser confirm()) ───────────────────────────────
+interface ConfirmDialogProps {
+  message: string
+  detail?: string
+  confirmLabel?: string
+  danger?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+function ConfirmDialog({ message, detail, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel }: ConfirmDialogProps) {
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 200, padding: '24px',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#111', border: '1px solid #2a2a2a', borderRadius: '12px',
+          padding: '24px', width: '100%', maxWidth: '400px',
+          fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <AlertTriangle size={16} style={{ color: danger ? '#ef4444' : '#fbbf24', flexShrink: 0 }} />
+          <span style={{ fontSize: '14px', fontWeight: 600, color: '#f0f0f0' }}>{message}</span>
+        </div>
+        {detail && (
+          <p style={{ fontSize: '12px', color: '#666', margin: '0 0 20px', lineHeight: 1.6 }}>{detail}</p>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: '7px 16px', borderRadius: '7px', border: '1px solid #2a2a2a',
+              background: 'transparent', color: '#888', fontSize: '12px',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              padding: '7px 16px', borderRadius: '7px', border: 'none',
+              background: danger ? '#ef4444' : '#3b82f6', color: '#fff',
+              fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Toast notification ────────────────────────────────────────────────────────
+interface ToastProps { message: string; type: 'success' | 'error' }
+
+function Toast({ message, type }: ToastProps) {
+  return (
+    <div style={{
+      position: 'fixed', bottom: '24px', right: '24px', zIndex: 300,
+      display: 'flex', alignItems: 'center', gap: '8px',
+      background: type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+      border: `1px solid ${type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+      borderRadius: '8px', padding: '10px 16px',
+      fontSize: '12px', color: type === 'success' ? '#34d399' : '#f87171',
+      fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+      animation: 'slideUp 0.25s ease-out',
+    }}>
+      {type === 'success'
+        ? <CheckCircle2 size={13} />
+        : <AlertTriangle size={13} />
+      }
+      {message}
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function CacheManagement() {
-  const [entries, setEntries] = useState<CacheEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
+  const [entries, setEntries]     = useState<CacheEntry[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [deleting, setDeleting]   = useState<string | null>(null)
+  const [toast, setToast]         = useState<ToastProps | null>(null)
+  const [confirm, setConfirm]     = useState<ConfirmDialogProps | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const loadCache = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      setError(null)
       const data = await getCache()
       setEntries(data.entries)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load cache')
+      showToast('Failed to load cache', 'error')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    loadCache()
-  }, [])
+  useEffect(() => { loadCache() }, [])
 
-  const handleDelete = async (query: string) => {
-    if (!confirm(`Delete this cache entry?\n\n"${query.substring(0, 100)}..."`)) {
-      return
-    }
-
-    try {
-      setDeleting(query)
-      await deleteCacheEntry(query)
-      await loadCache() // Reload to show updated list
-    } catch (err) {
-      alert(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    } finally {
-      setDeleting(null)
-    }
+  const handleDelete = (entry: CacheEntry) => {
+    setConfirm({
+      message: 'Delete this cache entry?',
+      detail: entry.query.length > 100 ? entry.query.slice(0, 100) + '…' : entry.query,
+      confirmLabel: 'Delete',
+      danger: true,
+      onCancel: () => setConfirm(null),
+      onConfirm: async () => {
+        setConfirm(null)
+        setDeleting(entry.query)
+        try {
+          await deleteCacheEntry(entry.query)
+          await loadCache()
+          showToast('Entry deleted', 'success')
+        } catch {
+          showToast('Failed to delete entry', 'error')
+        } finally {
+          setDeleting(null)
+        }
+      },
+    })
   }
 
-  const handleClearAll = async () => {
-    if (!confirm(`Clear ALL ${entries.length} cached entries?\n\nThis cannot be undone.`)) {
-      return
-    }
-
-    try {
-      setLoading(true)
-      await clearCache()
-      await loadCache()
-    } catch (err) {
-      alert(`Failed to clear cache: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      setLoading(false)
-    }
-  }
-
-  if (loading && entries.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center text-white">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
-            <p>Loading cache...</p>
-          </div>
-        </div>
-      </div>
-    )
+  const handleClearAll = () => {
+    setConfirm({
+      message: `Clear all ${entries.length} cached entries?`,
+      detail: 'This removes every cached query–SQL pair. The cache will rebuild as new queries are run.',
+      confirmLabel: 'Clear All',
+      danger: true,
+      onCancel: () => setConfirm(null),
+      onConfirm: async () => {
+        setConfirm(null)
+        setLoading(true)
+        try {
+          await clearCache()
+          await loadCache()
+          showToast('Cache cleared', 'success')
+        } catch {
+          showToast('Failed to clear cache', 'error')
+          setLoading(false)
+        }
+      },
+    })
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">Cache Management</h1>
-              <p className="text-slate-300">
-                View and manage cached query→SQL mappings
-              </p>
-            </div>
-            <a
-              href="/"
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-            >
-              ← Back to Dashboard
-            </a>
-          </div>
+    <div style={{
+      minHeight: '100vh', background: '#0a0a0a', color: '#f0f0f0',
+      fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+    }}>
 
-          {/* Stats & Actions */}
-          <div className="flex items-center justify-between bg-slate-800/50 backdrop-blur-sm rounded-lg p-4 border border-slate-700">
-            <div className="text-white">
-              <span className="text-2xl font-bold">{entries.length}</span>
-              <span className="text-slate-400 ml-2">cached {entries.length === 1 ? 'entry' : 'entries'}</span>
+      {/* Header */}
+      <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
+        <div style={{
+          maxWidth: '1280px', margin: '0 auto', padding: '0 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Cpu size={15} style={{ color: '#3b82f6' }} />
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={loadCache}
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh
-              </button>
-              <button
-                onClick={handleClearAll}
-                disabled={loading || entries.length === 0}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                Clear All
-              </button>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '-0.02em' }}>QueryCraft</div>
+              <div style={{ fontSize: '11px', color: '#444' }}>Cache Management</div>
             </div>
+          </div>
+          <Link
+            to="/"
+            style={{
+              padding: '7px 14px', borderRadius: '8px', border: '1px solid #2a2a2a',
+              background: '#161616', color: '#f0f0f0', fontSize: '12px',
+              textDecoration: 'none', fontWeight: 500,
+            }}
+          >
+            ← Dashboard
+          </Link>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px' }}>
+
+        {/* Stats bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          borderRadius: '10px', border: '1px solid #1c1c1c', background: '#111',
+          padding: '16px 20px', marginBottom: '24px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Database size={15} style={{ color: '#3b82f6' }} />
+            <span style={{ fontSize: '13px', color: '#888' }}>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: '#f0f0f0' }}>
+                {loading ? '—' : entries.length}
+              </span>
+              {' '}cached {entries.length === 1 ? 'entry' : 'entries'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={loadCache}
+              disabled={loading}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '7px 14px', borderRadius: '7px', border: '1px solid #2a2a2a',
+                background: '#161616', color: loading ? '#444' : '#f0f0f0',
+                fontSize: '12px', cursor: loading ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', fontWeight: 500,
+              }}
+            >
+              {loading
+                ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                : <RefreshCw size={12} />
+              }
+              Refresh
+            </button>
+            <button
+              onClick={handleClearAll}
+              disabled={loading || entries.length === 0}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '7px 14px', borderRadius: '7px', border: '1px solid rgba(239,68,68,0.3)',
+                background: 'rgba(239,68,68,0.08)', color: loading || entries.length === 0 ? '#555' : '#f87171',
+                fontSize: '12px', cursor: loading || entries.length === 0 ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', fontWeight: 500,
+              }}
+            >
+              <Trash2 size={12} />
+              Clear All
+            </button>
           </div>
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-lg text-red-200">
-            <p className="font-semibold">Error loading cache</p>
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {entries.length === 0 && !loading && (
-          <div className="text-center py-16 bg-slate-800/30 rounded-lg border border-slate-700">
-            <svg className="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-            </svg>
-            <h3 className="text-xl font-semibold text-white mb-2">Cache is Empty</h3>
-            <p className="text-slate-400">
-              Run some queries to populate the cache
+        {/* Empty state */}
+        {!loading && entries.length === 0 && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', borderRadius: '12px',
+            border: '1px dashed #1c1c1c', padding: '80px 24px', textAlign: 'center',
+          }}>
+            <div style={{
+              width: '52px', height: '52px', borderRadius: '50%',
+              background: '#161616', border: '1px solid #2a2a2a',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px',
+            }}>
+              <Database size={22} style={{ color: '#333' }} />
+            </div>
+            <p style={{ fontSize: '14px', fontWeight: 500, color: '#555', margin: '0 0 6px' }}>
+              Cache is empty
+            </p>
+            <p style={{ fontSize: '12px', color: '#333', margin: 0 }}>
+              Run queries from the dashboard to populate it
             </p>
           </div>
         )}
 
-        {/* Cache Entries */}
+        {/* Loading skeleton */}
+        {loading && entries.length === 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[1, 2, 3].map(i => (
+              <div key={i} style={{
+                borderRadius: '10px', border: '1px solid #1c1c1c',
+                background: '#111', padding: '20px', opacity: 0.5,
+              }}>
+                <div style={{ height: '14px', background: '#1c1c1c', borderRadius: '4px', width: '60%', marginBottom: '12px' }} />
+                <div style={{ height: '10px', background: '#1c1c1c', borderRadius: '4px', width: '90%' }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Entry list */}
         {entries.length > 0 && (
-          <div className="space-y-4">
-            {entries.map((entry) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {entries.map(entry => (
               <div
                 key={entry.id}
-                className="bg-slate-800/50 backdrop-blur-sm rounded-lg border border-slate-700 p-6 hover:border-slate-600 transition-colors"
+                style={{
+                  borderRadius: '10px', border: '1px solid #1c1c1c',
+                  background: '#111', padding: '20px',
+                  opacity: deleting === entry.query ? 0.5 : 1,
+                  transition: 'opacity 0.2s',
+                }}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+
                     {/* Query */}
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <svg className="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                        </svg>
-                        <span className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Query</span>
-                      </div>
-                      <p className="text-white text-lg font-medium break-words">
+                    <div style={{ marginBottom: '12px' }}>
+                      <span style={{
+                        fontSize: '10px', fontWeight: 600, color: '#3b82f6',
+                        letterSpacing: '0.08em', textTransform: 'uppercase',
+                      }}>
+                        Query
+                      </span>
+                      <p style={{
+                        margin: '4px 0 0', fontSize: '13px', color: '#f0f0f0',
+                        lineHeight: 1.5, wordBreak: 'break-word',
+                      }}>
                         {entry.query}
                       </p>
                     </div>
 
                     {/* SQL */}
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                        </svg>
-                        <span className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Cached SQL</span>
-                      </div>
-                      <pre className="text-sm text-slate-300 bg-slate-900/50 p-4 rounded border border-slate-700 overflow-x-auto">
+                      <span style={{
+                        fontSize: '10px', fontWeight: 600, color: '#10b981',
+                        letterSpacing: '0.08em', textTransform: 'uppercase',
+                      }}>
+                        Cached SQL
+                      </span>
+                      <pre style={{
+                        margin: '4px 0 0', fontSize: '11px', color: '#888',
+                        background: '#0a0a0a', border: '1px solid #1c1c1c',
+                        borderRadius: '6px', padding: '10px 12px',
+                        overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        lineHeight: 1.6,
+                      }}>
                         {entry.sql}
                       </pre>
                     </div>
+
+                    {/* ID */}
+                    <div style={{ marginTop: '10px' }}>
+                      <span style={{ fontSize: '10px', color: '#333', fontFamily: 'monospace' }}>
+                        id: {entry.id.slice(0, 16)}…
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Delete Button */}
+                  {/* Delete button */}
                   <button
-                    onClick={() => handleDelete(entry.query)}
+                    onClick={() => handleDelete(entry)}
                     disabled={deleting === entry.query}
-                    className="flex-shrink-0 p-2 bg-red-600/20 hover:bg-red-600 disabled:bg-red-900/20 disabled:cursor-not-allowed text-red-400 hover:text-white rounded-lg transition-colors group"
                     title="Delete this cache entry"
+                    style={{
+                      flexShrink: 0, width: '32px', height: '32px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '7px', border: '1px solid rgba(239,68,68,0.2)',
+                      background: 'rgba(239,68,68,0.06)', color: '#f87171',
+                      cursor: deleting === entry.query ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      if (!deleting) {
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.2)'
+                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.5)'
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.06)'
+                      ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(239,68,68,0.2)'
+                    }}
                   >
-                    {deleting === entry.query ? (
-                      <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    )}
+                    {deleting === entry.query
+                      ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                      : <X size={13} />
+                    }
                   </button>
-                </div>
-
-                {/* Entry ID (for debugging) */}
-                <div className="mt-4 pt-4 border-t border-slate-700">
-                  <span className="text-xs text-slate-500 font-mono">ID: {entry.id}</span>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </main>
+
+      {/* Confirm dialog */}
+      {confirm && <ConfirmDialog {...confirm} />}
+
+      {/* Toast */}
+      {toast && <Toast {...toast} />}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideUp { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+      `}</style>
     </div>
   )
 }

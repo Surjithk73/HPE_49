@@ -790,3 +790,270 @@ examples:
       LEFT JOIN tmf_agg t  ON c.system_name = t.system_name AND c.ts = t.ts
       ORDER BY c.ts
       LIMIT 10000;
+
+  # ==========================================================================
+  # COUNTER MATH PATTERNS — canonical examples for correct formula usage
+  # These examples exist specifically to teach the LLM the correct denominator
+  # for every counter type across all tables.
+  # ==========================================================================
+
+  # ── Busy counter: percentage from proc table ──────────────────────────────
+  - domain: proc
+    query: "Show CPU busy percentage per CPU from process table"
+    sql: |
+      SELECT
+        cpu_num,
+        SUM(cpu_busy_time) * 100.0 / NULLIF(MAX(delta_time), 0) AS total_proc_busy_pct,
+        SUM(ready_time)    * 100.0 / NULLIF(MAX(delta_time), 0) AS ready_time_pct
+      FROM macht413.proc
+      GROUP BY cpu_num
+      ORDER BY cpu_num
+      LIMIT 10000;
+
+  # ── Busy counter: per-CPU utilization breakdown by process category ───────
+  - domain: proc
+    query: "Show CPU busy percentage broken down by system processes versus user processes per CPU"
+    sql: |
+      SELECT
+        cpu_num,
+        SUM(CASE WHEN process_name LIKE '$%' THEN cpu_busy_time ELSE 0 END)
+          * 100.0 / NULLIF(MAX(delta_time), 0) AS system_proc_busy_pct,
+        SUM(CASE WHEN process_name NOT LIKE '$%' THEN cpu_busy_time ELSE 0 END)
+          * 100.0 / NULLIF(MAX(delta_time), 0) AS user_proc_busy_pct,
+        SUM(cpu_busy_time) * 100.0 / NULLIF(MAX(delta_time), 0) AS total_proc_busy_pct
+      FROM macht413.proc
+      GROUP BY cpu_num
+      ORDER BY cpu_num
+      LIMIT 10000;
+
+  # ── Busy counter: per-CPU utilization from cpu table ─────────────────────
+  - domain: cpu
+    query: "Show CPU utilization percentage including interrupt busy percentage per CPU"
+    sql: |
+      SELECT
+        cpu_num,
+        cpu_busy_time  * 100.0 / NULLIF(delta_time, 0) AS process_busy_pct,
+        intr_busy_time * 100.0 / NULLIF(delta_time, 0) AS interrupt_busy_pct,
+        (cpu_busy_time + intr_busy_time) * 100.0 / NULLIF(delta_time, 0) AS total_busy_pct
+      FROM macht413.cpu
+      ORDER BY cpu_num
+      LIMIT 10000;
+
+  # ── Queue counter: average queue length ──────────────────────────────────
+  - domain: cpu
+    query: "Show average CPU ready queue length per CPU"
+    sql: |
+      SELECT
+        cpu_num,
+        cpu_qtime * 1.0 / NULLIF(delta_time, 0) AS avg_ready_queue_length
+      FROM macht413.cpu
+      ORDER BY avg_ready_queue_length DESC
+      LIMIT 10000;
+
+  # ── Incrementing counter: per-second rate ────────────────────────────────
+  - domain: cpu
+    query: "Show disk I/Os per second and cache hits per second per CPU"
+    sql: |
+      SELECT
+        cpu_num,
+        disc_ios   * 1000000.0 / NULLIF(delta_time, 0) AS disk_ios_per_sec,
+        cache_hits * 1000000.0 / NULLIF(delta_time, 0) AS cache_hits_per_sec
+      FROM macht413.cpu
+      ORDER BY disk_ios_per_sec DESC
+      LIMIT 10000;
+
+  # ── Incrementing counter: disc reads/writes per second ───────────────────
+  - domain: disc
+    query: "Show disk read and write operations per second per device"
+    sql: |
+      SELECT
+        device_name,
+        reads  * 1000000.0 / NULLIF(delta_time, 0) AS reads_per_sec,
+        writes * 1000000.0 / NULLIF(delta_time, 0) AS writes_per_sec,
+        (reads + writes) * 1000000.0 / NULLIF(delta_time, 0) AS total_ios_per_sec
+      FROM macht413.disc
+      ORDER BY total_ios_per_sec DESC
+      LIMIT 10000;
+
+  # ── Queue counter: average disk request queue length ─────────────────────
+  - domain: disc
+    query: "Show average disk request queue length per device"
+    sql: |
+      SELECT
+        device_name,
+        request_qtime * 1.0 / NULLIF(delta_time, 0) AS avg_request_queue_length,
+        read_qtime    * 1.0 / NULLIF(delta_time, 0) AS avg_read_queue_length,
+        write_qtime   * 1.0 / NULLIF(delta_time, 0) AS avg_write_queue_length
+      FROM macht413.disc
+      ORDER BY avg_request_queue_length DESC
+      LIMIT 10000;
+
+  # ── Cache hit ratio: no delta_time involved ───────────────────────────────
+  - domain: disc
+    query: "Show cache hit ratio per disk device across all cache levels"
+    sql: |
+      SELECT
+        device_name,
+        (c0_hits + c1_hits + c2_hits + c3_hits + c4_hits + c5_hits + c6_hits + c7_hits)
+          * 100.0 / NULLIF(
+            c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
+            c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
+            c6_hits + c6_misses + c7_hits + c7_misses, 0
+          ) AS overall_cache_hit_pct
+      FROM macht413.disc
+      WHERE (c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
+             c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
+             c6_hits + c6_misses + c7_hits + c7_misses) > 0
+      ORDER BY overall_cache_hit_pct ASC
+      LIMIT 10000;
+
+  # ── Lockwait counter: average lock wait time ─────────────────────────────
+  - domain: dfile
+    query: "Show average lock wait time per file"
+    sql: |
+      SELECT
+        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
+        requests_blocked,
+        lockwait_time / NULLIF(requests_blocked, 0) AS avg_lockwait_us,
+        max_lockwait_time
+      FROM macht413.dfile
+      WHERE requests_blocked > 0
+      ORDER BY avg_lockwait_us DESC
+      LIMIT 10000;
+
+  # ── Response-time counter: average transaction response time ─────────────
+  - domain: cpu
+    query: "Show average terminal transaction response time per CPU"
+    sql: |
+      SELECT
+        cpu_num,
+        transactions,
+        response_time / NULLIF(transactions, 0) AS avg_response_time_us
+      FROM macht413.cpu
+      WHERE transactions > 0
+      ORDER BY avg_response_time_us DESC
+      LIMIT 10000;
+
+  # ── Accumulating counter: throughput in bytes per second ─────────────────
+  - domain: disc
+    query: "Show disk read and write throughput in MB per second per device"
+    sql: |
+      SELECT
+        device_name,
+        input_bytes  * 1000000.0 / NULLIF(delta_time, 0) / 1048576 AS read_mb_per_sec,
+        output_bytes * 1000000.0 / NULLIF(delta_time, 0) / 1048576 AS write_mb_per_sec
+      FROM macht413.disc
+      ORDER BY read_mb_per_sec + write_mb_per_sec DESC
+      LIMIT 10000;
+
+  # ── Proc: per-process CPU percentage (single row per process, no GROUP BY) ─
+  - domain: proc
+    query: "Show CPU usage percentage per process"
+    sql: |
+      SELECT
+        process_name,
+        cpu_num,
+        cpu_busy_time * 100.0 / NULLIF(delta_time, 0) AS cpu_busy_pct,
+        ready_time    * 100.0 / NULLIF(delta_time, 0) AS ready_time_pct
+      FROM macht413.proc
+      WHERE cpu_busy_time > 0
+      ORDER BY cpu_busy_pct DESC
+      LIMIT 10000;
+
+  # ── TMF: abort rate (ratio, no delta_time) ───────────────────────────────
+  - domain: tmf
+    query: "Show transaction abort rate percentage per CPU"
+    sql: |
+      SELECT
+        cpu_num,
+        SUM(home_trans)     AS total_transactions,
+        SUM(aborting_trans) AS total_aborted,
+        SUM(aborting_trans) * 100.0 / NULLIF(SUM(home_trans), 0) AS abort_rate_pct
+      FROM macht413.tmf
+      GROUP BY cpu_num
+      ORDER BY abort_rate_pct DESC
+      LIMIT 10000;
+
+  # ── OSSNS: cache hit ratio (ratio, no delta_time) ────────────────────────
+  - domain: ossns
+    query: "Show inode cache hit ratio and link cache hit ratio for OSS namespace"
+    sql: |
+      SELECT
+        process_name,
+        ic_hits * 100.0 / NULLIF(ic_lookups, 0) AS inode_cache_hit_pct,
+        lc_hits * 100.0 / NULLIF(lc_lookups, 0) AS link_cache_hit_pct,
+        ic_lookups,
+        lc_lookups
+      FROM macht413.ossns
+      WHERE ic_lookups > 0 OR lc_lookups > 0
+      ORDER BY inode_cache_hit_pct ASC
+      LIMIT 10000;
+
+  # ==========================================================================
+  # CPU + PROC BREAKDOWN — interrupt from cpu table, categories from proc table
+  #
+  # IMPORTANT — process naming in this dataset (macht413.proc):
+  #   Disk processes:   $DATA01–$DATA10, $SSD01, $AUDIT (LIKE '$DATA%' OR '$SSD%' OR '$AUDIT%')
+  #   System processes: $SYSTEM, $MONITOR, $MSENGER, $VIRTUAL, $NULL, $OSS,
+  #                     $SWAP, $SWAP01, $SWAP23, $SWAP34, $NCP, $TMP
+  #   User/app procs:   Everything else starting with $ ($BEER, $CHAMP, $GANESH, etc.)
+  #   NOTE: ALL processes in this dataset start with '$'. There are NO processes
+  #         without a '$' prefix. Do NOT use "NOT LIKE '$%'" for user processes.
+  #
+  # intr_busy_time lives in macht413.cpu — NEVER in macht413.proc.
+  # Always use MAX(delta_time) as denominator when grouping proc rows.
+  # ==========================================================================
+
+  - domain: multi
+    query: "For each CPU show the interrupt busy percentage, backup disc process percentage, primary disc process percentage, other processes percentage, and user processes percentage — all as a fraction of delta time, ordered by CPU number"
+    sql: |
+      WITH cpu_stats AS (
+          SELECT
+              DATE_TRUNC('second', from_timestamp) AS ts,
+              system_name,
+              cpu_num,
+              intr_busy_time,
+              delta_time
+          FROM macht413.cpu
+      ),
+      proc_stats AS (
+          SELECT
+              DATE_TRUNC('second', from_timestamp) AS ts,
+              system_name,
+              cpu_num,
+              SUM(CASE WHEN process_name LIKE '$DATA%'
+                            OR process_name LIKE '$SSD%'
+                            OR process_name LIKE '$AUDIT%'
+                       THEN cpu_busy_time ELSE 0 END) AS disc_busy_time,
+              SUM(CASE WHEN process_name IN ('$SYSTEM','$MONITOR','$MSENGER',
+                                             '$VIRTUAL','$NULL','$OSS',
+                                             '$SWAP','$SWAP01','$SWAP23','$SWAP34',
+                                             '$NCP','$TMP')
+                       THEN cpu_busy_time ELSE 0 END) AS system_busy_time,
+              SUM(CASE WHEN process_name NOT LIKE '$DATA%'
+                            AND process_name NOT LIKE '$SSD%'
+                            AND process_name NOT LIKE '$AUDIT%'
+                            AND process_name NOT IN ('$SYSTEM','$MONITOR','$MSENGER',
+                                                     '$VIRTUAL','$NULL','$OSS',
+                                                     '$SWAP','$SWAP01','$SWAP23','$SWAP34',
+                                                     '$NCP','$TMP')
+                       THEN cpu_busy_time ELSE 0 END) AS user_app_busy_time,
+              MAX(delta_time) AS delta_time
+          FROM macht413.proc
+          GROUP BY 1, 2, 3
+      )
+      SELECT
+          c.cpu_num,
+          AVG(c.intr_busy_time         * 100.0 / NULLIF(c.delta_time, 0)) AS interrupt_busy_pct,
+          AVG(p.disc_busy_time         * 100.0 / NULLIF(p.delta_time, 0)) AS disc_proc_pct,
+          AVG(p.system_busy_time       * 100.0 / NULLIF(p.delta_time, 0)) AS system_proc_pct,
+          AVG(p.user_app_busy_time     * 100.0 / NULLIF(p.delta_time, 0)) AS user_app_proc_pct
+      FROM cpu_stats AS c
+      JOIN proc_stats AS p
+          ON c.ts = p.ts
+          AND c.system_name = p.system_name
+          AND c.cpu_num = p.cpu_num
+      GROUP BY c.cpu_num
+      ORDER BY c.cpu_num
+      LIMIT 10000;
+

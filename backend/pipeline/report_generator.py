@@ -253,27 +253,43 @@ def export_pdf(columns: List[str], rows: List[Dict],
                include_chart: bool = True,
                include_table: bool = True,
                chart_types: Optional[List[str]] = None,
-               chart_type_override: Optional[str] = None) -> bytes:
+               chart_type_override: Optional[str] = None,
+               chart_image_base64: Optional[str] = None) -> bytes:
     """
     Export results as PDF bytes.
 
     Uses WeasyPrint if GTK is available, otherwise falls back to reportlab.
 
     Args:
-        columns:    Column names
-        rows:       List of row dicts
-        query_text: Original user query (shown in report header)
-        sql:        Generated SQL (shown in report)
-        include_chart: Whether to include chart in the PDF
-        include_table: Whether to include data table in the PDF
-        chart_types: List of chart types to include
+        columns:            Column names
+        rows:               List of row dicts
+        query_text:         Original user query (shown in report header)
+        sql:                Generated SQL (shown in report)
+        include_chart:      Whether to include chart in the PDF
+        include_table:      Whether to include data table in the PDF
+        chart_types:        List of chart types to include (server-side fallback)
         chart_type_override: Override for chart type (backwards compatibility)
+        chart_image_base64: Base64 PNG captured from the UI chart.  When
+                            provided this is embedded directly, ensuring the
+                            PDF matches exactly what the user sees.  Falls
+                            back to server-side matplotlib when None.
 
     Returns:
         PDF file bytes
     """
-    resolved_chart_types = []
-    if include_chart:
+    # If the frontend sent a captured chart image, use it directly and skip
+    # the server-side chart generation entirely.
+    ui_chart_bytes: Optional[bytes] = None
+    if include_chart and chart_image_base64:
+        try:
+            ui_chart_bytes = base64.b64decode(chart_image_base64)
+        except Exception as e:
+            print(f"[ReportGenerator] Failed to decode frontend chart image: {e}")
+            ui_chart_bytes = None
+
+    # Resolve server-side chart types only when no UI image is available
+    resolved_chart_types: List[str] = []
+    if include_chart and ui_chart_bytes is None:
         actual_chart_types = chart_types
         if actual_chart_types is None and chart_type_override is not None:
             actual_chart_types = [chart_type_override]
@@ -295,16 +311,19 @@ def export_pdf(columns: List[str], rows: List[Dict],
                 resolved_chart_types.append(detected)
 
     if _PDF_BACKEND == "weasyprint":
-        return _pdf_weasyprint(columns, rows, query_text, sql, resolved_chart_types, include_table)
+        return _pdf_weasyprint(columns, rows, query_text, sql,
+                               resolved_chart_types, include_table, ui_chart_bytes)
     elif _PDF_BACKEND == "reportlab":
-        return _pdf_reportlab(columns, rows, query_text, sql, resolved_chart_types, include_table)
+        return _pdf_reportlab(columns, rows, query_text, sql,
+                              resolved_chart_types, include_table, ui_chart_bytes)
     else:
         raise RuntimeError("No PDF backend available. Install reportlab: pip install reportlab")
 
 
 def _pdf_weasyprint(columns, rows, query_text, sql,
                     resolved_chart_types: List[str],
-                    include_table: bool = True) -> bytes:
+                    include_table: bool = True,
+                    ui_chart_bytes: Optional[bytes] = None) -> bytes:
     """Generate PDF using WeasyPrint (HTML → PDF)."""
     # Build HTML table rows
     header_cells = "".join(f"<th>{c}</th>" for c in columns)
@@ -314,15 +333,27 @@ def _pdf_weasyprint(columns, rows, query_text, sql,
         data_rows += f"<tr>{cells}</tr>\n"
 
     chart_html = ""
-    for ct in resolved_chart_types:
-        chart_bytes = _generate_chart_image(columns, rows, ct)
-        if chart_bytes:
-            base64_data = base64.b64encode(chart_bytes).decode('utf-8')
-            chart_html += f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="data:image/png;base64,{base64_data}" style="max-width: 100%; max-height: 350px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;"/>
-            </div>
-            """
+    if ui_chart_bytes:
+        # Embed the UI-captured chart directly — matches exactly what the user sees
+        b64 = base64.b64encode(ui_chart_bytes).decode('utf-8')
+        chart_html = f"""
+        <div style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{b64}"
+                 style="max-width: 100%; max-height: 350px; border: 1px solid #ddd;
+                        border-radius: 4px; padding: 5px;"/>
+            <p style="font-size:10px;color:#888;margin:4px 0 0;">Chart captured from dashboard</p>
+        </div>
+        """
+    else:
+        for ct in resolved_chart_types:
+            chart_bytes = _generate_chart_image(columns, rows, ct)
+            if chart_bytes:
+                base64_data = base64.b64encode(chart_bytes).decode('utf-8')
+                chart_html += f"""
+                <div style="text-align: center; margin: 20px 0;">
+                    <img src="data:image/png;base64,{base64_data}" style="max-width: 100%; max-height: 350px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;"/>
+                </div>
+                """
 
     table_html = ""
     if include_table:
@@ -364,7 +395,8 @@ def _pdf_weasyprint(columns, rows, query_text, sql,
 
 def _pdf_reportlab(columns, rows, query_text, sql,
                     resolved_chart_types: List[str],
-                    include_table: bool = True) -> bytes:
+                    include_table: bool = True,
+                    ui_chart_bytes: Optional[bytes] = None) -> bytes:
     """Generate PDF using reportlab (pure Python, no GTK needed)."""
     buf = io.BytesIO()
 
@@ -432,17 +464,30 @@ def _pdf_reportlab(columns, rows, query_text, sql,
         story.append(Paragraph(formatted_sql, code_style))
         story.append(Spacer(1, 0.3*cm))
 
-    # Chart images
-    for ct in resolved_chart_types:
-        chart_bytes = _generate_chart_image(columns, rows, ct)
-        if chart_bytes:
-            try:
-                from reportlab.platypus import Image as RLImage
-                img_flowable = RLImage(io.BytesIO(chart_bytes), width=16*cm, height=8*cm)
-                story.append(img_flowable)
-                story.append(Spacer(1, 0.4*cm))
-            except Exception as e:
-                print(f"[ReportGenerator] ReportLab image embedding failed: {e}")
+    # Chart images — prefer UI-captured image, fall back to server-side matplotlib
+    if ui_chart_bytes:
+        try:
+            from reportlab.platypus import Image as RLImage
+            img_flowable = RLImage(io.BytesIO(ui_chart_bytes), width=16*cm, height=8*cm)
+            story.append(img_flowable)
+            story.append(Paragraph("Chart captured from dashboard", 
+                                   ParagraphStyle("caption", parent=styles["Normal"],
+                                                  fontSize=8, textColor=colors.HexColor("#888888"),
+                                                  alignment=1)))
+            story.append(Spacer(1, 0.4*cm))
+        except Exception as e:
+            print(f"[ReportGenerator] UI chart embedding failed: {e}")
+    else:
+        for ct in resolved_chart_types:
+            chart_bytes = _generate_chart_image(columns, rows, ct)
+            if chart_bytes:
+                try:
+                    from reportlab.platypus import Image as RLImage
+                    img_flowable = RLImage(io.BytesIO(chart_bytes), width=16*cm, height=8*cm)
+                    story.append(img_flowable)
+                    story.append(Spacer(1, 0.4*cm))
+                except Exception as e:
+                    print(f"[ReportGenerator] ReportLab image embedding failed: {e}")
 
     # Results table
     if include_table:
@@ -508,20 +553,22 @@ def generate_report(format: str, columns: List[str], rows: List[Dict],
                     include_chart: bool = True,
                     include_table: bool = True,
                     chart_types: Optional[List[str]] = None,
-                    chart_type_override: Optional[str] = None) -> Tuple[bytes, str]:
+                    chart_type_override: Optional[str] = None,
+                    chart_image_base64: Optional[str] = None) -> Tuple[bytes, str]:
     """
     Generate a report in the requested format.
 
     Args:
-        format:     "csv", "excel", or "pdf"
-        columns:    Column names
-        rows:       List of row dicts
-        query_text: Original user query
-        sql:        Generated SQL
-        include_chart: Whether to include chart in the PDF
-        include_table: Whether to include data table in the PDF
-        chart_types: List of chart types to include
+        format:             "csv", "excel", or "pdf"
+        columns:            Column names
+        rows:               List of row dicts
+        query_text:         Original user query
+        sql:                Generated SQL
+        include_chart:      Whether to include chart in the PDF
+        include_table:      Whether to include data table in the PDF
+        chart_types:        List of chart types (server-side fallback)
         chart_type_override: Override for chart type (backwards compatibility)
+        chart_image_base64: Base64 PNG from the UI chart (PDF only)
 
     Returns:
         (file_bytes, mime_type)
@@ -538,7 +585,10 @@ def generate_report(format: str, columns: List[str], rows: List[Dict],
         return export_excel(columns, rows), MIME_EXCEL
 
     elif fmt == "pdf":
-        return export_pdf(columns, rows, query_text, sql, include_chart, include_table, chart_types, chart_type_override), MIME_PDF
+        return export_pdf(columns, rows, query_text, sql,
+                          include_chart, include_table,
+                          chart_types, chart_type_override,
+                          chart_image_base64), MIME_PDF
 
     else:
         raise ValueError(f"Unsupported format: '{format}'. Use 'csv', 'excel', or 'pdf'.")

@@ -121,7 +121,8 @@ class LLMEngine(BaseLLMEngine):
 
         Args:
             api_key: Gemini API key (defaults to config value)
-            model: Model name (defaults to config value)
+            model: Model name to use. If provided, overrides the config value.
+                   This allows runtime model switching via POST /api/model.
         """
         self.api_key = api_key or GEMINI_API_KEY
         self.model_name = model or GEMINI_MODEL

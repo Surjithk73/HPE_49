@@ -39,6 +39,49 @@ class SQLValidator:
         r'xp_',          # Extended stored procedures
         r';\s*\w',       # Semicolon followed by statement
     ]
+
+    # Math anti-patterns: SQL that will silently produce wrong results.
+    # These are caught before execution and fed back to the LLM as a retry
+    # with a specific correction hint.
+    MATH_ANTIPATTERNS = [
+        (
+            # SUM(delta_time) as a denominator — inflates by row count.
+            # Matches: / NULLIF(SUM(delta_time), 0)  or  / SUM(delta_time)
+            re.compile(
+                r'/\s*NULLIF\s*\(\s*SUM\s*\(\s*delta_time\s*\)',
+                re.IGNORECASE,
+            ),
+            (
+                "Math error: SUM(delta_time) used as denominator. "
+                "delta_time is the same value for every row in an interval — "
+                "SUM(delta_time) inflates by row count and produces near-zero results. "
+                "Use MAX(delta_time) instead: col * 100.0 / NULLIF(MAX(delta_time), 0)"
+            ),
+        ),
+        (
+            # Bare / SUM(delta_time) without NULLIF
+            re.compile(
+                r'/\s*SUM\s*\(\s*delta_time\s*\)',
+                re.IGNORECASE,
+            ),
+            (
+                "Math error: SUM(delta_time) used as denominator. "
+                "Use MAX(delta_time) instead: col * 100.0 / NULLIF(MAX(delta_time), 0)"
+            ),
+        ),
+        (
+            # AVG(delta_time) as denominator — same problem as SUM
+            re.compile(
+                r'/\s*(?:NULLIF\s*\(\s*)?AVG\s*\(\s*delta_time\s*\)',
+                re.IGNORECASE,
+            ),
+            (
+                "Math error: AVG(delta_time) used as denominator. "
+                "delta_time is constant per interval — AVG equals the raw value. "
+                "Use MAX(delta_time) for clarity: col * 100.0 / NULLIF(MAX(delta_time), 0)"
+            ),
+        ),
+    ]
     
     def __init__(self, schema: Dict):
         """
@@ -95,6 +138,13 @@ class SQLValidator:
         for pattern in self.INJECTION_PATTERNS:
             if re.search(pattern, sql):
                 return ValidationResult(False, None, f"Potential SQL injection pattern detected")
+
+        # Check for math anti-patterns that produce silently wrong results.
+        # These are caught early and returned as validation failures so the
+        # retry loop can feed the specific correction hint back to the LLM.
+        for pattern, hint in self.MATH_ANTIPATTERNS:
+            if pattern.search(sql):
+                return ValidationResult(False, None, hint)
         
         # Check for forbidden keywords in raw SQL
         for keyword in self.FORBIDDEN_KEYWORDS:

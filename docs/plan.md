@@ -19,7 +19,7 @@
 **In scope:**
 - All 9 tables in `macht413` schema (cpu, disc, dfile, dopen, file, ossns, proc, tmf, udef)
 - Natural language → SQL via Gemini API (`gemini-3.1-flash-lite`)
-- Semantic cache using ChromaDB + `all-MiniLM-L6-v2`
+- Semantic cache using ChromaDB + `BAAI/bge-large-en-v1.5`
 - SQL validation and security guard via `sqlglot`
 - Report export: CSV, Excel, PDF
 - Charts: line and bar (auto-detected from result columns)
@@ -344,7 +344,7 @@
 - [x] **6.1 — Cache implementation (`pipeline/cache.py`)**
   - [x] Initialize ChromaDB client in local persistent mode (path: `backend/cache_store/`)
   - [x] Create or load collection named `querycraft_cache`
-  - [x] Load embedding model `all-MiniLM-L6-v2` using `sentence_transformers.SentenceTransformer`
+  - [x] Load embedding model `BAAI/bge-large-en-v1.5` using `sentence_transformers.SentenceTransformer`
   - [x] Implement `lookup(normalized_text: str) -> CacheResult` where `CacheResult = { hit: bool, sql: str | None, confidence: float }`
     - Embed input using `model.encode([normalized_text])`
     - Query ChromaDB with `n_results=1`

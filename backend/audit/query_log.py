@@ -15,6 +15,10 @@ import os
 class AuditLog:
     """Manages query audit logging."""
 
+    # Stats are cached in memory for this many seconds to avoid running
+    # 6 SQLite queries on every /api/stats poll.
+    _STATS_CACHE_TTL = 60
+
     def __init__(self, db_path: str = "audit/query_log.db"):
         """
         Initialize the audit log.
@@ -23,6 +27,8 @@ class AuditLog:
             db_path: Path to SQLite database file
         """
         self.db_path = db_path
+        self._stats_cache: dict = {}
+        self._stats_cache_ts: float = 0.0
 
         # Ensure directory exists
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -47,6 +53,7 @@ class AuditLog:
                     validation_passed INTEGER,
                     validation_error TEXT,
                     cache_hit INTEGER,
+                    cache_confidence REAL,
                     row_count INTEGER,
                     execution_time_ms INTEGER,
                     export_format TEXT,
@@ -57,6 +64,12 @@ class AuditLog:
             # Add llm_retries column to existing databases that pre-date this column
             try:
                 cursor.execute("ALTER TABLE query_log ADD COLUMN llm_retries INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass  # Column already exists — safe to ignore
+
+            # Add cache_confidence column to existing databases that pre-date this column
+            try:
+                cursor.execute("ALTER TABLE query_log ADD COLUMN cache_confidence REAL")
             except sqlite3.OperationalError:
                 pass  # Column already exists — safe to ignore
 
@@ -94,8 +107,8 @@ class AuditLog:
                 INSERT INTO query_log (
                     timestamp, original_input, normalized_input, domain_category,
                     generated_sql, validation_passed, validation_error, cache_hit,
-                    row_count, execution_time_ms, export_format, llm_retries
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    cache_confidence, row_count, execution_time_ms, export_format, llm_retries
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 timestamp,
                 entry.get('original_input', ''),
@@ -105,6 +118,7 @@ class AuditLog:
                 1 if entry.get('validation_passed', False) else 0,
                 entry.get('validation_error', None),
                 1 if entry.get('cache_hit', False) else 0,
+                entry.get('cache_confidence', None),
                 entry.get('row_count', None),
                 entry.get('execution_time_ms', None),
                 entry.get('export_format', None),
@@ -113,6 +127,10 @@ class AuditLog:
 
             conn.commit()
             conn.close()
+            # Invalidate the stats cache so the next /api/stats call reflects
+            # the new entry without waiting for the TTL to expire.
+            self._stats_cache = {}
+            self._stats_cache_ts = 0.0
 
         except Exception as e:
             # Never raise — logging must not break the application
@@ -152,6 +170,10 @@ class AuditLog:
         """
         Compute analytics over the full audit log.
 
+        Results are cached in memory for _STATS_CACHE_TTL seconds so that
+        frequent polling (e.g. a dashboard that refreshes every few seconds)
+        doesn't hammer SQLite with repeated full-table scans.
+
         Returns a dict with:
             total_queries          — total rows in the log
             cache_hit_rate         — fraction of queries served from cache
@@ -160,6 +182,11 @@ class AuditLog:
             validation_failure_rate — fraction of queries that failed validation
             retry_rate             — fraction of queries that needed at least one LLM retry
         """
+        import time
+        now = time.monotonic()
+        if self._stats_cache and (now - self._stats_cache_ts) < self._STATS_CACHE_TTL:
+            return self._stats_cache
+
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -222,7 +249,7 @@ class AuditLog:
 
             conn.close()
 
-            return {
+            result = {
                 "total_queries":           total_queries,
                 "cache_hit_rate":          round(cache_hits / total_queries, 4),
                 "avg_execution_time_ms":   avg_execution_time_ms,
@@ -231,6 +258,10 @@ class AuditLog:
                 "retry_rate":              round(retried_queries / non_cache_queries, 4)
                                            if non_cache_queries > 0 else 0.0,
             }
+            # Write to in-memory cache
+            self._stats_cache = result
+            self._stats_cache_ts = now
+            return result
 
         except Exception as e:
             print(f"Warning: Failed to retrieve stats: {e}")
