@@ -27,18 +27,6 @@ cpu:
   - JOIN proc ON (system_name, cpu_num, from_timestamp) for process activity
   - JOIN disc ON (system_name, cpu_num, from_timestamp) for disk activity
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-      description: Internal Measure load ID
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-      description: Internal Measure load ID prefix
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
-      description: Internal Measure load ID interval
     system_name:
       queryable: true
       type: string
@@ -66,14 +54,6 @@ cpu:
         pio-sends pio-send-qtime pio-send-bytes pio-recvs pio-recv-bytes --- Derived
         counter fields ----------------------------------------- home-trans-ART home-net-trans-ART
         remote-trans-ART trans-backout-ART tmp-work-AQT ``` ``` RECORD zmstmf.
-    os_version.letter:
-      queryable: true
-      type: string
-      description: OS version letter (e.g. J, L)
-    os_version.number:
-      queryable: true
-      type: integer
-      description: OS version number (e.g. 06)
     object_uid:
       queryable: false
       type: string
@@ -138,22 +118,6 @@ cpu:
         one used to create the structured file.)'
       derived_formula: The length of in^record is derived from the information encoded
         in the template version of the header record pointed to by in^record.
-    format_version.letter:
-      queryable: false
-      type: string
-      description: MEASFH format version letter
-    format_version.number:
-      queryable: false
-      type: integer
-      description: MEASFH format version number
-    data_version.letter:
-      queryable: false
-      type: string
-      description: Data file version letter
-    data_version.number:
-      queryable: false
-      type: integer
-      description: Data file version number
     subsystem_version:
       queryable: false
       type: integer
@@ -672,47 +636,6 @@ cpu:
         \ subsystem version (ZMSPROC.HDR.SUBSYSTEM- VERSION), supplied by Nonstop\
         \ OS, is four or greater; otherwise the counter contains a zero value and\
         \ is not displayed by MEASCOM.)"
-    ipu{N}.ipu_busy_time:
-      queryable: true
-      type: integer
-      unit: microseconds
-      counter_type: Busy
-      description: "Time IPU N was busy; N = 0..15; RATE ON \u2192 % of interval"
-    ipu{N}.ipu_qtime:
-      queryable: true
-      type: integer
-      unit: microseconds
-      counter_type: Queue
-      description: "Time processes waited on IPU N ready queue; RATE ON \u2192 AQL"
-    ipu{N}.ipu_dispatches:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: Number of process dispatches on IPU N
-    svnet{N}.read_requests:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: Transfers initiated by this CPU that brought data INTO CPU N; N
-        = 0..15
-    svnet{N}.write_requests:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: Transfers initiated by this CPU that sent data OUT FROM CPU N (writes
-        + message sends)
-    svnet{N}.read_bytes:
-      queryable: true
-      type: integer
-      unit: bytes
-      counter_type: Accumulating
-      description: Bytes transferred by read requests for CPU N
-    svnet{N}.write_bytes:
-      queryable: true
-      type: integer
-      unit: bytes
-      counter_type: Accumulating
-      description: Bytes transferred by write requests for CPU N
 disc:
   source_file: measurefiles/disccsv
   ddl_record: ZMSDISC
@@ -734,15 +657,6 @@ disc:
   - JOIN cpu ON (system_name, cpu_num, from_timestamp) for CPU context
   - JOIN dfile ON (system_name, device_name, from_timestamp) for file-level activity
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
     system_name:
       queryable: true
       type: string
@@ -770,12 +684,6 @@ disc:
         pio-sends pio-send-qtime pio-send-bytes pio-recvs pio-recv-bytes --- Derived
         counter fields ----------------------------------------- home-trans-ART home-net-trans-ART
         remote-trans-ART trans-backout-ART tmp-work-AQT ``` ``` RECORD zmstmf.
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -837,18 +745,6 @@ disc:
         for all records is the one used to create the structured file.)'
       derived_formula: The length of in^record is derived from the information encoded
         in the template version of the header record pointed to by in^record.
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -952,14 +848,6 @@ disc:
         \ 5 Single\u2011line handler attached to a 6100 subsystem 6 Multiline line\
         \ attached to a 6100 subsystem ``` # DEVICE-TYPEDEVICE-TYPE A value of 63,\
         \ which indicates an Expand line."
-    u_fabric.fabric:
-      queryable: false
-      type: integer
-      description: ServerNet fabric (0=X, 1=Y); internal use
-    u_fabric.servernet:
-      queryable: false
-      type: integer
-      description: Redefines fabric field
     device_name:
       queryable: true
       type: string
@@ -982,38 +870,6 @@ disc:
       type: integer
       description: 'Logical device number (MANUAL DEF: Logical device number of the
         measured terminal.)'
-    gms.group:
-      queryable: true
-      type: integer
-      description: GMS group number (physical enclosure); use in IF/BY clauses
-    gms.module:
-      queryable: true
-      type: integer
-      description: GMS module number; use in IF/BY clauses
-    gms.slot:
-      queryable: true
-      type: integer
-      description: GMS slot number; use in IF/BY clauses
-    u_scsi_id.plpt.plpt_flags:
-      queryable: false
-      type: bitmask
-      description: 'PLPT flags: MEAS_CLIM_REL, MEAS_PATH_SEL, MEAS_CLIM_DEVICE, MEAS_MULTIPLE_CLIMS'
-    u_scsi_id.plpt.path:
-      queryable: true
-      type: integer
-      description: Connection path (0=Primary, 1=Backup, 2=Mirror, 3=Mirror-Backup)
-    u_scsi_id.plpt.lun:
-      queryable: true
-      type: integer
-      description: Logical Unit Number within a CLIM (0-65534); 0 for non-CLIM
-    u_scsi_id.plpt.partition:
-      queryable: true
-      type: integer
-      description: Partition number within a partitioned disk (H06.23/J06.12+)
-    u_scsi_id.plpt.target_id:
-      queryable: true
-      type: integer
-      description: SCSI device ID (0-999); 0 for CLIM devices
     config_name:
       queryable: true
       type: string
@@ -1328,155 +1184,6 @@ disc:
         (DERIVED METRIC: This counter is a subset of DEFREQ-QTIME.)'
       derived_formula: N/A
       thresholds: N/A
-    c{N}.blks:
-      queryable: true
-      type: integer
-      counter_type: Snapshot
-      description: Total cache blocks allocated for level N; N = 0..7
-    c{N}.block_size:
-      queryable: true
-      type: integer
-      unit: bytes
-      counter_type: Snapshot
-      description: Cache block size for level N in bytes
-    c{N}.blocks_inuse_start:
-      queryable: true
-      type: integer
-      counter_type: Snapshot
-      description: Cache blocks in use at interval start for level N
-    c{N}.blocks_inuse_end:
-      queryable: true
-      type: integer
-      counter_type: Snapshot
-      description: Cache blocks in use at interval end for level N
-    c{N}.block_splits:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: Number of block splits per block size for level N
-    c{N}.hits:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: Cache hits for level N on read or buffered write; hits/(hits+misses)
-        = hit ratio
-    c{N}.misses:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: Cache misses for level N on read operations; causes a disk I/O
-    c{N}.faults:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: "Cache faults for level N \u2014 block indicated in cache but stolen\
-        \ by memory manager; >5% of I/Os indicates need for more memory"
-    c{N}.audit_buf_forces:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: Times disk process had to write to audit-trail before freeing a
-        dirty cache block; should be near zero
-    c{N}.blks_dirty_qtime:
-      queryable: true
-      type: integer
-      unit: microseconds
-      counter_type: Queue
-      description: "Time cache blocks spent dirty for level N; RATE ON \u2192 AQL"
-    c{N}.write_cleans:
-      queryable: true
-      type: integer
-      counter_type: Accumulating
-      description: Times a write found the required block clean in cache for level
-        N; saves a disk read per write
-    c{N}.write_dirtys:
-      queryable: true
-      type: integer
-      counter_type: Accumulating
-      description: Times a write found the required block dirty in cache for level
-        N
-    c{N}.write_misses:
-      queryable: true
-      type: integer
-      counter_type: Accumulating
-      description: Times a write did not find the required block in cache for level
-        N; requires a disk read before write
-    blocks_inuse_end:
-      type: integer
-      description: Number of cache blocks that were in use at the end of the measurement
-        or at measurement interval copy time.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    block_splits:
-      type: integer
-      description: Number of block splits (per block size) for the volume.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    hits:
-      type: integer
-      description: Number of times a required block is found in cache on a read or
-        buffered write operation, which saves a disk I/O. This counter includes cache
-        hits on both read and write operations.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    misses:
-      type: integer
-      description: Number of times a required block is not found in cache on a read
-        operation, which causes a disk I/O. Read operations that do not go through
-        cache are not included in this counter.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    faults:
-      type: integer
-      description: Number of times the cache tables indicate a required block is in
-        cache, but not because the memory manager is using it for another purpose.
-        Faults occur when a cache is too large or physical memory is too small for
-        a given application.
-      queryable: true
-      derived_formula: N/A
-      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
-        you need more memory.
-    audit_buf_forces:
-      type: integer
-      description: Number of times the disk process had to write to the audit-trail
-        volume before it could write a dirty cache block and thereby free that block
-        for another use.
-      queryable: true
-      derived_formula: N/A
-      thresholds: This value should be close to zero.
-    blks_dirty_qtime:
-      type: integer
-      description: Time that cache blocks spent dirty. A cache block is dirty when
-        a buffered write operation writes data to it. After the disk process writes
-        the dirty cache block to disk, the block is clean.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    write_cleans:
-      type: integer
-      description: Number of times a required block is in cache for a write operation,
-        which saves a found clean disk read per write.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    write_dirtys:
-      type: integer
-      description: Number of times a required block is found dirty in cache for a
-        write operation.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    write_misses:
-      type: integer
-      description: Number of times a required block is not found in cache for a write
-        operation, which requires a disk read before the write can be performed.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
 dfile:
   source_file: measurefiles/dfilecsv
   ddl_record: ZMSDFILE
@@ -1502,15 +1209,6 @@ dfile:
   - JOIN dopen ON (system_name, cpu_num, fcb_number, from_timestamp) for per-opener
     detail
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
     system_name:
       queryable: true
       type: string
@@ -1520,12 +1218,6 @@ dfile:
       type: integer
       description: "(MANUAL DEF: Number of the CPU on which the measurement was taken.\
         \ For interprocessor communications (IPC) records, CPU\u2011NUM is MYCPU.)"
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -1558,18 +1250,6 @@ dfile:
         for the format of the external record. When data collected on systems of differing
         product versions are stored in the same structured files, the template version
         for all records is the one used to create the structured file.)'
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -1608,18 +1288,6 @@ dfile:
       queryable: true
       type: integer
       description: 'File format: 1=format 1, 2=format 2 (for files >2GB or large extents)'
-    file_name.volume:
-      queryable: true
-      type: string
-      description: Volume component of the file name (e.g. $DATA01)
-    file_name.subvol:
-      queryable: true
-      type: string
-      description: Subvolume component of the file name
-    file_name.filename:
-      queryable: true
-      type: string
-      description: Filename component
     device_name:
       queryable: true
       type: string
@@ -1638,14 +1306,6 @@ dfile:
         process).)'
       derived_formula: N/A
       thresholds: N/A
-    file_name_mid.pathid:
-      queryable: false
-      type: string
-      description: Internal OSS/SQL MID PATHID; zeros for non-OSS/SQL files
-    file_name_mid.crvsn:
-      queryable: false
-      type: string
-      description: Creation Version Serial Number for OSS/SQL files; zeros for others
     starting_eof:
       queryable: true
       type: integer
@@ -1931,228 +1591,6 @@ dfile:
         by DP2 as a result of OSS-CACHE-CALLBACKS.)'
       derived_formula: N/A
       thresholds: N/A
-    open_qlen_max:
-      type: integer
-      description: (Legacy Style only) Maximum number of opens on this file.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    adapter_name:
-      type: integer
-      description: Logical name associated with the adapter in which the SAC resides.
-        Logical names are maintained by the system configuration database. The name
-        is null-filled and null-terminated.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    ctrl_type:
-      type: integer
-      description: "Product number, such as 3128. For IPC and RIPC records, CTRL\u2011\
-        TYPE is 0 for the linker, 1 for the listener. For more information on IPC\
-        \ records, see Usage notes for ENDPOINT entities."
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    flags:
-      type: integer
-      description: (ZMS style only, L01, H07/J05 and later PVUs) A16-bit field that
-        is used to indicate if the measurement was done on an L-series or later RVU.
-        flags.0:13Reserved for future use. flags.14 1 = The measurement was done on
-        an L-series or later RVU flags.15 Reserved for future use.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    node_class:
-      type: integer
-      description: SAC type as defined in the system configuration database.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    node_class_s:
-      type: integer
-      description: "Redefines NODE\u2011CLASS as a four\u2011character alphanumeric\
-        \ field. The possible values (blank filled to four characters) are: #####\
-        \ \u201CCLIM\u201D ##### \u201CCLMI\u201D ##### \u201CCLMO\u201D ##### \u201C\
-        CLMS\u201D ##### \"COLO\" ##### \"ENET\" ##### \"IPC \" ##### \"MONT\" #####\
-        \ \"NIOC\" ##### \"RIPC\" ##### \"SCSI\" ##### \"SWAN\" ##### \"* \" Node\
-        \ classes supported on L-series RVUs are CLIM, CLMI, CLMO, CLMS, IPC, and\
-        \ RIPC. NOTENOTE CLIM is a wildcard for all CLIM node classes."
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    remote_cluster:
-      type: integer
-      description: Number of a remote cluster with which the entity is communicating.
-        Only valid for RIPC.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    remote_cpu:
-      type: integer
-      description: Number of the CPU on a remote cluster with which the entity is
-        communicating for RIPC. Number of the other CPU on a local cluster with which
-        the entity is communicating for IPC.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    sac_name:
-      type: integer
-      description: 'Logical name of the SAC used in this path to the physical disk.
-        Logical names are maintained by the system configuration database. The name
-        is null-filled and null-terminated. For IPC records, Measure generates this
-        identifier instead of a SAC name: where xx is the linker CPU number and yy
-        is the listener CPU number.'
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    server_qtime:
-      type: integer
-      description: Time (in microseconds) between the receipt of messages in this
-        processor and the issuing of replies. This value does not include READ- QTIME
-        for Measure System read operations to pull the data to the CPU. The counter
-        helps to isolate Measure System latency time from the time required for the
-        receiving process to respond to a request. This applies only to IPC and RIPC
-        records.
-      queryable: true
-      derived_formula: Average message latency = (linker WRITE-QTIME - listener SERVER-QTIME)
-        / linker WRITE-REQUESTS
-      thresholds: N/A
-    x_defrd_busy_time:
-      type: integer
-      description: Time (in microseconds) during which the Message System was unable
-        to switch from using the Y fabric to using the X fabric. A large value for
-        this counter can be the result of an outstanding message on the Y fabric or
-        a problem with the X fabric. This counter applies only to IPC and RIPC records.
-      queryable: true
-      derived_formula: N/A
-      thresholds: Large value indicates outstanding message on Y fabric or problem
-        with X fabric.
-    y_defrd_busy_time:
-      type: integer
-      description: Time (in microseconds) during which the Measure System was unable
-        to switch from using the X fabric to using the Y fabric. A large value for
-        this counter can be the result of an outstanding message on the X fabric or
-        a problem with the Y fabric. This counter applies only to IPC and RIPC records.
-      queryable: true
-      derived_formula: N/A
-      thresholds: Large value indicates outstanding message on Y fabric or problem
-        with X fabric.
-    write_qlen_max:
-      type: integer
-      description: (Legacy Style only) Maximum number of requests on the write request
-        queue since the counter was allocated.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    target_cpu:
-      type: integer
-      description: This is the CPU number of the target CPU if the endpoint type is
-        CPU. This field is 0 for all other endpoint types.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    target_node:
-      type: integer
-      description: 02 y-sends type binary 64. 02 y-send-bytes type binary 64. 02 y-send-qlen-start
-        type binary 64. 02 y-send-qlen-end type binary 64. 02 y-reserved-2 type character
-        48. end RECORD zmsfabr. FILE is "zmsfabr" ENTRY-SEQUENCED. 02 hdr type zmsheader.
-        02 ctr type zmsfabr-ctrs. 02 id type zmsfabr-id. end For CPU endpoints, this
-        is the ServerNet node number on G-, H-, and J-series RVUs, or the Expand node
-        number on L-series RVUs. This field is 0 for other endpoint types.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    target_node_name:
-      type: integer
-      description: This is a 8 byte field that contains the target node name (e.g.,
-        \BLPROD). This field is filled in only for CPU endpoints of remote CPUs. The
-        name is space-filled.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    virtual_chan_name:
-      type: integer
-      description: This is the 8 byte field that contains the virtual channel name.
-        The name is null-filled.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    x_recvs:
-      type: integer
-      description: Number of received transfers from the endpoint over the X fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    x_recv_bytes:
-      type: integer
-      description: Number of received bytes from the endpoint over the X fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    x_sends:
-      type: integer
-      description: Number of sent transfers to the endpoint over the X fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    x_send_bytes:
-      type: integer
-      description: Number of sent bytes to the endpoint over the X fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    x_send_qlen_end:
-      type: integer
-      description: Number of data transfer operations on the send queue for the X
-        fabric at the end of the measurement interval.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    x_send_qlen_start:
-      type: integer
-      description: Number of data transfer operations on the send queue for the X
-        fabric at the start of the measurement interval.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    y_recvs:
-      type: integer
-      description: Number of received transfers from the endpoint over the Y fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    y_recv_bytes:
-      type: integer
-      description: Number of received bytes from the endpoint over the Y fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    y_sends:
-      type: integer
-      description: Number of sent transfers to the endpoint over the Y fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    y_send_bytes:
-      type: integer
-      description: Number of sent bytes to the endpoint over the Y fabric.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    y_send_qlen_end:
-      type: integer
-      description: Number of data transfer operations on the send queue for the Y
-        fabric at the end of the measurement interval.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
-    y_send_qlen_start:
-      type: integer
-      description: Number of data transfer operations on the send queue for the Y
-        fabric at the start of the measurement interval.
-      queryable: true
-      derived_formula: N/A
-      thresholds: N/A
 dopen:
   source_file: measurefiles/dopencsv
   ddl_record: ZMSDOPEN
@@ -2183,15 +1621,6 @@ dopen:
   - JOIN proc ON (system_name, opener_cpu, opener_pin, from_timestamp) for opener
     process detail
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
     system_name:
       queryable: true
       type: string
@@ -2202,12 +1631,6 @@ dopen:
       description: "CPU number where the file resides (MANUAL DEF: Number of the CPU\
         \ on which the measurement was taken. For interprocessor communications (IPC)\
         \ records, CPU\u2011NUM is MYCPU.)"
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -2240,18 +1663,6 @@ dopen:
         for the format of the external record. When data collected on systems of differing
         product versions are stored in the same structured files, the template version
         for all records is the one used to create the structured file.)'
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -2293,18 +1704,6 @@ dopen:
       type: string
       description: 'System name of the opener process (MANUAL DEF: Name of the system
         that opened the measured file.)'
-    file_name.volume:
-      queryable: true
-      type: string
-      description: Volume component of the opened file name
-    file_name.subvol:
-      queryable: true
-      type: string
-      description: Subvolume component of the opened file name
-    file_name.filename:
-      queryable: true
-      type: string
-      description: Filename component of the opened file name
     device_name:
       queryable: true
       type: string
@@ -2318,14 +1717,6 @@ dopen:
       description: 'SMF storage pool process name (MANUAL DEF: Name of the SMF storage
         pool to which the measured disk is assigned (process name of the storage pool
         process).)'
-    file_name_mid.pathid:
-      queryable: false
-      type: string
-      description: Internal OSS/SQL MID PATHID
-    file_name_mid.crvsn:
-      queryable: false
-      type: string
-      description: Creation Version Serial Number
     record_type:
       queryable: true
       type: integer
@@ -2512,15 +1903,6 @@ file:
   - JOIN dfile ON (system_name, cpu_num, file_name.*, from_timestamp) for disk file
     totals
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
     system_name:
       queryable: true
       type: string
@@ -2546,12 +1928,6 @@ file:
         pio-sends pio-send-qtime pio-send-bytes pio-recvs pio-recv-bytes --- Derived
         counter fields ----------------------------------------- home-trans-ART home-net-trans-ART
         remote-trans-ART trans-backout-ART tmp-work-AQT ``` ``` RECORD zmstmf.
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -2613,18 +1989,6 @@ file:
         for all records is the one used to create the structured file.)'
       derived_formula: The length of in^record is derived from the information encoded
         in the template version of the header record pointed to by in^record.
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -2743,18 +2107,6 @@ file:
         \ to a controller 3 FOX line handler 5 Single\u2011line handler attached to\
         \ a 6100 subsystem 6 Multiline line attached to a 6100 subsystem ``` # DEVICE-TYPEDEVICE-TYPE\
         \ A value of 63, which indicates an Expand line."
-    file_name.volume:
-      queryable: true
-      type: string
-      description: Volume component of the file name
-    file_name.subvol:
-      queryable: true
-      type: string
-      description: Subvolume component of the file name
-    file_name.filename:
-      queryable: true
-      type: string
-      description: Filename component
     file_system_name:
       queryable: true
       type: string
@@ -2765,18 +2117,6 @@ file:
       type: string
       description: 'Named process name of the opener (if named) (MANUAL DEF: Name
         of the opener process.)'
-    opener_program_filename.volume:
-      queryable: true
-      type: string
-      description: Volume of the opener's program file
-    opener_program_filename.subvol:
-      queryable: true
-      type: string
-      description: Subvolume of the opener's program file
-    opener_program_filename.filename:
-      queryable: true
-      type: string
-      description: Filename of the opener's program file
     device_name:
       queryable: true
       type: string
@@ -2803,14 +2143,6 @@ file:
         For SMF files, this field provides the physical location that corresponds
         to the logical file name.) (DERIVED METRIC: For Nonstop files, this field
         is the same as the OPENER-PROGRAM-FILENAME VOLUME subfield.)'
-    file_name_mid.pathid:
-      queryable: false
-      type: string
-      description: Internal OSS/SQL MID PATHID; zeros for non-OSS/SQL files
-    file_name_mid.crvsn:
-      queryable: false
-      type: string
-      description: Creation Version Serial Number; zeros for non-OSS/SQL files
     opener_osspid:
       queryable: true
       type: integer
@@ -2818,14 +2150,6 @@ file:
         DEF: If the opener process runs in the OSS environment, this field contains
         the OSS Process ID. If this process is not an OSS process, this field contains
         zeros.)'
-    opener_program_fname_mid.pathid:
-      queryable: false
-      type: string
-      description: Internal OSS MID PATHID for opener program file
-    opener_program_fname_mid.crvsn:
-      queryable: false
-      type: string
-      description: Creation Version Serial Number for opener program file
     file_open_type:
       queryable: true
       type: integer
@@ -2836,19 +2160,6 @@ file:
         KEYFILE %H008 PROCFILE %H081 SQLFILE %H101 OSSFIFO %H102 OSSPIPE %H201 OSSDISK
         %H411 OSSUNIXSTREAM %H412 OSSUNIXDGRAM %H421 OSSINETSTREAM %H422 OSSINETDGRAM
         ```.)'
-    ip.family:
-      queryable: true
-      type: integer
-      description: 'IP address family: 2=IPv4, 26=IPv6 (for AF_INET/AF_INET6 sockets)'
-    ip.port:
-      queryable: true
-      type: integer
-      description: IP port number (for AF_INET/AF_INET6 sockets)
-    ip.ip_addr:
-      queryable: true
-      type: string
-      description: IP address in hex (4 bytes for IPv4, 16 bytes for IPv6); use in
-        IF clause as '1.2.3.4 port'
     file_busy_time:
       queryable: true
       type: integer
@@ -3132,28 +2443,6 @@ file:
         fcntl(), and the socket APIs connect(), setsockopt(), accept(), and shutdown().)
         (DERIVED METRIC: For OSS, this counter totals operations that increase FILE-BUSY-TIME
         but are not READS, WRITES, or INFO-CALLS.)'
-    physical_reads (prefetch operation):
-      type: integer
-      description: Physical reads done for a given volume for a prefetch operation.
-        CACHE-READ-HITS (or CACHE-HITS) is from the FILE entity.
-      queryable: true
-      derived_formula: ((CACHE-READ-HITS + DISC-READS) - DRIVE-READS)
-      thresholds: N/A
-    average queue time counters (_aqt, _art):
-      type: integer
-      description: Measure the average time that each item visiting a queue spends
-        there. -ART includes average service time; -AQT does not.
-      queryable: true
-      derived_formula: Queue counter / Corresponding incrementing counter for items
-        visiting the queue
-      thresholds: N/A
-    average service time counters (_ast):
-      type: integer
-      description: Measure the average time to satisfy each request of a resource.
-      queryable: true
-      derived_formula: Busy or queue-busy counter for a resource / Corresponding incrementing
-        counter for requests of the resource
-      thresholds: N/A
 ossns:
   source_file: measurefiles/ossnscsv
   ddl_record: ZMSOSSNS
@@ -3175,15 +2464,6 @@ ossns:
   join_hints:
   - JOIN proc ON (system_name, cpu_num, pin, from_timestamp) for process context
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
     system_name:
       queryable: true
       type: string
@@ -3193,12 +2473,6 @@ ossns:
       type: integer
       description: "(MANUAL DEF: Number of the CPU on which the measurement was taken.\
         \ For interprocessor communications (IPC) records, CPU\u2011NUM is MYCPU.)"
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -3231,18 +2505,6 @@ ossns:
         for the format of the external record. When data collected on systems of differing
         product versions are stored in the same structured files, the template version
         for all records is the one used to create the structured file.)'
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -3266,18 +2528,6 @@ ossns:
       type: string
       description: 'Named process name (e.g. $ZPNS) (MANUAL DEF: Name of the measured
         process.)'
-    program_file_name.volume:
-      queryable: true
-      type: string
-      description: Volume of the NS program file
-    program_file_name.subvol:
-      queryable: true
-      type: string
-      description: Subvolume of the NS program file
-    program_file_name.filename:
-      queryable: true
-      type: string
-      description: Filename of the NS program file
     ic_entries:
       queryable: true
       type: integer
@@ -3465,30 +2715,6 @@ ossns:
       description: 'Number of settime requests sent to a pipe server or local server
         (MANUAL DEF: Number of settime requests sent by the OSS name server to a pipe
         server or local server. Counter type: Incrementing.)'
-    dp2_msg_qlen_max:
-      type: integer
-      description: (Measure G10 PVU only) Maximum number of DP2 messages outstanding
-        for an OSS name server since it began execution. In H-series and later RVUs,
-        this counter has a value of 1.
-      queryable: true
-    ls_msg_qlen_max:
-      type: integer
-      description: (Measure G10 PVU only) Maximum number of concurrent local server
-        messages outstanding on an OSS name server since it began execution. In H-series
-        and later RVUs, this counter has a value of 1.
-      queryable: true
-    ps_msg_qlen_max:
-      type: integer
-      description: (Measure G10 PVU only) Maximum number of concurrent pipe server
-        messages outstanding on an OSS name server since it began execution. In H-series
-        and later RVUs, this counter has a value of 1.
-      queryable: true
-    sem_wait_qlen_max:
-      type: integer
-      description: (Measure G10 PVU only) Maximum number of resolution request semaphore
-        waits on an OSS name server since it began execution. In H-series and later
-        RVUs, this counter has a value of 1.
-      queryable: true
 proc:
   source_file: measurefiles/proccsv
   ddl_record: ZMSPROC
@@ -3516,18 +2742,6 @@ proc:
   - JOIN dopen ON (system_name, opener_cpu, opener_pin, from_timestamp) for disk open
     activity
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-      description: Internal Measure load ID
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-      description: Internal Measure load ID prefix
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
-      description: Internal Measure load ID interval
     system_name:
       queryable: true
       type: string
@@ -3555,12 +2769,6 @@ proc:
         pio-sends pio-send-qtime pio-send-bytes pio-recvs pio-recv-bytes --- Derived
         counter fields ----------------------------------------- home-trans-ART home-net-trans-ART
         remote-trans-ART trans-backout-ART tmp-work-AQT ``` ``` RECORD zmstmf.
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -3622,18 +2830,6 @@ proc:
         for all records is the one used to create the structured file.)'
       derived_formula: The length of in^record is derived from the information encoded
         in the template version of the header record pointed to by in^record.
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -3719,22 +2915,6 @@ proc:
         SQL query activity, you see a low ratio between deferrable q-time and deferred
         q-time. Priority adjustments for the SQL query should correspond to changes
         in the ratio.
-    userid.group:
-      queryable: true
-      type: integer
-      description: Process accessor ID group component (PAID)
-    userid.user:
-      queryable: true
-      type: integer
-      description: Process accessor ID user component (PAID)
-    creatorid.group:
-      queryable: true
-      type: integer
-      description: Creator access ID group component (CAID)
-    creatorid.user:
-      queryable: true
-      type: integer
-      description: Creator access ID user component (CAID)
     process_name:
       queryable: true
       type: string
@@ -3744,18 +2924,6 @@ proc:
         type of file to be measured: ``` 0 Unstructured 1 Relative 2 Entry-sequenced
         3 Key-sequenced ``` # STORAGE-POOLSTORAGE-POOL Name of the SMF storage pool
         to which the measured disk is assigned (process name of the storage pool process).'
-    program_file_name.volume:
-      queryable: true
-      type: string
-      description: Volume of the program object file
-    program_file_name.subvol:
-      queryable: true
-      type: string
-      description: Subvolume of the program object file
-    program_file_name.filename:
-      queryable: true
-      type: string
-      description: Filename of the program object file
     osspid:
       queryable: true
       type: integer
@@ -3800,14 +2968,6 @@ proc:
         \ ``` # ENDPOINTENDPOINT The SERVERNET entity has been replaced by ENDPOINT."
       thresholds: MEAS_PATH_SEL Indicates that selection is only by path and device
         name, and not other attributes like lun, partition, or scsi-id.
-    program_file_name_mid.pathid:
-      queryable: false
-      type: string
-      description: Internal OSS MID PATHID for program file; zeros for non-OSS
-    program_file_name_mid.crvsn:
-      queryable: false
-      type: string
-      description: Creation Version Serial Number for program file; zeros for non-OSS
     flags:
       queryable: true
       type: bitmask
@@ -3819,22 +2979,6 @@ proc:
         current setting of Measure subsystem parameters controlled through defines:
         ``` ADD DEFINE =_SET_MAX_CIDS_TO_1024K, file a ``` ``` error := MEASMONSTATUS
         ( meascb!'
-    u_gmom.gmom.gmom_node:
-      queryable: true
-      type: integer
-      description: Expand node number of GMOM process (NetBatch); 0 if not NetBatch
-    u_gmom.gmom.gmom_cpu:
-      queryable: true
-      type: integer
-      description: CPU of GMOM process (NetBatch); 0 if not NetBatch
-    u_gmom.gmom.gmom_pin:
-      queryable: true
-      type: integer
-      description: PIN of GMOM process (NetBatch); 0 if not NetBatch
-    u_gmom.gmom.gmom_jobid:
-      queryable: true
-      type: integer
-      description: NetBatch job ID assigned by GMOM; 0 if not NetBatch
     gmom_sysname:
       queryable: true
       type: string
@@ -3908,30 +3052,12 @@ proc:
       description: 'Home terminal system name (MANUAL DEF: Home terminal system name
         associated with the process. This identifier appears only in the data record,
         not in the PROCESS report.)'
-    hometerm_name.device:
-      queryable: true
-      type: string
-      description: Home terminal device name component
-    hometerm_name.subdevice:
-      queryable: true
-      type: string
-      description: Home terminal subdevice name component
-    hometerm_name.qualifier:
-      queryable: true
-      type: string
-      description: Home terminal qualifier component
     serverclass_name:
       queryable: true
       type: string
       description: 'Serverclass name (populated by Nonstop TS/MP Pathway; L02/J06+)
         (MANUAL DEF: (ZMS style only, L02, J06 and later) Serverclass name of the
         process. This field will be displayed if populated by Nonstop TS/MP pathway.)'
-    thread_group_id:
-      queryable: true
-      type: integer
-      description: 'Thread group ID; valid only for KLT processes (L03+) (MANUAL DEF:
-        (ZMS Style only) This counter is supported in Measure L03 and later PVUs.
-        This counter is valid only in the KLT process.)'
     cpu_busy_time:
       queryable: true
       type: integer
@@ -4546,59 +3672,6 @@ proc:
         \ For OSS processes, wait time accumulates for file open and close operations,\
         \ excluding name server operations.) (DERIVED METRIC: Name server operations\
         \ are counted in OSSNS-WAIT-TIME.)"
-    open_closes:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of OSS and Guardian open and close operations (L03+) (MANUAL
-        DEF: (ZMS Style only) Number of OSS and Guardian open and close operations.
-        This counter is supported in Measure L03 and later PVUs.)'
-    file_reads:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of read operations (L03+) (MANUAL DEF: (ZMS Style only)
-        Number of read operations. This counter is supported in Measure L03 and later
-        PVUs.)'
-    file_writes:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of write, update, and delete operations (L03+) (MANUAL
-        DEF: (ZMS Style only) Number of write, update and delete operations. This
-        counter is supported in Measure L03 and later PVUs.)'
-    file_nowait_initiated:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of nowait I/Os initiated (L03+) (MANUAL DEF: (ZMS Style
-        only) Number of nowait I/Os initiated. This counter is supported in Measure
-        L03 and later PVUs.)'
-    file_nowait_completed:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of nowait I/O completions processed (L03+) (MANUAL DEF:
-        (ZMS Style only) Number of nowait I/O completions processed. This counter
-        is supported in Measure L03 and later PVUs.)'
-    file_awaitio_calls:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of calls to AWAITIO and FILE_COMPLETE_ family of APIs (L03+)
-        (MANUAL DEF: (ZMS Style only) Number of calls to the AWAITIO and FILE_COMPLETE_
-        family of APIs. This counter is supported in Measure L03 and later PVUs.)'
-      derived_formula: FILE-AWAITIO-QTIME is divided by FILE-AWAITIO-CALLS.
-    file_awaitio_qtime:
-      queryable: true
-      type: integer
-      unit: microseconds
-      counter_type: Queue
-      description: "Time spent in AWAITIO and FILE_COMPLETE_ family of APIs (L03+);\
-        \ RATE ON \u2192 AQL (MANUAL DEF: (ZMS Style only) Time spent in the AWAITIO\
-        \ and FILE_COMPLETE_ family of APIs. This counter is supported in Measure\
-        \ L03 and later PVUs.)"
-      derived_formula: FILE-AWAITIO-QTIME is divided by FILE-AWAITIO-CALLS.
     begin_trans:
       queryable: true
       type: integer
@@ -4659,40 +3732,6 @@ proc:
         APIs. In Measure L03 and later PVUs, LAUNCH-WAIT-TIME is zero and not displayed
         by MEASCOM.) (DERIVED METRIC: In Measure L03 and later PVUs, LAUNCH-WAIT-TIME
         is zero and not displayed by MEASCOM.)'
-    process_launches:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of process launches (L03+; valid when subsystem_version
-        >= 9) (MANUAL DEF: (ZMS Style only) Number of process launches. This counter
-        is supported in Measure L03 and later PVUs.)'
-      derived_formula: PROCESS-LAUNCH-QTIME is divided by PROCESS-LAUNCHES.
-    process_launch_qtime:
-      queryable: true
-      type: integer
-      unit: microseconds
-      counter_type: Queue
-      description: "Time to launch processes (L03+; valid when subsystem_version >=\
-        \ 9); RATE ON \u2192 AQL (MANUAL DEF: (ZMS Style only) Time to launch processes.\
-        \ This counter is supported in Measure L03 and later PVUs.)"
-      derived_formula: PROCESS-LAUNCH-QTIME is divided by PROCESS-LAUNCHES.
-    thread_launches:
-      queryable: true
-      type: integer
-      counter_type: Incrementing
-      description: 'Number of KLT thread launches (L03+; valid when subsystem_version
-        >= 9) (MANUAL DEF: (ZMS Style only) Number of KLT thread launches. This counter
-        is supported in Measure L03 and later PVUs.)'
-      derived_formula: THREAD-LAUNCH-QTIME is divided by THREAD-LAUNCHES.
-    thread_launch_qtime:
-      queryable: true
-      type: integer
-      unit: microseconds
-      counter_type: Queue
-      description: "Time to launch KLT threads (L03+; valid when subsystem_version\
-        \ >= 9); RATE ON \u2192 AQL (MANUAL DEF: (ZMS Style only) Time to launch KLT\
-        \ threads. This counter is supported in Measure L03 and later PVUs.)"
-      derived_formula: THREAD-LAUNCH-QTIME is divided by THREAD-LAUNCHES.
     oss_tty_reads:
       queryable: true
       type: integer
@@ -4778,767 +3817,6 @@ proc:
       description: 'Number of redirected requests sent to OSS name servers (MANUAL
         DEF: Number of redirected requests sent to OSS name servers. Counter type:
         Incrementing.)'
-    "intrintr \u2011 busybusy \u2011 timetime":
-      type: integer
-      description: 'Time that the CPU spent executing interrupt handlers. Most interrupts
-        are caused by the processing of messages and I/O operations. The appropriate
-        system description manual describes each type of interrupt. For TNS/E systems,
-        this is the total time spend executing system Interrupt Processes (IPs) and
-        system Auxiliary Processes (APs). Counter type: Busy.'
-      queryable: true
-      derived_formula: Most interrupts are caused by the processing of messages and
-        I/O operations.
-    link_large_msgslink_large_msgs:
-      type: integer
-      description: 'H/J-series: Number of messages transferred to a CPU that exceeded
-        the readlinkcache message size. L-series: Number of requests transferred to
-        another CPU that exceeded the Send operation size. The request data bytes
-        will be pulled by the server CPU with an IB RDMA Read operation. Counter type:
-        Incrementing.'
-      queryable: true
-      derived_formula: 'L-series: Number of requests transferred to another CPU that
-        exceeded the Send operation size. The request data bytes will be pulled by
-        the server CPU with an IB RDMA Read operation.'
-    link_prepush_msgslink_prepush_msgs:
-      type: integer
-      description: 'H/J-series: Number of messages transferred to another CPU using
-        the prepush protocol. L-series: Number of requests transferred to another
-        CPU via a Send operation. Counter type: Incrementing.'
-      queryable: true
-      derived_formula: 'L-series: Number of requests transferred to another CPU via
-        a Send operation.'
-    "tnsrtnsr \u2011 busybusy \u2011 timetime":
-      type: integer
-      description: "(Legacy Style only) Time that the CPU was busy executing TNS/R\
-        \ native code. This counter applies only to measurements taken on a TNS/R\
-        \ system and is derived from other counters: CPU\u2011BUSY\u2011TIME \u2011\
-        \ (INTR\u2011BUSY\u2011TIME + TNS\u2011BUSY\u2011TIME + ACCEL\u2011BUSY\u2011\
-        TIME) = TNSR\u2011BUSY\u2011TIME Counter type: Busy."
-      queryable: true
-      derived_formula: "This counter applies only to measurements taken on a TNS/R\
-        \ system and is derived from other counters: CPU\u2011BUSY\u2011TIME \u2011\
-        \ (INTR\u2011BUSY\u2011TIME + TNS\u2011BUSY\u2011TIME + ACCEL\u2011BUSY\u2011\
-        TIME) = TNSR\u2011BUSY\u2011TIME Counter type: Busy.."
-    requests_blockedrequests_blocked:
-      type: integer
-      description: 'Number of times an operation had to wait because the requested
-        file or record was already locked. Typically, a record is locked by a LOCKFILE
-        request, a LOCKREC request, or a TMF auditing operation.   Counter type: Incrementing.'
-      queryable: true
-      derived_formula: Number of times an operation had to wait because the requested
-        file or record was already locked. Typically, a record is locked by a LOCKFILE
-        request, a LOCKREC request, or a TMF auditing operation.
-    swapsswaps:
-      type: integer
-      description: 'Number of swap operations (both into and out of memory) performed
-        for the memory manager. Unlike CPU swaps, which are not dependent on file
-        block size, the disk process performs I/O based on the block size of the file
-        and might need to perform more than one I/O to swap the needed data. The DISC
-        SWAPS counter is advanced for each I/O. Therefore, total disk swaps might
-        be greater than total CPU swaps. Only updated pages are swapped. Because code
-        pages are never updated, they are never swapped out of memory. Counter type:
-        Incrementing.'
-      queryable: true
-      derived_formula: Number of swap operations (both into and out of memory) performed
-        for the memory manager.
-    volsem_qtimevolsem_qtime:
-      type: integer
-      description: 'Time that the requests spent waiting for the volume semaphore
-        (exclusive and shared modes). With REPORT RATE OFF, the value of this counter
-        equals the total queue time for volume semaphore. With REPORT RATE ON, the
-        value of this counter equals the average number of requests in the queue.
-        Under normal conditions, the value of this counter should be close to zero.
-        Otherwise, it indicates some operations are holding the volume semaphore in
-        exclusive mode, causing all other request operations that require the volume
-        semaphore in share mode to wait. Counter type: Queue.'
-      queryable: true
-      derived_formula: Otherwise, it indicates some operations are holding the volume
-        semaphore in exclusive mode, causing all other request operations that require
-        the volume semaphore in share mode to wait.
-      thresholds: Under normal conditions, the value of this counter should be close
-        to zero.
-    writeswrites:
-      type: integer
-      description: 'Number of physical write operations (from memory to disk) performed
-        by the disk process. In addition to programmatic write operations, many commands
-        (for example, FORMAT and LOADMICROCODE) also write to the disk. Counter type:
-        Incrementing.'
-      queryable: true
-      derived_formula: Number of write operations (from memory to the terminal) performed
-        by the terminal process.
-    cc:
-      type: integer
-      description: "(Legacy Style only) Disk cache metrics. While the C field is included\
-        \ in both the Legacy Style DDL and the ZMS Style DDL records, the subfield\
-        \ contents and the sequence of the subfields varies based on the style of\
-        \ the record. For the subfield contents and sequence of the C field for ZMS\
-        \ Style DDL records, see Common and ZMS Style Only Counter Field DDL Definitions\
-        \ for DISC Entities. In the Legacy Style DDL record, this field is divided\
-        \ into these subfields:   ``` SubfieldSubfield DescriptionDescription Counter\
-        \ TypeCounter Type HITS Number of times a required block is found in cache\
-        \ on a read or buffered write operation, which saves a disk I/O. This counter\
-        \ includes cache hits on both read and write operations. ``` ``` Incrementing\
-        \ ``` ``` MISSES Number of times a required block is not found in cache on\
-        \ a read operation, which causes a disk I/O. Read operations that do not go\
-        \ through cache are not included in this counter. ``` ``` Incrementing ```\
-        \ ``` FAULTS Number of times the cache tables indicate a required block is\
-        \ in cache, but not because the memory manager is using it for another purpose.\
-        \ Faults occur when a cache is too large or physical memory is too small for\
-        \ a given application. Fault rates greater than 5% of all I/O operations generally\
-        \ indicate you need more memory. ``` ``` Incrementing ``` ``` AUDIT\u2011\
-        BUF\u2011FORCES Number of times the disk process had to write to the audit-trail\
-        \ volume before it could write a dirty cache block and thereby free that block\
-        \ for another use. This value should be close to zero. ``` ``` Incrementing\
-        \ ``` ``` BLKS Number of cache blocks allocated. When TOTALS ONLY or TOTALS\
-        \ INCLUDE is used, this value is the maximum number of cache blocks allocated.\
-        \ BLKS is not a counter but a value obtained from an internal disk process\
-        \ data structure. ``` ##### N.A.  ``` BLKS\u2011DIRTY\u2011QTIME Time that\
-        \ cache blocks spent dirty. A cache block is dirty when a buffered write operation\
-        \ writes data to it. After the disk process writes the dirty cache block to\
-        \ disk, the block is clean. ``` ``` Queue ``` ``` BLKS\u2011DIRTY\u2011MAX\
-        \ Maximum number of items on the queue described by the BLKS\u2011DIRTY\u2011\
-        QTIME counter. ``` ``` Max queue ``` In Measure output, each subfield provides\
-        \ four values, one for each size of DP2 cache block:  ``` Field labelField\
-        \ labelCache block sizeCache block size C0 512 bytes C1 1024 bytes C2 2048\
-        \ bytes C3 4096 bytes ```"
-      queryable: true
-      derived_formula: 'In the Legacy Style DDL record, this field is divided into
-        these subfields:   ``` SubfieldSubfield DescriptionDescription Counter TypeCounter
-        Type HITS Number of times a required block is found in cache on a read or
-        buffered write operation, which saves a disk I/O. This counter includes cache
-        hits on both read and write operations. ``` ``` Incrementing ``` ``` MISSES
-        Number of times a required block is not found in cache on a read operation,
-        which causes a disk I/O. Read operations that do not go through cache are
-        not included in this counter. Fault rates greater than 5% of all I/O operations
-        generally indicate you need more memory. A cache block is dirty when a buffered
-        write operation writes data to it.'
-      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
-        you need more memory. AUDIT-BUF-FORCES should be close to zero.
-    cwcw:
-      type: integer
-      description: "(Legacy Style only) Cache write metrics. This field is divided\
-        \ into these subfields:  ``` SubfieldSubfield DescriptionDescription Counter\
-        \ TypeCounter Type WRITE\u2011DIRTYS Number of times a required block is found\
-        \ dirty in cache for a write operation. Accumulating WRITE\u2011CLEANS Number\
-        \ of times a required block is found clean in cache for a write operation,\
-        \ which saves a disk read per write. ``` ``` Accumulating ``` ``` WRITE\u2011\
-        MISSES Number of times a required block is not found in cache for a write\
-        \ operation, which requires a disk read before the write can be performed.\
-        \ ``` ``` Accumulating ``` ``` BLOCK\u2011SPLITS Number of block splits (per\
-        \ block size) for the volume. Incrementing ``` In Measure output, each subfield\
-        \ provides four values, one for each size of DP2 cache block:  ``` Field NameField\
-        \ NameCache Block SizeCache Block Size C0 512 bytes C1 1024 bytes C2 2048\
-        \ bytes C3 4096 bytes ```"
-      queryable: true
-      derived_formula: "This field is divided into these subfields:  ``` SubfieldSubfield\
-        \ DescriptionDescription Counter TypeCounter Type WRITE\u2011DIRTYS Number\
-        \ of times a required block is found dirty in cache for a write operation.\
-        \ Accumulating WRITE\u2011CLEANS Number of times a required block is found\
-        \ clean in cache for a write operation, which saves a disk read per write.\
-        \ ``` ``` Accumulating ``` ``` WRITE\u2011MISSES Number of times a required\
-        \ block is not found in cache for a write operation, which requires a disk\
-        \ read before the write can be performed."
-    seek_busy_timeseek_busy_time:
-      type: integer
-      description: (Legacy Style only) No longer used; returns zeros. All seek operations
-        are implicit in read and write operations.
-      queryable: true
-      derived_formula: All seek operations are implicit in read and write operations..
-    seeksseeks:
-      type: integer
-      description: (Legacy Style only) No longer used; returns zeros. All seek operations
-        are implicit in read and write operations.
-      queryable: true
-      derived_formula: All seek operations are implicit in read and write operations..
-    misc_callsmisc_calls:
-      type: integer
-      description: 'For OSS, this counter totals operations that increase FILE-BUSY-TIME
-        but are not READS, WRITES, or INFO-CALLS. APIs that fall in this category
-        are ioctl(), fsync(), ftruncate(), lseek(), and fcntl(), and the socket APIs
-        connect(), setsockopt(), accept(), and shutdown(). Counter type: Incrementing.'
-      queryable: true
-      derived_formula: For OSS, this counter totals operations that increase FILE-BUSY-TIME
-        but are not READS, WRITES, or INFO-CALLS.
-    oss_flow_controlsoss_flow_controls:
-      type: integer
-      description: 'For OSS sockets and pipes, this counter reports the number of
-        times a WRITE operation was blocked. Counter type: Incrementing.'
-      queryable: true
-      derived_formula: For OSS sockets and pipes, this counter reports the number
-        of times a WRITE operation was blocked.
-    readsreads:
-      type: integer
-      description: 'Number of calls to the file system read family of APIs and OSS
-        file system read APIs such as read() or recv(). For OSS, the total includes
-        OSS- CACHE-READS. For the Enscribe file system, the total includes non-DBIO
-        and DBIO operations. This counter includes both user and system calls to these
-        procedures. In G05 and later RVUs, this counter includes direct bulk I/O read
-        operations. Counter type: Incrementing.'
-      queryable: true
-      derived_formula: Number of read operations (from the terminal to memory) performed
-        by the terminal process.
-    records_accessedrecords_accessed:
-      type: integer
-      description: "Number of records read by the disk process or file system to perform\
-        \ the operations. Number of records accessed is greater than or equal to the\
-        \ number of records used. The ratio of RECORDS\u2011USED to RECORDS\u2011\
-        ACCESSED indicates the selectivity of the statement. The value of this counter\
-        \ is zero for Enscribe files. Counter type: Incrementing."
-      queryable: true
-      derived_formula: "Number of records read by the disk process or file system\
-        \ to perform the operations. The ratio of RECORDS\u2011USED to RECORDS\u2011\
-        ACCESSED indicates the selectivity of the statement."
-      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
-        you need more memory. AUDIT-BUF-FORCES should be close to zero.
-    reply_aqtreply_aqt:
-      type: integer
-      description: '(ZMS style only) Average time spent on replying to messages on
-        the internal queue. This counter is supported in Measure L03 and later PVUs.
-        REPLY-QTIME is divided by REPLIES. Counter type: Derived - Average Queue Time'
-      queryable: true
-      derived_formula: REPLY-QTIME is divided by REPLIES.
-    request_artrequest_art:
-      type: integer
-      description: '(ZMS style only) The average response time for requests. This
-        counter is supported in Measure L03 and later PVUs. REQUEST-QTIME is divided
-        by REQUESTS. Counter type: Average Response Time'
-      queryable: true
-      derived_formula: REQUEST-QTIME is divided by REQUESTS.
-    updates_or_repliesupdates_or_replies:
-      type: integer
-      description: 'Number of calls to the WRITEUPDATE family of APIs with a non-zero
-        buffer length for update operations and number of successful calls to the
-        REPLY family of APIs. This counter includes both user and system calls to
-        these procedures. Interpretation of this counter depends on the type of file
-        being measured. Delete operations are performed on disk and tape files. Reply
-        operations are performed on terminals or processes. Counter type: Incrementing.'
-      queryable: true
-      derived_formula: Number of calls to the WRITEUPDATE family of APIs with a non-zero
-        buffer length for update operations and number of successful calls to the
-        REPLY family of APIs. Delete operations are performed on disk and tape files.
-        Reply operations are performed on terminals or processes.
-    retriesretries:
-      type: integer
-      description: 'Number of times the I/O process retried an I/O operation because
-        of an error on the communications line. Counter type: Incrementing.'
-      queryable: true
-      derived_formula: Number of times the I/O process retried an I/O operation because
-        of an error on the communications line.
-    write_busy_timewrite_busy_time:
-      type: integer
-      description: 'The time spent writing to the communications line. This counter
-        measures the time from the instruction that starts the write to the interrupt
-        that signals the end of the I/O operation. Any process can run during this
-        time. Counter type: Busy.'
-      queryable: true
-      derived_formula: This counter measures the time from the instruction that starts
-        the write operation to the interrupt that ends the operation.
-    read_busy_timeread_busy_time:
-      type: integer
-      description: "Time spent reading data from the network communications line.\
-        \ This counter includes the time spent waiting for input to the line. The\
-        \ counter measures the time from the instruction that starts the read to the\
-        \ interrupt that signals the end of the I/O operation. Because active, full\u2011\
-        duplex lines usually have a read continue outstanding, expect a high value\
-        \ for this counter. Any process can run during this time. This counter is\
-        \ only measured when Expand over SWAN is in use. Counter type: Busy."
-      queryable: true
-      derived_formula: This counter measures the time from the instruction that starts
-        the read operation to the interrupt that ends the operation.
-    requestsrequests:
-      type: integer
-      description: "Sum of all SYSTEM LINKS handled by this path plus the sum of all\
-        \ SYSTEM SENT FORWARDs (PASSTHRU REQUESTS) handled by this path. LINKS is\
-        \ a message\u2011level number. SENT, RECEIVED, SENT FORWARD, and RECEIVE FORWARD\
-        \ are packet counters. One message can be several packets. REQUESTS counts\
-        \ both message\u2011level events (LINKS) and packet\u2011level events (SENT\
-        \ FORWARD) in the same counter. Requests are the number of message quick cells\
-        \ (MQCs) this line handler receives that are sent to the remote system. Counter\
-        \ type: Incrementing."
-      queryable: true
-      derived_formula: Sum of all SYSTEM LINKS handled by this path plus the sum of
-        all SYSTEM SENT FORWARDs (PASSTHRU REQUESTS) handled by this path.
-    opdiskopdisk:
-      type: integer
-      description: The OPDISK entity provides information about one or more optical
-        disk systems on the local system. The optical disk system is an enclosure
-        (familiarly called a jukebox) that contains one or more disk drives and multiple
-        disk cartridges stored in cells. Each cartridge has two sides, and each side
-        is a volume. G-series and later RVUs do not support optical disks. However,
-        Measure and later PVUs include an OPDISK DDL record for future use. Specifying
-        an OPDISK entity in a RVU that does not support the entity does not cause
-        an error message but also does not affect the measurement configuration. Optical
-        disk records from D-series data can be formatted and displayed.   ``` TopicTopic
-        Entity specification syntax for OPDISK entities DDL record for OPDISK entities
-        DDL field definitions for OPDISK entities Usage notes for OPDISK entities
-        ``` SubtopicsSubtopics Entity Specification Syntax for OPDISK EntitiesEntity
-        Specification Syntax for OPDISK Entities DDL Record for OPDISK Entities (ZMS
-        Style)DDL Record for OPDISK Entities (ZMS Style) DDL Record for OPDISK Entities
-        (Legacy Style)DDL Record for OPDISK Entities (Legacy Style) Common and ZMS
-        Style Only ID Field DDL Definitions for OPDISK EntitiesCommon and ZMS Style
-        Only ID Field DDL Definitions for OPDISK Entities Common and ZMS Style Only
-        Counter Field DDL Definitions for OPDISK EntitiesCommon and ZMS Style Only
-        Counter Field DDL Definitions for OPDISK Entities Legacy Style Only ID Field
-        DDL Definitions for OPDISK EntitiesLegacy Style Only ID Field DDL Definitions
-        for OPDISK Entities Legacy Style Only Counter Field DDL Definitions for OPDISK
-        EntitiesLegacy Style Only Counter Field DDL Definitions for OPDISK Entities
-        Usage Notes for All OPDISK EntitiesUsage Notes for All OPDISK Entities
-      queryable: true
-      derived_formula: Specifying an OPDISK entity in a RVU that does not support
-        the entity does not cause an error message but also does not affect the measurement
-        configuration.
-    adapter_nameadapter_name:
-      type: integer
-      description: (ZMS Style only) Logical name associated with the adapter in which
-        the SAC resides. Logical names are maintained by the system configuration
-        database. The name is null-filled and null-terminated.
-      queryable: true
-      derived_formula: Logical names are maintained by the system configuration database.
-    config_nameconfig_name:
-      type: integer
-      description: (ZMS Style only) Logical name associated with this physical disk.
-        Logical names are maintained by the system configuration database. The name
-        is null-filled and null-terminated.
-      queryable: true
-      derived_formula: Logical names are maintained by the system configuration database.
-    device_subtypedevice_subtype:
-      type: integer
-      description: An additional identifier for DEVICE-TYPE. For a complete list of
-        possible subtype values for optical disks, see the System Generation Manual.
-      queryable: true
-      derived_formula: For a complete list of possible subtype values for optical
-        disks, see the System Generation Manual..
-    sac_namesac_name:
-      type: integer
-      description: (ZMS Style only) Logical name associated with the SAC used in this
-        path to the physical volume. Logical names are maintained by the system configuration
-        database. The name is null-filled and null-terminated.
-      queryable: true
-      derived_formula: Logical names are maintained by the system configuration database.
-    input_bytesinput_bytes:
-      type: integer
-      description: 'Number of bytes read from the optical disk. In addition to programmatic
-        read operations, internal operations such as reading file labels also modify
-        this counter. Because the optical disk process modifies this counter before
-        the I/O operation, this counter might not be accurate if the read fails. Counter
-        type: Accumulating.'
-      queryable: true
-      derived_formula: In addition to programmatic read operations, internal operations
-        such as reading file labels also modify this counter. Because the optical
-        disk process modifies this counter before the I/O operation, this counter
-        might not be accurate if the read fails.
-    output_bytesoutput_bytes:
-      type: integer
-      description: 'Number of bytes written to the optical disk. In addition to programmatic
-        write operations, internal operations such as writing volume labels also modify
-        this counter. Because the optical disk process modifies this counter before
-        the I/O operation, the counter might not be accurate if the write fails. Counter
-        type: Accumulating.'
-      queryable: true
-      derived_formula: Because the terminal process modifies this counter before the
-        I/O operation, this counter might not be accurate if the write instruction
-        fails.
-    abort_transabort_trans:
-      type: integer
-      description: 'Number of times the process invokes the TMF ABORTTRANSACTION procedure
-        to abort the current transaction. The number of calls does distributed across
-        the IPUs in a CPU. The IPU-NUM, IPU-SWITCHES, and IPU-NUM-PREV counters were
-        also added to the PROCESS entity so that the users can see the IPU where the
-        process was being executed. If the process had switched IPUs during the measurement
-        or interval, IPU-SWITCHES will have a non-zero value and will show the number
-        of the PROCESS entity does not have any IPU Busy Time counters; it only has
-        the CPU-BUSY-TIME. Therefore, during an interval where there were IPU switches
-        you cannot determine how the CPU-BUSY-TIME was spread across the IPU-NUM and
-        IPU-NUM-PREV and any previous IPUs (if IPU-SWITCHES is greater than 1). What
-        this means is that if you total all the PROCESS CPU-BUSY-TIME in a CPU for
-        a particular IPU (for example, LIST PROCESS 0,*, IF IPU- NUM = 1, TOTALS ONLY,
-        RATE OFF) and there were IPU switches, this total is not likely to match the
-        corresponding IPU-BUSY-TIME in the PROCESS entity, the priority for a particular
-        process or set of processes at the start and end of a measurement interval
-        and can be helpful in tuning an application. In H06.25/J06.14 and later RVUs,
-        two sets of PROCESS entity counters are implemented to track process priority
-        changes during a measurement: INITIAL-PRIORITY-START and INITIAL-PRIORITY-END,
-        and CURRENT-PRIORITY- START and CURRENT-PRIORITY-END. The INITIAL-PRIORITY-START
-        and INITIAL-PRIORITY-END snapshot counters reflect the target (requested)
-        priority of a process at the start and end of a measurement interval. The
-        initial priority can be changed during process execution by using the ALTPRI
-        TACL command, or the ALTERPRIORITY, PRIORITY or PROCESS_SETINFO_ Guardian
-        procedures. For example: a process that was launched with a priority of 100
-        is said to have an initial priority of 100. If the priority for that process
-        were changed to 150 using one of the procedures listed above, its initial
-        priority would thereafter be 150. ```  ##### NOTENOTE  ``` The original initial
-        priority value of a process (also known as the creation priority) is displayed
-        in the first line of the PROCESS header and stored in the PRIORITY field in
-        the ID section of the ZMSPROC record. This PRIORITY value is static during
-        a measurement. ``` ``` The CURRENT-PRIORITY-START and CURRENT-PRIORITY-END
-        snapshot counters reflect the current execution priority at the start and
-        end of a measurement interval. The current priority can differ from the initial
-        priority because a process may have its priority decremented by process control.
-        For example: the current priority for a CPU bound process that started out
-        with an initial priority of 150 may go down to 149, 148, and so on, as it
-        executes and then return to a current priority (that matches the initial priority)
-        of 150 when it becomes I/O bound. ``` ``` NOTENOTE If the process stops during
-        a measurement, CURRENT-PRIORITY-END and INITIAL-PRIORITY-END may have unexpected
-        values as operating system can modify these counter fields during the shutdown
-        of process. ``` Configuring a PROCESS entity measurement with intervals, then
-        plotting the INITIAL-PRIORITY-START/INITIAL-PRIORITY-END and CURRENT-PRIORITY-START/CURRENT-PRIORITY
-        counters, can provide a historical representation of the priority changes
-        for a process or set of processes across measurement intervals.  ``` NOTENOTE
-        Viewing the INITIAL-PRIORITY-START/INITIAL-PRIORITY-END and CURRENT-PRIORITY-
-        START/CURRENT-PRIORITY-END counter value pairs with LISTACTIVE, MEASREADACTIVE,
-        MEAS_READACTIVE_ or MEAS_READACTIVE_MANY_, during a running measurement, produces
-        a value of zero for the START counter and the existing value for the END counter.
-        ``` The PAGE-SIZE-BYTES field for PROCESS entities is supported only in Legacy
-        Style records for pre-H-series Measure data files. Although this field may
-        still be populated by Measure G12 and later G-series PVUs, the field is obselete
-        in H-series and later RVUs.  In H-series and later RVUs, all byte-count fields
-        accommodate 64 bits. Field names ending in -F are no longer used in ZMS style
-        records but remain available to applications that request data in legacy style.  Counters
-        that report maximum numbers (counters that have MAX in their names) are valid
-        only in Legacy style. In H-series and later RVUs, the value of any such counter
-        is 1.  In Measure H02, H03, H04, J01, and J02 PVUs, the ZMS style PROCESS
-        displays report a subsystem version of 2.  In Measure H05/J03 and later PVUs,
-        the ZMS style PROCESS displays report a subsystem version of 3.  In Measure
-        H06/J04 and later PVUs, ZMS style PROCESS and ZMS style CPU support the LOCKED-PAGES-END
-        and LOCKED-PAGES- START counters. Note the following usage considerations
-        when using these counters:  ``` The sum of page frames reported as locked
-        in all PROCESS entities for a CPU does not need to equal the page frames reported
-        as The initial record of the PROCESS entity is created when the process is
-        started and not at the measurement start time. During active retrieval the
-        current counter values are shown taking in consideration the delta time between
-        the initial record and the current record. The counters ACCEL-BUSY-TIME, NATIVE-BUSY-TIME,
-        and TNS-BUSY-TIME are calculated, returned, and displayed only if a PROCESSH
-        measurement is active in the CPU where the process is running. Otherwise,
-        the counters are not displayed, and their values in the returned record are
-        zero. If the PROCESSH measurement has not been active since the process was
-        started (which is likely for most system processes), the counter values will
-        not be correct. The counters are calculated based on the number of PROCESSH
-        samples observed in the applicable code region, and so for more You do not
-        need to explicitly add the PROCESS entity for the PROCESSH entity. When you
-        add the PROCESSH entity to a measurement, the corresponding PROCESS entity
-        is automatically added for the measured process. You can use the PROCESS entity
-        to get more information about the measured process with two exceptions: the
-        ALLTIME and ALLINTR measurements. Although Measure creates a PROCESS record
-        for each of these measurements, these PROCESS records are just placeholders
-        because these two measurements do not involve measuring any specific processes.
-        NOTENOTE In H-series and later RVUs, the ALLINTR option for PROCESSH sampling
-        is disabled. On systems running H-series and later RVUs, all interrupt handlers
-        are individual and separate Interrupt/ Auxiliary Processes and so can be sampled
-        and measured individually.  In Measure G09 and later PVUs, the PROCESSH entity
-        supports the use of OSS file pathnames in place of Guardian file names. The
-        G09 PROCESSH displays OSS file pathnames in PROCESSH reports and provides
-        direct mapping between external structured records and the new OSSNAMES structured
-        record output. Entity specification for G09 PVU PROCESSH entities differs
-        from the syntax for D-series and pre-G09 PVU entities. The DDL records also
-        differ. Two bins, UNMATCHED SAMPLES 32-BIT and UNMATCHED SAMPLES 64-BIT, hold
-        the samples of code that execute in data segment, for example, Java programs.  ```
-        TopicTopic Entity specification syntax for PROCESSH entities DDL record for
-        PROCESSH entities DDL field definitions for PROCESSH entities Usage notes
-        for PROCESSH entities Examples of PROCESSH measurements ``` SubtopicsSubtopics
-        Entity Specification Syntax for PROCESSH EntitiesEntity Specification Syntax
-        for PROCESSH Entities DDL Record for PROCESSH Entities (ZMS Style)DDL Record
-        for PROCESSH Entities (ZMS Style) DDL Record for PROCESSH Entities (Legacy
-        Style)DDL Record for PROCESSH Entities (Legacy Style) Common and ZMS Style
-        Only ID Field DDL Definitions for PROCESSH EntitiesCommon and ZMS Style Only
-        ID Field DDL Definitions for PROCESSH Entities Common and ZMS Style Only Counter
-        Field DDL Definitions for PROCESSH EntitiesCommon and ZMS Style Only Counter
-        Field DDL Definitions for PROCESSH Entities Legacy Style Only Counter Field
-        DDL Definition for PROCESSH EntitiesLegacy Style Only Counter Field DDL Definition
-        for PROCESSH Entities Usage Notes for H-series and later PROCESSH EntitiesUsage
-        Notes for H-series and later PROCESSH Entities Usage Notes for G-Series PROCESSH
-        EntitiesUsage Notes for G-Series PROCESSH Entities Examples of PROCESSH measurementsExamples
-        of PROCESSH measurements'
-      queryable: true
-      derived_formula: 'Note the following usage considerations when using these counters:  ```
-        The sum of page frames reported as locked in all PROCESS entities for a CPU
-        does not need to equal the page frames reported as The initial record of the
-        PROCESS entity is created when the process is started and not at the measurement
-        start time. During active retrieval the current counter values are shown taking
-        in consideration the delta time between the initial record and the current
-        record.'
-    accel_busy_samplesaccel_busy_samples:
-      type: integer
-      description: "Number of times the sampling operation found the measured code\
-        \ executing accelerated code. This counter applies only to measurements taken\
-        \ on a TNS/X, TNS/R or TNS/E system. ACCEL\u2011BUSY\u2011SAMPLES + TNS\u2011\
-        BUSY\u2011SAMPLES = CODE\u2011RANGE\u2011BUSY\u2011SAMPLES. Counter type:\
-        \ Sampling."
-      queryable: true
-      derived_formula: Number of times the sampling operation found the measured code
-        executing accelerated code.
-      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
-        you need more memory. AUDIT-BUF-FORCES should be close to zero.
-    code_range_busy_samplescode_range_busy_samples:
-      type: integer
-      description: "Number of times the sampling operation found the measured code\
-        \ range executing. For TNS/X, TNS/R, and TNS/E systems running TNS and accelerated\
-        \ code, CODE\u2011RANGE\u2011BUSY\u2011SAMPLES=ACCEL\u2011BUSY\u2011SAMPLES\
-        \ + TNS\u2011BUSY\u2011SAMPLES. For TNS/R and TNS/E systems running TNS/R\
-        \ native code, CODE\u2011RANGE\u2011BUSY\u2011SAMPLES = TNSR\u2011BUSY\u2011\
-        SAMPLES. For TNS/E systems running TNS/E native code, CODE\u2011RANGE\u2011\
-        BUSY\u2011SAMPLES = NATIVE\u2011BUSY\u2011SAMPLES. Counter type: Sampling."
-      queryable: true
-      derived_formula: Number of times the sampling operation found the measured code
-        range executing.
-    code_space_busy_samplescode_space_busy_samples:
-      type: integer
-      description: 'Number of times the sampling operation found the measured code
-        space executing. Counter type: Sampling.'
-      queryable: true
-      derived_formula: Number of times the sampling operation found the measured code
-        space executing.
-    native_busy_samplesnative_busy_samples:
-      type: integer
-      description: '(ZMS Style only) Number of times the sampling operation found
-        the measured code executing native code. Counter type: Sampling.'
-      queryable: true
-      derived_formula: (ZMS Style only) Number of times the sampling operation found
-        the measured code executing native code.
-    process_busy_samplesprocess_busy_samples:
-      type: integer
-      description: 'Number of times the sampling operation found the process executing.
-        Counter type: Sampling.'
-      queryable: true
-      derived_formula: Number of times the sampling operation found the process executing.
-    tns_busy_samplestns_busy_samples:
-      type: integer
-      description: "Number of times the sampling operation found the measured code\
-        \ executing TNS code. This counter applies only to measurements taken on a\
-        \ TNS/X, TNS/R, or TNS/E system. ACCEL\u2011BUSY\u2011SAMPLES + TNS\u2011\
-        BUSY\u2011SAMPLES = CODE\u2011RANGE\u2011BUSY\u2011SAMPLES. Counter type:\
-        \ Sampling."
-      queryable: true
-      derived_formula: Number of times the sampling operation found the measured code
-        executing TNS code.
-    tnsr_busy_samplestnsr_busy_samples:
-      type: integer
-      description: "(Legacy Style only) Number of times the sampling operation found\
-        \ the measured code executing TNS/R native code. This counter applies only\
-        \ to measurements taken on a TNS/R system. TNSR\u2011BUSY\u2011SAMPLES = CODE\u2011\
-        RANGE\u2011BUSY\u2011SAMPLES. Counter type: Sampling."
-      queryable: true
-      derived_formula: (Legacy Style only) Number of times the sampling operation
-        found the measured code executing TNS/R native code.
-    examples of processh measurementsexamples of processh measurements:
-      type: integer
-      description: "``` This example tracks the use of system procedures by all processes\
-        \ in CPU 7. It shows the use of the system code and system library activity\
-        \ for the TNS/R system, and produces sampling reports for all of the system\
-        \ procedures run on a TNS/R system. The use of ALLTIME measures all system\
-        \ code and system library activity for all processes in the CPU. ``` #####\
-        \ NOTENOTE  ``` A TNS/R system has more than one system code (SC) file. ```\
-        \ ``` This example measures SCR and SLR code spaces. To support the TNS/R\
-        \ operating environment, the SYSGEN program creates a new object file (file\
-        \ code 700), named TSYSCLR, which is placed in $SYSTEM.SYSnn subvolume. This\
-        \ object file can be used to sample TNS/R system code (SCR) and the TNS/R\
-        \ system library (SLR). Because TNS/R code spaces contain no code maps, the\
-        \ samples are displayed only for SCR and SLR. The TSYSCLR file is superseded\
-        \ in H-series and later RVUs, as described later in this list of examples.\
-        \ To sample TNS/R code spaces for SCR and SLR: ``` ``` This example describes\
-        \ how to check for shared run-time libraries (SRLs) in a program and how to\
-        \ include them in your program\u2019s PROCESSH measurement: 1. Identify all\
-        \ the SRLs associated with a particular program using the Native Object File\
-        \ Tool (NOFT) utility. 2. Add the SRLs as user library files (URLs) in MEASCOM.\
-        \ The accounting and mapping of the PROCESSH total samples count for the program\
-        \ and the sum of the individual code-space sample counts now match as closely\
-        \ as currently possible. If a program uses SRLs: 1. Use the NOFT LISTSRLINFO\
-        \ command to identify the SRLs: ``` ``` + ``` ``` + ``` ``` ADD PROCESSH ALLTIME\
-        \ 7 (SC $SYSTEM.SYSnn.TSC) ``` ``` ADD PROCESSH ALLTIME 7 (SL $SYSTEM.SYSnn.TSL)\
-        \ ``` ``` + ``` ``` + ``` ``` ADD PROCESSH proc spec (SCR $SYSTEM.SYSnn.TSYSCLR)\
-        \ ``` ``` ADD PROCESSH proc spec (SLR $SYSTEM.SYSnn.TSYSCLR) ``` ``` noft>\
-        \ FILE $VOL.SUBVOL.FILENAME ```  ``` 2. In MEASCOM, add these SRLs as ULRs\
-        \ to the PROCESSH configuration of the program: ``` ``` No TSYSCLR file exists\
-        \ in H-series and later RVUs. That file is replaced by the two system DLLs\
-        \ INITDLL and MCPDLL. This example reflects the H-series and later library\
-        \ structure. The code-space identifier SL designates nonnative system library\
-        \ code: ```"
-      queryable: true
-      derived_formula: 'The accounting and mapping of the PROCESSH total samples count
-        for the program and the sum of the individual code-space sample counts now
-        match as closely as currently possible. In MEASCOM, add these SRLs as ULRs
-        to the PROCESSH configuration of the program: ``` ``` No TSYSCLR file exists
-        in H-series and later RVUs.'
-    servernetservernet:
-      type: integer
-      description: 'On L-series RVUs, the SERVERNET entity provides information about
-        I/O operations involving the clients of the system interconnct; that is, the
-        Message System, the Storage Subsystem and the Comm Subsystem. The counters
-        allow a user to monitor all system interconnect activity of these subsystems.
-        On L01, H07/J05, or later PVUs, ENDPOINT replaces SERVERNET as the name for
-        this entity, although SERVERNET is accepted on the command line. On L-series
-        RVUs, the NCSL and RDMA Services layers have replaced the ServerNet Millicode
-        Layer. L-series RVUs are instrumented with the FABRIC entity, using NCSL counters.
-        The FABRIC entity provides a lower, more granular level of instrumentation.
-        The SERVERNET entity measures both intrasystem traffic and intersystem traffic
-        (for example, all interprocessor traffic for remote nodes conncted through
-        either Expand-over-ServerNet clustering in G-, H-, and J-series RVUs or Expand-over-IB
-        clustering in L-series RVUs). Measure refers to the latter as Remote Interprocessor
-        Communication or RIPC.  ``` Object File : \ node .$ system .sys nn .ztcpsrl
-        File Format : ELF Scope : (none) Case : Sensitive noft> ``` ``` SRL Name :
-        # ZLANCSRL: 0 ZLANDSRL: 1 ``` ``` LISTSRLINFO ``` ``` + + + ``` ``` ADD PROCESSH
-        $VOL.SUBVOL.FILENAME (UCR FILE-NAME) ADD PROCESSH $VOL.SUBVOL.FILENAME (ULR
-        ZLANCSRL) ADD PROCESSH $VOL.SUBVOL.FILENAME (ULR ZLANDSRL) ``` ``` + + + +
-        + + ADD PROCESSH $SYSTEM.SYS01.TSYSDP2 (2, *) ($SYSTEM.SYS01.TSYSDP2) ```
-        ``` ADD PROCESSH $SYSTEM.SYS01.TSYSDP2 (2, *) ($SYSTEM.SYS01.INITDLL) ```
-        ``` ADD PROCESSH $SYSTEM.SYS01.TSYSDP2 (2, *) ($SYSTEM.SYS01.MCPDLL) ``` ```
-        ADD PROCESSH ALLTIME 1 ($SYSTEM.SYS01.INITDLL) ``` ``` ADD PROCESSH ALLTIME
-        1 ($SYSTEM.SYS01.MCPDLL) ``` ``` ADD PROCESSH ALLTIME 1 (SL $SYSTEM.SYS01.TSL)
-        ```  ##### NOTENOTE  ``` You can measure ServerNet addressable controllers
-        with a D-series RVU measurement application if it specifies all controllers
-        (ADD CONTROLLER *) or only a CPU number (ADD CONTROLLER 2). To measure specific
-        SACs, you must modify the entity identifiers. ``` ``` TopicTopic Entity specification
-        syntax for SERVERNET entities DDL record for SERVERNET entities DDL field
-        definitions for SERVERNET entities Usage notes for SERVERNET entities Examples
-        of SERVERNET measurements ``` SubtopicsSubtopics  ``` Entity Specification
-        Syntax for SERVERNET EntitiesEntity Specification Syntax for SERVERNET Entities
-        DDL Record for SERVERNET Entities (ZMS Style)DDL Record for SERVERNET Entities
-        (ZMS Style) DDL Record for SERVERNET Entities (Legacy Style)DDL Record for
-        SERVERNET Entities (Legacy Style) Common and ZMS Style Only ID Field DDL Definitions
-        for SERVERNET EntitiesCommon and ZMS Style Only ID Field DDL Definitions for
-        SERVERNET Entities Common and ZMS Style Only Counter Field DDL Definitions
-        for SERVERNET EntitiesCommon and ZMS Style Only Counter Field DDL Definitions
-        for SERVERNET Entities Legacy Style Only ID Field DDL Definitions for SERVERNET
-        EntitiesLegacy Style Only ID Field DDL Definitions for SERVERNET Entities
-        Legacy Style Only Counter Field DDL Definitions for SERVERNET EntitiesLegacy
-        Style Only Counter Field DDL Definitions for SERVERNET Entities Usage Notes
-        for SERVERNET EntitiesUsage Notes for SERVERNET Entities Usage Notes for SERVERNET
-        IPC and RIPCUsage Notes for SERVERNET IPC and RIPC Usage Notes for CLIMsUsage
-        Notes for CLIMs Examples of Configuring Measurements for SERVERNET ClusterExamples
-        of Configuring Measurements for SERVERNET Cluster Examples of Configuring
-        Measurements for CLIMsExamples of Configuring Measurements for CLIMs ```'
-      queryable: true
-      derived_formula: On L-series RVUs, the SERVERNET entity provides information
-        about I/O operations involving the clients of the system interconnct; that
-        is, the Message System, the Storage Subsystem and the Comm Subsystem.
-    node_classnode_class:
-      type: integer
-      description: SAC type as defined in the system configuration database.
-      queryable: true
-      derived_formula: SAC type as defined in the system configuration database..
-    read_bytesread_bytes:
-      type: integer
-      description: 'Total number of bytes transferred as a result of read requests
-        or pull operations and the bytes received in pre-push operations from the
-        linker CPU. Counter type: Accumulating.'
-      queryable: true
-      derived_formula: Total number of bytes transferred as a result of read requests
-        or pull operations and the bytes received in pre-push operations from the
-        linker CPU.
-    server_qtimeserver_qtime:
-      type: integer
-      description: 'Time (in microseconds) between the receipt of messages in this
-        processor and the issuing of replies. This value does not include READ- QTIME
-        for Message System read operations to pull the data to the CPU. The counter
-        helps to isolate Message System latency time from the time required for the
-        receiving process to respond to a request. This applies only to IPC and RIPC
-        records. Counter type: Accumulating.'
-      queryable: true
-      derived_formula: This value does not include READ- QTIME for Message System
-        read operations to pull the data to the CPU.
-    sqlstmtsqlstmt:
-      type: integer
-      description: "The SQLSTMT entity provides information about all SQL statements\
-        \ within the SQL process. There is one SQLSTMT counter record for each SQL\
-        \ statement in each procedure or module of a program that contains SQL function.\
-        \  ``` NOTENOTE Overhead cost for measuring SQL statements is higher than\
-        \ the cost of measuring other entities. A practical use is to measure SQLSTMT\
-        \ periodically for application\u2011program performance tuning only. Be sure\
-        \ to configure SQLSTMT to measure only the programs to be examined. ``` In\
-        \ Measure G09 and later PVUs, SQLSTMT entity operation supports SQL/MX and\
-        \ OSS file pathnames. SQL/MX program objects and run units are defined only\
-        \ in the OSS file system space. In the SQL/MP environment, SQL procedures\
-        \ and run units are part of the program object file that executes them. In\
-        \ SQL/MX, however, SQL procedures and modules are compiled and stored separately\
-        \ from the program object file that executes them.  ``` 2 ```  In Measure\
-        \ G11 and later PVUs, the SQLSTMT entity displays ANSI SQL names in SQLSTMT\
-        \ reports. In Measure H01 and later PVUs, MEASCOM LIST commands accept ANSI\
-        \ SQL/MX release 2 module object names (run unit names) in SQLSTMT entity\
-        \ specifications. SQL/MX module names (previously called run unit names),\
-        \ can be:  ``` Measure PVUsMeasure PVUs Length (In Characters)Length (In Characters)\
-        \ G10 and earlierUp to 128 G11 and later Up to 784 ``` If specific module\
-        \ names are not specified in SQL/MX, a system-generated name based on the\
-        \ Julian timestamp at the time of preprocessing will be assigned. For information\
-        \ regarding the naming and indexing of statements in SQL/MX modules, see the\
-        \ preprocessor output file.  ``` TopicTopic Entity specification syntax for\
-        \ SQLSTMT entities DDL record for SQLSTMT entities DDL field definitions for\
-        \ SQLSTMT entities Usage notes for SQLSTMT entities Example of SQLSTMT measurement\
-        \ ``` SubtopicsSubtopics Entity Specification Syntax for SQLSTMT EntitiesEntity\
-        \ Specification Syntax for SQLSTMT Entities DDL Record for SQLSTMT Entities\
-        \ (ZMS Style)DDL Record for SQLSTMT Entities (ZMS Style) DDL Record for SQLSTMT\
-        \ Entities (Legacy Style)DDL Record for SQLSTMT Entities (Legacy Style) Common\
-        \ and ZMS Style Only ID Field DDL Definitions for SQLSTMT EntitiesCommon and\
-        \ ZMS Style Only ID Field DDL Definitions for SQLSTMT Entities Common and\
-        \ ZMS Style Only Counter Field DDL Definitions for SQLSTMT EntitiesCommon\
-        \ and ZMS Style Only Counter Field DDL Definitions for SQLSTMT Entities Legacy\
-        \ Style Only ID Field DDL Definitions for SQLSTMT EntitiesLegacy Style Only\
-        \ ID Field DDL Definitions for SQLSTMT Entities Legacy Style Only Counter\
-        \ Field DDL Definitions for SQLSTMT EntitiesLegacy Style Only Counter Field\
-        \ DDL Definitions for SQLSTMT Entities Usage Notes for All SQLSTMT EntitiesUsage\
-        \ Notes for All SQLSTMT Entities Usage Notes for L-series and later SQLSTMT\
-        \ EntitiesUsage Notes for L-series and later SQLSTMT Entities Usage Notes\
-        \ for H-series and later SQLSTMT EntitiesUsage Notes for H-series and later\
-        \ SQLSTMT Entities Usage Notes for G-Series SQLSTMT EntitiesUsage Notes for\
-        \ G-Series SQLSTMT Entities ExampleExample"
-      queryable: true
-      derived_formula: '``` In Measure G09 and later PVUs, SQLSTMT entity operation
-        supports SQL/MX and OSS file pathnames.'
-    systemsystem:
-      type: integer
-      description: 'The SYSTEM entity provides information about network traffic through
-        Expand line handlers. A network link involves at least two processes: the
-        linker that initiated the link and the listener that accepted the link. Because
-        the Measure subsystem can measure only the local system, the measurement data
-        reflects only one side of each link: the linker or the listener, but not both.
-        Which network links are measured depends on the entity specification in the
-        measurement configuration: If you specify all systems, the Measure subsystem
-        counts the local end of all messages passed between the local system and any
-        remote system. If you specify a local CPU, the Measure subsystem counts the
-        local end of all messages passed between the local system and any remote system
-        through the line-handler processes (primary or backup) in the specified CPU.
-        If you specify a remote system, the Measure subsystem counts the local end
-        of all messages passed between the local system and the remote system. For
-        a multi-CPU path (superpath), the Measure subsystem reports one active path
-        only. Entity specification syntax and DDL record Legacy Styles are the same
-        for G-series PVU SYSTEM entities as for D-series PVU SYSTEM entities.  ```
-        TopicTopic Entity specification syntax for SYSTEM entities DDL record for
-        SYSTEM entities DDL field definitions for SYSTEM entities Usage notes for
-        SYSTEM entities ``` SubtopicsSubtopics Entity Specification Syntax for SYSTEM
-        EntitiesEntity Specification Syntax for SYSTEM Entities DDL Record for All
-        SYSTEM Entities (ZMS Style)DDL Record for All SYSTEM Entities (ZMS Style)
-        DDL Record for All SYSTEM Entities (Legacy Style)DDL Record for All SYSTEM
-        Entities (Legacy Style)  ``` SQL Statement Procedure ''CATALOG_12.SCHEMA_34.MODULE_56
-        '' Index # Process Pri OSSPID: Program OSSPath: Userid Creatorid Ancestor
-        Format Version: H01 Data Version: H01 Subsystem Version: 1 Local System ----------------------------------------------------------------------------
-        Elapsed-Busy-Time 4.17 ms Calls 0.17 /s Elapsed-Sort-Time Sorts Elapsed-Recompile-Time
-        Recompiles Messages 0.22 /s Message-Bytes 931.00 /s Lock-Waits Escalations
-        Timeouts Disc-Reads Records-Accessed 0.17 /s Records-Used 0.17 /s ```  ```
-        Common ID Field DDL Definitions for SYSTEM EntitiesCommon ID Field DDL Definitions
-        for SYSTEM Entities Common Counter Field DDL Definitions for SYSTEM EntitiesCommon
-        Counter Field DDL Definitions for SYSTEM Entities Usage Notes for All SYSTEM
-        EntitiesUsage Notes for All SYSTEM Entities ```'
-      queryable: true
-      derived_formula: 'Which network links are measured depends on the entity specification
-        in the measurement configuration: If you specify all systems, the Measure
-        subsystem counts the local end of all messages passed between the local system
-        and any remote system.'
-    response_timeresponse_time:
-      type: integer
-      description: 'Time the terminal process spent on terminal response.   A transaction
-        is a read from a terminal followed by a write to the terminal. Terminal response
-        is the interval between the end of the read and the beginning of the write.
-        Block mode operations read a function key and then read data. This counter
-        does not include the time between the two reads. For SNAX lines, this counter
-        is always zero. Counter type: Response time.'
-      queryable: true
-      derived_formula: Block mode operations read a function key and then read data.
-    tnsr_busy_time:
-      type: integer
-      description: Time that the CPU was busy executing TNS/R native code. This counter
-        applies only to measurements taken on a TNS/R system and is derived from other
-        counters.
-      queryable: true
-      derived_formula: CPU-BUSY-TIME - (INTR-BUSY-TIME + TNS-BUSY-TIME + ACCEL-BUSY-TIME)
-        = TNSR-BUSY-TIME
 tmf:
   source_file: measurefiles/tmfcsv
   ddl_record: ZMSTMF
@@ -5560,15 +3838,6 @@ tmf:
   - JOIN cpu ON (system_name, cpu_num, from_timestamp) for CPU context
   - JOIN proc ON (system_name, cpu_num, from_timestamp) for process activity
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
     system_name:
       queryable: true
       type: string
@@ -5578,12 +3847,6 @@ tmf:
       type: integer
       description: "(MANUAL DEF: Number of the CPU on which the measurement was taken.\
         \ For interprocessor communications (IPC) records, CPU\u2011NUM is MYCPU.)"
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -5616,18 +3879,6 @@ tmf:
         for the format of the external record. When data collected on systems of differing
         product versions are stored in the same structured files, the template version
         for all records is the one used to create the structured file.)'
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -5774,56 +4025,6 @@ tmf:
       counter_type: Accumulating
       description: 'Number of PIO bytes received by the CPU (MANUAL DEF: Number of
         PIO bytes received by the CPU. Counter type: Accumulating.)'
-    tmp_work_aqt:
-      type: integer
-      description: The average time that each work item spends waiting on the TMP
-        queue.
-      queryable: true
-      derived_formula: TMP-WORK-QTIME / TMP-WORK
-    home_net_trans_qmax:
-      type: integer
-      description: (Legacy Style only) Maximum number of items on the queue described
-        by the HOME-NET-TRANS-QTIME counter.
-      queryable: true
-    home_trans_qmax:
-      type: integer
-      description: (Legacy Style only) Maximum number of items on the queue described
-        by the HOME-TRANS-QTIME counter.
-      queryable: true
-    remote_trans_qmax:
-      type: integer
-      description: (Legacy Style only) Maximum number of items on the queue described
-        by the REMOTE-TRANS-QTIME counter.
-      queryable: true
-    trans_backout_qmax:
-      type: integer
-      description: (Legacy Style only) Maximum number of items on the queue described
-        by the TRANS-BACKOUT-QTIME counter.
-      queryable: true
-    home_trans_art:
-      type: integer
-      description: (ZMS Style only) The average response time that each home transaction
-        spends waiting or being processed by TMF.
-      queryable: true
-      derived_formula: HOME-TRANS-QTIME / HOME-TRANS
-    home_net_trans_art:
-      type: integer
-      description: (ZMS Style only) The average response time that each request spends
-        waiting or being processed by TMF.
-      queryable: true
-      derived_formula: HOME-NET-TRANS-QTIME / HOME-NET-TRANS
-    remote_trans_art:
-      type: integer
-      description: (ZMS Style only) The average response time that each remote home
-        net transaction spends waiting or being processed by TMF.
-      queryable: true
-      derived_formula: REMOTE-TRANS-QTIME / REMOTE-TRANS
-    trans_backout_art:
-      type: integer
-      description: (ZMS Style only) The average response time that each aborting transaction
-        spends waiting or being processed by TMF.
-      queryable: true
-      derived_formula: TRANS-BACKOUT-QTIME / ABORTING-TRANS
 udef:
   source_file: measurefiles/udefcsv
   ddl_record: ZMSUDEF
@@ -5849,15 +4050,6 @@ udef:
   join_hints:
   - JOIN proc ON (system_name, cpu_num, pin, from_timestamp) for process context
   columns:
-    u_loadid.loadid:
-      queryable: false
-      type: string
-    u_loadid.load_id.prefix_id:
-      queryable: false
-      type: string
-    u_loadid.load_id.interval_id:
-      queryable: false
-      type: string
     system_name:
       queryable: true
       type: string
@@ -5867,12 +4059,6 @@ udef:
       type: integer
       description: "(MANUAL DEF: Number of the CPU on which the measurement was taken.\
         \ For interprocessor communications (IPC) records, CPU\u2011NUM is MYCPU.)"
-    os_version.letter:
-      queryable: true
-      type: string
-    os_version.number:
-      queryable: true
-      type: integer
     object_uid:
       queryable: false
       type: string
@@ -5905,18 +4091,6 @@ udef:
         for the format of the external record. When data collected on systems of differing
         product versions are stored in the same structured files, the template version
         for all records is the one used to create the structured file.)'
-    format_version.letter:
-      queryable: false
-      type: string
-    format_version.number:
-      queryable: false
-      type: integer
-    data_version.letter:
-      queryable: false
-      type: string
-    data_version.number:
-      queryable: false
-      type: integer
     subsystem_version:
       queryable: false
       type: integer
@@ -5945,22 +4119,6 @@ udef:
         measured process.)'
       derived_formula: None specified
       thresholds: None specified
-    userid.group:
-      queryable: true
-      type: integer
-      description: Process accessor ID (PAID) group component
-    userid.user:
-      queryable: true
-      type: integer
-      description: Process accessor ID (PAID) user component
-    creatorid.group:
-      queryable: true
-      type: integer
-      description: Creator access ID (CAID) group component
-    creatorid.user:
-      queryable: true
-      type: integer
-      description: Creator access ID (CAID) user component
     process_name:
       queryable: true
       type: string
@@ -5968,18 +4126,6 @@ udef:
         process.)'
       derived_formula: None specified
       thresholds: None specified
-    program_file_name.volume:
-      queryable: true
-      type: string
-      description: Volume of the program object file
-    program_file_name.subvol:
-      queryable: true
-      type: string
-      description: Subvolume of the program object file
-    program_file_name.filename:
-      queryable: true
-      type: string
-      description: Filename of the program object file
     osspid:
       queryable: true
       type: integer
@@ -6026,30 +4172,6 @@ udef:
         VOLUME subfield.)'
       derived_formula: None specified
       thresholds: None specified
-    program_file_name_mid.pathid:
-      queryable: false
-      type: string
-      description: Internal OSS MID PATHID for program file; zeros for non-OSS
-    program_file_name_mid.crvsn:
-      queryable: false
-      type: string
-      description: Creation Version Serial Number for program file; zeros for non-OSS
-    u_gmom.gmom.gmom_node:
-      queryable: true
-      type: integer
-      description: Expand node number of GMOM process (NetBatch); 0 if not NetBatch
-    u_gmom.gmom.gmom_cpu:
-      queryable: true
-      type: integer
-      description: CPU of GMOM process (NetBatch); 0 if not NetBatch
-    u_gmom.gmom.gmom_pin:
-      queryable: true
-      type: integer
-      description: PIN of GMOM process (NetBatch); 0 if not NetBatch
-    u_gmom.gmom.gmom_jobid:
-      queryable: true
-      type: integer
-      description: NetBatch job ID assigned by GMOM; 0 if not NetBatch
     gmom_sysname:
       queryable: true
       type: string
@@ -6101,65 +4223,6 @@ udef:
       type: integer
       description: "Value of the user-defined counter; interpretation depends on counter\
         \ type (MANUAL DEF: (ZMS Style only) Value of a user\u2011defined counter.)"
-      derived_formula: None specified
-      thresholds: None specified
-    counts:
-      type: integer
-      description: (Legacy Style only) Value of a user-defined accumulating counter.
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    max_value:
-      type: integer
-      description: (Legacy Style only) Maximum number of items on the queue described
-        by the TIME-VALUE counter.
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    time_value:
-      type: integer
-      description: (Legacy Style only) Redefined. See COUNTS.
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    creatorid:
-      type: integer
-      description: Creator access ID (CAID). Identifies the creator of the process
-        (divided into GROUP and USER).
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    gmom:
-      type: integer
-      description: GMOM structure containing node, cpu, pin, and jobid of the NetBatch
-        job that initiated the process.
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    gmom_full_id:
-      type: integer
-      description: 64-bit redefinition of the individual GMOM fields as a single value.
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    program_file_name:
-      type: integer
-      description: Name of the object file the process is executing (VOLUME, SUBVOLUME,
-        FILENAME).
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    program_file_name_mid:
-      type: integer
-      description: Internal format representation of an OSS file pathname (PATHID
-        and CRVSN).
-      queryable: true
-      derived_formula: None specified
-      thresholds: None specified
-    userid:
-      type: integer
-      description: Process accessor ID (PAID), helps identify the owner of the process.
-      queryable: true
       derived_formula: None specified
       thresholds: None specified
 derived_metrics:

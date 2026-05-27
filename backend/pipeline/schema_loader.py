@@ -46,6 +46,10 @@ class SchemaLoader:
         
         # Validate each table has columns
         for table_name, table_def in self.schema.items():
+            # Skip top-level configuration/metadata keys that aren't tables
+            if table_name in ['business_rules', 'derived_metrics']:
+                continue
+                
             if isinstance(table_def, dict):
                 if 'columns' not in table_def:
                     raise ValueError(f"Table '{table_name}' missing 'columns' definition")
