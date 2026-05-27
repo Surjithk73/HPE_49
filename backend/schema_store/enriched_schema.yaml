@@ -1,4 +1,4 @@
-﻿# ================================================================
+# ================================================================
 # HPE NonStop Measure â€” Schema Definition
 # Source:    Column headers from measurefiles/ CSV exports
 # Reference: HPE NonStop Measure Reference Manual (10-180500-Q, Sep 2025)
@@ -62,6 +62,17 @@
 # subsystem_version            â€” Subsystem version supplied by the measured subsystem
 # error                        â€” 0=no error; >0=error (no data); <0=warning (data present with caveats)
 # ----------------------------------------------------------------
+
+business_rules: |
+  PROCESS NAME CONVENTIONS in macht413.proc: ALL processes in this dataset start
+  with '$'. There are NO processes without a '$' prefix — do NOT use
+  "NOT LIKE '$%'" to identify user processes; it will return zero rows.
+  Disk processes match LIKE '$DATA%' OR '$SSD%' OR '$AUDIT%'.
+  Core system processes are: $SYSTEM, $MONITOR, $MSENGER, $VIRTUAL, $NULL,
+  $OSS, $SWAP, $SWAP01, $SWAP23, $SWAP34, $NCP, $TMP.
+  User/application processes are everything else (e.g. $BEER, $CHAMP, $GANESH).
+  When categorising processes, always use explicit IN() or LIKE patterns based
+  on the actual names above — never assume generic HPE naming conventions.
 
 cpu:
   source_file: measurefiles/cpucsv

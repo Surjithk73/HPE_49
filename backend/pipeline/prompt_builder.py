@@ -57,7 +57,7 @@ class PromptBuilder:
                 blocks.append(
                     f"### Example {i}\n"
                     f"INPUT: {query}\n"
-                    f"OUTPUT:\n{sql}"
+                    f"OUTPUT:\n<thought>\nMapping metrics for: {query}\n</thought>\n```sql\n{sql}\n```"
                 )
             few_shot_section = (
                 "\nEXAMPLES (follow this INPUT/OUTPUT pattern exactly):\n"
@@ -70,7 +70,8 @@ class PromptBuilder:
 Generate a single valid PostgreSQL SELECT query for the schema 'macht413'.
 
 STRICT RULES:
-- Output ONLY the raw SQL query. No explanation, no markdown, no backticks.
+- You must output a brief `<thought>` block before writing the SQL. Use this block to explicitly map the user's requested metrics to the specific schema tables/columns and explain your reasoning.
+- After the `<thought>` block, output ONLY the raw SQL query wrapped in standard markdown code fences (```sql\n...\n```). No other explanation.
 - Only SELECT statements. No DDL/DML.
 - Always qualify tables: macht413.table_name.
 - Only use columns shown in the schema context; never invent column names.
@@ -103,15 +104,6 @@ CROSS-TABLE RULES:
 - CRITICAL — cross-table joins on timestamps: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
 - CRITICAL — multi-table aggregation performance: When joining 3 or more tables that each have many rows (proc has 110k rows, file has 61k rows), ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results. Flat multi-table joins with DATE_TRUNC will time out. Pattern: WITH t1 AS (SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name, AGG(...) FROM macht413.table GROUP BY 1,2), ... SELECT ... FROM t1 LEFT JOIN t2 ON t1.system_name=t2.system_name AND t1.ts=t2.ts
 
-- PROCESS NAME CONVENTIONS in macht413.proc: ALL processes in this dataset start
-  with '$'. There are NO processes without a '$' prefix — do NOT use
-  "NOT LIKE '$%'" to identify user processes; it will return zero rows.
-  Disk processes match LIKE '$DATA%' OR '$SSD%' OR '$AUDIT%'.
-  Core system processes are: $SYSTEM, $MONITOR, $MSENGER, $VIRTUAL, $NULL,
-  $OSS, $SWAP, $SWAP01, $SWAP23, $SWAP34, $NCP, $TMP.
-  User/application processes are everything else (e.g. $BEER, $CHAMP, $GANESH).
-  When categorising processes, always use explicit IN() or LIKE patterns based
-  on the actual names above — never assume generic HPE naming conventions.
 - Intent Mapping: If a user asks for a metric using non-technical terms (e.g., "bottleneck", "sluggish"), map their intent to the closest matching column provided in the SCHEMA CONTEXT. If absolutely no logical match exists, use the most relevant primary metric for that table (e.g., cpu_busy_time for cpu).
 - Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 
@@ -119,9 +111,7 @@ SCHEMA CONTEXT:
 {schema_context}
 {few_shot_section}
 USER REQUEST:
-{normalized_query}
-
-SQL:"""
+{normalized_query}"""
         
         return prompt
     
@@ -141,7 +131,7 @@ SQL:"""
 
 The SQL you generated was invalid. Error: {error}
 Generated SQL: {failed_sql}
-Please fix the SQL and output only the corrected query.
+Please fix the SQL. Output your reasoning in a `<thought>` block, followed by the corrected SQL wrapped in ```sql\n...\n```.
 
 SQL:"""
         
@@ -183,7 +173,6 @@ CREATE TABLE macht413.cpu (
     assert "STRICT RULES:" in prompt
     assert "SCHEMA CONTEXT:" in prompt
     assert "USER REQUEST:" in prompt
-    assert "SQL:" in prompt
     assert f"LIMIT {MAX_ROWS}" in prompt
     assert "EXAMPLES" not in prompt  # Should be omitted when empty
     print("✓ Basic prompt structure correct")
@@ -216,7 +205,8 @@ CREATE TABLE macht413.cpu (
     assert "EXAMPLES (follow this INPUT/OUTPUT pattern exactly):" in prompt_with_examples
     assert "### Example 1" in prompt_with_examples
     assert "INPUT: Show CPU busy time per CPU" in prompt_with_examples
-    assert "OUTPUT:\nSELECT cpu_num" in prompt_with_examples
+    assert "OUTPUT:\n<thought>" in prompt_with_examples
+    assert "```sql\nSELECT cpu_num" in prompt_with_examples
     assert "### Example 2" in prompt_with_examples
     print("✓ Few-shot examples included correctly")
     

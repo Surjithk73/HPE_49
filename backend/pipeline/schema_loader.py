@@ -53,6 +53,10 @@ class SchemaLoader:
     def get_schema(self) -> Dict[str, Any]:
         """Get the complete schema."""
         return self.schema
+        
+    def get_business_rules(self) -> str:
+        """Get domain business rules defined in the schema."""
+        return self.schema.get('business_rules', '')
     
     def get_table(self, table_name: str) -> Dict[str, Any]:
         """

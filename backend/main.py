@@ -49,12 +49,12 @@ from pipeline.llm_engine import LLMError, make_llm_engine
 from pipeline.validator import SQLValidator
 from pipeline.executor import QueryExecutor, ExecutionError, detect_chart_type
 from pipeline.cache import SemanticCache
+from pipeline.few_shot_retriever import FewShotRetriever
 from pipeline.report_generator import generate_report
 from audit.query_log import AuditLog
 
 import psycopg2
 import yaml
-
 
 # ── Global component instances (initialised at startup) ───────────────────────
 _schema_loader = None
@@ -66,6 +66,7 @@ _llm_engine    = None
 _validator     = None
 _executor      = None
 _cache         = None
+_few_shot_retriever = None
 _audit         = None
 _few_shots     = []
 
@@ -116,6 +117,10 @@ async def lifespan(app: FastAPI):
     except Exception:
         _few_shots = []
         print("[QueryCraft] No few-shot examples found (using empty list)")
+        
+    # Few-shot retriever (RAG for prompts)
+    _few_shot_retriever = FewShotRetriever(_few_shots, persist_path="cache_store")
+    print("[QueryCraft] Few-shot retriever ready")
 
     print("[QueryCraft] Startup complete\n")
     yield
@@ -325,8 +330,9 @@ def run_query(req: QueryRequest):
             # Step 3 — Schema linking
             schema_context = _linker.link_schema(norm_text, domain)
 
-            # Step 4 — Prompt building
-            prompt = _builder.build_prompt(norm_text, schema_context, _few_shots)
+            # Step 4 — Prompt building (RAG for few-shots)
+            top_few_shots = _few_shot_retriever.get_top_k(norm_text, k=3) if _few_shot_retriever else []
+            prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots)
 
             # Capture the exact prompt for debugging
             debug_prompt = prompt

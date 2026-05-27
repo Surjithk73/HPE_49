@@ -539,6 +539,11 @@ class SchemaLinker:
             if companion_ddl:
                 schema_str += '\n' + companion_ddl
 
+        business_rules = self.schema.get('business_rules')
+        if business_rules:
+            rules_comment = '\n-- '.join(business_rules.splitlines())
+            schema_str += f"\n-- DOMAIN BUSINESS RULES:\n-- {rules_comment}\n"
+
         return schema_str
     
     def _select_relevant_columns(self, table_name: str, table_def: Dict,
