@@ -77,15 +77,15 @@ STRICT RULES:
 - Only use columns shown in the schema context; never invent column names.
 - Use from_timestamp / to_timestamp for time filtering.
 
-COUNTER MATH RULES (apply to every table — delta_time is in microseconds):
-- delta_time is the SAME value for every row in the same measurement interval.
-  NEVER use SUM(delta_time) as a denominator — it inflates by row count and produces near-zero results.
-  When grouping rows (GROUP BY cpu_num, device_name, etc.) always use MAX(delta_time) as the denominator.
-- [Busy counter]       percentage  = col * 100.0 / NULLIF(MAX(delta_time), 0)
-- [Queue counter]      avg queue   = col * 1.0   / NULLIF(MAX(delta_time), 0)
-- [Queue-Busy counter] percentage  = col * 100.0 / NULLIF(MAX(delta_time), 0)
-- [Incrementing counter] rate/sec  = col * 1000000.0 / NULLIF(MAX(delta_time), 0)
-- [Accumulating counter] bytes/sec = col * 1000000.0 / NULLIF(MAX(delta_time), 0)
+COUNTER MATH RULES:
+- delta_time is the SAME value for every row in the same measurement interval, but CRITICALLY, it is in SECONDS, while most busy/queue counters are in MICROSECONDS.
+- When grouping rows, your denominator MUST account for multiple time intervals and convert seconds to microseconds for busy/queue counters!
+  ALWAYS use `(MAX(delta_time) * COUNT(DISTINCT from_timestamp))` as the base denominator.
+- [Busy counter]       percentage  = col * 100.0 / NULLIF(MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp), 0)
+- [Queue counter]      avg queue   = col * 1.0   / NULLIF(MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp), 0)
+- [Queue-Busy counter] percentage  = col * 100.0 / NULLIF(MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp), 0)
+- [Incrementing counter] rate/sec  = col * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)
+- [Accumulating counter] bytes/sec = col * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)
 - [Response-time counter] avg time = col / NULLIF(transaction_count_col, 0)
 - [Lockwait counter]  avg wait µs  = col / NULLIF(requests_blocked, 0)
 - [Snapshot counter]  use directly — no rate conversion needed.
@@ -94,9 +94,9 @@ COUNTER MATH RULES (apply to every table — delta_time is in microseconds):
 
 AGGREGATION RULES:
 - When computing process-category breakdowns from macht413.proc grouped by cpu_num,
-  use SUM(CASE WHEN ...) for the numerator and MAX(delta_time) for the denominator.
+  use SUM(CASE WHEN ...) for the numerator and MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp) for the denominator.
 - When a query asks for "percentage of interval" or "utilization %", always divide
-  the Busy/Queue counter by MAX(delta_time), never by SUM(delta_time).
+  the Busy/Queue counter by (MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp)).
 - For cache hit ratios: hits * 100.0 / NULLIF(hits + misses, 0) — do NOT involve delta_time.
 - For lock wait averages: lockwait_time / NULLIF(requests_blocked, 0).
 

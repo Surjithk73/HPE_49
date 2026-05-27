@@ -213,18 +213,34 @@ class SchemaLinker:
                 parts.append(str(table_def['entity_type']))
             if 'purpose' in table_def:
                 parts.append(str(table_def['purpose']))
-            for ident in table_def.get('identity_columns', []) or []:
+            if 'entity_type' in table:
+                parts.append(str(table['entity_type']))
+            if 'purpose' in table:
+                parts.append(str(table['purpose']))
+            for ident in table.get('identity_columns', []) or []:
                 parts.append(str(ident))
 
             # Include both column names AND descriptions so literal token
             # matches (e.g. user types "cpu_busy_time") have something to hit.
-            for col_name, col_def in table_def.get('columns', {}).items():
-                if not isinstance(col_def, dict):
+            for col_name, col_data in table['columns'].items():
+                if not col_data.get('queryable', False):
                     continue
-                parts.append(col_name.replace('_', ' '))
-                desc = col_def.get('description', '')
-                if desc:
-                    parts.append(desc)
+
+                col_type = col_data.get('type', 'string')
+                desc = col_data.get('description', '')
+                
+                # Incorporate derived formulas and thresholds from the Measure Reference Manual
+                derived_formula = col_data.get('derived_formula')
+                if derived_formula:
+                    desc += f" (DERIVED FORMULA: {derived_formula})"
+                    
+                thresholds = col_data.get('thresholds')
+                if thresholds:
+                    desc += f" (PERFORMANCE THRESHOLDS: {thresholds})"
+
+                # Base column line
+                line = f"    {col_name} {col_type}  -- {desc}"
+                parts.append(line)
 
             table_texts.append(' '.join(parts))
 
@@ -356,15 +372,15 @@ class SchemaLinker:
     # formulas at a higher level.
     _COUNTER_FORMULA: Dict[str, str] = {
         # Busy counters: value is microseconds busy → divide by delta_time for %
-        "Busy":          "% = col*100.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        "Busy":          "% = col*100.0/NULLIF(delta_time*1000000.0,0); use (MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp)) when grouping",
         # Queue counters: value is cumulative queue time → divide by delta_time for AQL
-        "Queue":         "AQL = col*1.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        "Queue":         "AQL = col*1.0/NULLIF(delta_time*1000000.0,0); use (MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp)) when grouping",
         # Queue-Busy: time queue was non-empty → divide by delta_time for %
-        "Queue-Busy":    "% = col*100.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
-        # Incrementing: event count → divide by delta_time (µs) for per-second rate
-        "Incrementing":  "rate/s = col*1000000.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
-        # Accumulating: byte/block count → divide by delta_time for throughput/s
-        "Accumulating":  "throughput/s = col*1000000.0/NULLIF(delta_time,0); use MAX(delta_time) when grouping",
+        "Queue-Busy":    "% = col*100.0/NULLIF(delta_time*1000000.0,0); use (MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp)) when grouping",
+        # Incrementing: event count → divide by delta_time (seconds) for per-second rate
+        "Incrementing":  "rate/s = col*1.0/NULLIF(delta_time,0); use (MAX(delta_time)*COUNT(DISTINCT from_timestamp)) when grouping",
+        # Accumulating: byte/block count → divide by delta_time (seconds) for throughput/s
+        "Accumulating":  "throughput/s = col*1.0/NULLIF(delta_time,0); use (MAX(delta_time)*COUNT(DISTINCT from_timestamp)) when grouping",
         # Response-time: cumulative time → divide by transaction count for avg
         "Response-time": "avg = col/NULLIF(transaction_count,0)",
         # Lockwait: cumulative lock wait → divide by requests_blocked for avg
@@ -398,6 +414,14 @@ class SchemaLinker:
                 parts.append(f"[{counter_type}] {formula}")
             else:
                 parts.append(f"[{counter_type}]")
+                
+        derived_formula = col_def.get('derived_formula')
+        if derived_formula:
+            parts.append(f"DERIVED FORMULA: {derived_formula}")
+            
+        thresholds = col_def.get('thresholds')
+        if thresholds:
+            parts.append(f"PERFORMANCE THRESHOLDS: {thresholds}")
 
         return ' | '.join(parts) if parts else ''
 
