@@ -636,6 +636,490 @@ cpu:
         \ subsystem version (ZMSPROC.HDR.SUBSYSTEM- VERSION), supplied by Nonstop\
         \ OS, is four or greater; otherwise the counter contains a zero value and\
         \ is not displayed by MEASCOM.)"
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    ipu0_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu0_ipu_busy_time metric
+    ipu1_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu1_ipu_busy_time metric
+    ipu2_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu2_ipu_busy_time metric
+    ipu3_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu3_ipu_busy_time metric
+    ipu4_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu4_ipu_busy_time metric
+    ipu5_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu5_ipu_busy_time metric
+    ipu6_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu6_ipu_busy_time metric
+    ipu7_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu7_ipu_busy_time metric
+    ipu8_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu8_ipu_busy_time metric
+    ipu9_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu9_ipu_busy_time metric
+    ipu10_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu10_ipu_busy_time metric
+    ipu11_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu11_ipu_busy_time metric
+    ipu12_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu12_ipu_busy_time metric
+    ipu13_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu13_ipu_busy_time metric
+    ipu14_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu14_ipu_busy_time metric
+    ipu15_ipu_busy_time:
+      type: integer
+      queryable: true
+      description: ipu15_ipu_busy_time metric
+    ipu0_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu0_ipu_qtime metric
+    ipu1_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu1_ipu_qtime metric
+    ipu2_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu2_ipu_qtime metric
+    ipu3_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu3_ipu_qtime metric
+    ipu4_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu4_ipu_qtime metric
+    ipu5_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu5_ipu_qtime metric
+    ipu6_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu6_ipu_qtime metric
+    ipu7_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu7_ipu_qtime metric
+    ipu8_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu8_ipu_qtime metric
+    ipu9_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu9_ipu_qtime metric
+    ipu10_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu10_ipu_qtime metric
+    ipu11_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu11_ipu_qtime metric
+    ipu12_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu12_ipu_qtime metric
+    ipu13_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu13_ipu_qtime metric
+    ipu14_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu14_ipu_qtime metric
+    ipu15_ipu_qtime:
+      type: integer
+      queryable: true
+      description: ipu15_ipu_qtime metric
+    ipu0_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu0_ipu_dispatches metric
+    ipu1_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu1_ipu_dispatches metric
+    ipu2_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu2_ipu_dispatches metric
+    ipu3_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu3_ipu_dispatches metric
+    ipu4_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu4_ipu_dispatches metric
+    ipu5_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu5_ipu_dispatches metric
+    ipu6_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu6_ipu_dispatches metric
+    ipu7_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu7_ipu_dispatches metric
+    ipu8_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu8_ipu_dispatches metric
+    ipu9_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu9_ipu_dispatches metric
+    ipu10_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu10_ipu_dispatches metric
+    ipu11_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu11_ipu_dispatches metric
+    ipu12_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu12_ipu_dispatches metric
+    ipu13_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu13_ipu_dispatches metric
+    ipu14_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu14_ipu_dispatches metric
+    ipu15_ipu_dispatches:
+      type: integer
+      queryable: true
+      description: ipu15_ipu_dispatches metric
+    svnet0_read_requests:
+      type: integer
+      queryable: true
+      description: svnet0_read_requests metric
+    svnet1_read_requests:
+      type: integer
+      queryable: true
+      description: svnet1_read_requests metric
+    svnet2_read_requests:
+      type: integer
+      queryable: true
+      description: svnet2_read_requests metric
+    svnet3_read_requests:
+      type: integer
+      queryable: true
+      description: svnet3_read_requests metric
+    svnet4_read_requests:
+      type: integer
+      queryable: true
+      description: svnet4_read_requests metric
+    svnet5_read_requests:
+      type: integer
+      queryable: true
+      description: svnet5_read_requests metric
+    svnet6_read_requests:
+      type: integer
+      queryable: true
+      description: svnet6_read_requests metric
+    svnet7_read_requests:
+      type: integer
+      queryable: true
+      description: svnet7_read_requests metric
+    svnet8_read_requests:
+      type: integer
+      queryable: true
+      description: svnet8_read_requests metric
+    svnet9_read_requests:
+      type: integer
+      queryable: true
+      description: svnet9_read_requests metric
+    svnet10_read_requests:
+      type: integer
+      queryable: true
+      description: svnet10_read_requests metric
+    svnet11_read_requests:
+      type: integer
+      queryable: true
+      description: svnet11_read_requests metric
+    svnet12_read_requests:
+      type: integer
+      queryable: true
+      description: svnet12_read_requests metric
+    svnet13_read_requests:
+      type: integer
+      queryable: true
+      description: svnet13_read_requests metric
+    svnet14_read_requests:
+      type: integer
+      queryable: true
+      description: svnet14_read_requests metric
+    svnet15_read_requests:
+      type: integer
+      queryable: true
+      description: svnet15_read_requests metric
+    svnet0_write_requests:
+      type: integer
+      queryable: true
+      description: svnet0_write_requests metric
+    svnet1_write_requests:
+      type: integer
+      queryable: true
+      description: svnet1_write_requests metric
+    svnet2_write_requests:
+      type: integer
+      queryable: true
+      description: svnet2_write_requests metric
+    svnet3_write_requests:
+      type: integer
+      queryable: true
+      description: svnet3_write_requests metric
+    svnet4_write_requests:
+      type: integer
+      queryable: true
+      description: svnet4_write_requests metric
+    svnet5_write_requests:
+      type: integer
+      queryable: true
+      description: svnet5_write_requests metric
+    svnet6_write_requests:
+      type: integer
+      queryable: true
+      description: svnet6_write_requests metric
+    svnet7_write_requests:
+      type: integer
+      queryable: true
+      description: svnet7_write_requests metric
+    svnet8_write_requests:
+      type: integer
+      queryable: true
+      description: svnet8_write_requests metric
+    svnet9_write_requests:
+      type: integer
+      queryable: true
+      description: svnet9_write_requests metric
+    svnet10_write_requests:
+      type: integer
+      queryable: true
+      description: svnet10_write_requests metric
+    svnet11_write_requests:
+      type: integer
+      queryable: true
+      description: svnet11_write_requests metric
+    svnet12_write_requests:
+      type: integer
+      queryable: true
+      description: svnet12_write_requests metric
+    svnet13_write_requests:
+      type: integer
+      queryable: true
+      description: svnet13_write_requests metric
+    svnet14_write_requests:
+      type: integer
+      queryable: true
+      description: svnet14_write_requests metric
+    svnet15_write_requests:
+      type: integer
+      queryable: true
+      description: svnet15_write_requests metric
+    svnet0_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet0_read_bytes metric
+    svnet1_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet1_read_bytes metric
+    svnet2_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet2_read_bytes metric
+    svnet3_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet3_read_bytes metric
+    svnet4_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet4_read_bytes metric
+    svnet5_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet5_read_bytes metric
+    svnet6_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet6_read_bytes metric
+    svnet7_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet7_read_bytes metric
+    svnet8_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet8_read_bytes metric
+    svnet9_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet9_read_bytes metric
+    svnet10_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet10_read_bytes metric
+    svnet11_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet11_read_bytes metric
+    svnet12_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet12_read_bytes metric
+    svnet13_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet13_read_bytes metric
+    svnet14_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet14_read_bytes metric
+    svnet15_read_bytes:
+      type: integer
+      queryable: true
+      description: svnet15_read_bytes metric
+    svnet0_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet0_write_bytes metric
+    svnet1_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet1_write_bytes metric
+    svnet2_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet2_write_bytes metric
+    svnet3_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet3_write_bytes metric
+    svnet4_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet4_write_bytes metric
+    svnet5_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet5_write_bytes metric
+    svnet6_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet6_write_bytes metric
+    svnet7_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet7_write_bytes metric
+    svnet8_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet8_write_bytes metric
+    svnet9_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet9_write_bytes metric
+    svnet10_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet10_write_bytes metric
+    svnet11_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet11_write_bytes metric
+    svnet12_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet12_write_bytes metric
+    svnet13_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet13_write_bytes metric
+    svnet14_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet14_write_bytes metric
+    svnet15_write_bytes:
+      type: integer
+      queryable: true
+      description: svnet15_write_bytes metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
 disc:
   source_file: measurefiles/disccsv
   ddl_record: ZMSDISC
@@ -1184,6 +1668,786 @@ disc:
         (DERIVED METRIC: This counter is a subset of DEFREQ-QTIME.)'
       derived_formula: N/A
       thresholds: N/A
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    u_fabric_fabric:
+      type: integer
+      queryable: true
+      description: u_fabric_fabric metric
+    u_fabric_servernet:
+      type: integer
+      queryable: true
+      description: u_fabric_servernet metric
+    gms_group:
+      type: integer
+      queryable: true
+      description: gms_group metric
+    gms_module:
+      type: integer
+      queryable: true
+      description: gms_module metric
+    gms_slot:
+      type: integer
+      queryable: true
+      description: gms_slot metric
+    u_scsi_id_plpt_plpt_flags:
+      type: integer
+      queryable: true
+      description: u_scsi_id_plpt_plpt_flags metric
+    u_scsi_id_plpt_path:
+      type: integer
+      queryable: true
+      description: u_scsi_id_plpt_path metric
+    u_scsi_id_plpt_lun:
+      type: integer
+      queryable: true
+      description: u_scsi_id_plpt_lun metric
+    u_scsi_id_plpt_partition:
+      type: integer
+      queryable: true
+      description: u_scsi_id_plpt_partition metric
+    u_scsi_id_plpt_target_id:
+      type: integer
+      queryable: true
+      description: u_scsi_id_plpt_target_id metric
+    c0_blks:
+      type: integer
+      queryable: true
+      description: c0_blks metric
+    c1_blks:
+      type: integer
+      queryable: true
+      description: c1_blks metric
+    c2_blks:
+      type: integer
+      queryable: true
+      description: c2_blks metric
+    c3_blks:
+      type: integer
+      queryable: true
+      description: c3_blks metric
+    c4_blks:
+      type: integer
+      queryable: true
+      description: c4_blks metric
+    c5_blks:
+      type: integer
+      queryable: true
+      description: c5_blks metric
+    c6_blks:
+      type: integer
+      queryable: true
+      description: c6_blks metric
+    c7_blks:
+      type: integer
+      queryable: true
+      description: c7_blks metric
+    c0_block_size:
+      type: integer
+      queryable: true
+      description: c0_block_size metric
+    c1_block_size:
+      type: integer
+      queryable: true
+      description: c1_block_size metric
+    c2_block_size:
+      type: integer
+      queryable: true
+      description: c2_block_size metric
+    c3_block_size:
+      type: integer
+      queryable: true
+      description: c3_block_size metric
+    c4_block_size:
+      type: integer
+      queryable: true
+      description: c4_block_size metric
+    c5_block_size:
+      type: integer
+      queryable: true
+      description: c5_block_size metric
+    c6_block_size:
+      type: integer
+      queryable: true
+      description: c6_block_size metric
+    c7_block_size:
+      type: integer
+      queryable: true
+      description: c7_block_size metric
+    c0_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c0_blocks_inuse_start metric
+    c1_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c1_blocks_inuse_start metric
+    c2_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c2_blocks_inuse_start metric
+    c3_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c3_blocks_inuse_start metric
+    c4_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c4_blocks_inuse_start metric
+    c5_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c5_blocks_inuse_start metric
+    c6_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c6_blocks_inuse_start metric
+    c7_blocks_inuse_start:
+      type: integer
+      queryable: true
+      description: c7_blocks_inuse_start metric
+    c0_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_blocks_inuse_end:
+      type: integer
+      queryable: true
+      description: Number of cache blocks that were in use at the end of the measurement
+        or at measurement interval copy time.
+      derived_formula: N/A
+      thresholds: N/A
+    c0_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_block_splits:
+      type: integer
+      queryable: true
+      description: Number of block splits (per block size) for the volume.
+      derived_formula: N/A
+      thresholds: N/A
+    c0_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_hits:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found in cache on a read or
+        buffered write operation, which saves a disk I/O. This counter includes cache
+        hits on both read and write operations.
+      derived_formula: N/A
+      thresholds: N/A
+    c0_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache on a read
+        operation, which causes a disk I/O. Read operations that do not go through
+        cache are not included in this counter.
+      derived_formula: N/A
+      thresholds: N/A
+    c0_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c1_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c2_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c3_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c4_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c5_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c6_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c7_faults:
+      type: integer
+      queryable: true
+      description: Number of times the cache tables indicate a required block is in
+        cache, but not because the memory manager is using it for another purpose.
+        Faults occur when a cache is too large or physical memory is too small for
+        a given application.
+      derived_formula: N/A
+      thresholds: Fault rates greater than 5% of all I/O operations generally indicate
+        you need more memory.
+    c0_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c1_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c2_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c3_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c4_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c5_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c6_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c7_audit_buf_forces:
+      type: integer
+      queryable: true
+      description: Number of times the disk process had to write to the audit-trail
+        volume before it could write a dirty cache block and thereby free that block
+        for another use.
+      derived_formula: N/A
+      thresholds: This value should be close to zero.
+    c0_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_blks_dirty_qtime:
+      type: integer
+      queryable: true
+      description: Time that cache blocks spent dirty. A cache block is dirty when
+        a buffered write operation writes data to it. After the disk process writes
+        the dirty cache block to disk, the block is clean.
+      derived_formula: N/A
+      thresholds: N/A
+    c0_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_write_cleans:
+      type: integer
+      queryable: true
+      description: Number of times a required block is in cache for a write operation,
+        which saves a found clean disk read per write.
+      derived_formula: N/A
+      thresholds: N/A
+    c0_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_write_dirtys:
+      type: integer
+      queryable: true
+      description: Number of times a required block is found dirty in cache for a
+        write operation.
+      derived_formula: N/A
+      thresholds: N/A
+    c0_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    c1_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    c2_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    c3_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    c4_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    c5_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    c6_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    c7_write_misses:
+      type: integer
+      queryable: true
+      description: Number of times a required block is not found in cache for a write
+        operation, which requires a disk read before the write can be performed.
+      derived_formula: N/A
+      thresholds: N/A
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
 dfile:
   source_file: measurefiles/dfilecsv
   ddl_record: ZMSDFILE
@@ -1591,6 +2855,62 @@ dfile:
         by DP2 as a result of OSS-CACHE-CALLBACKS.)'
       derived_formula: N/A
       thresholds: N/A
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
+    file_name_volume:
+      type: string
+      queryable: true
+      description: file_name_volume metric
+    file_name_subvol:
+      type: string
+      queryable: true
+      description: file_name_subvol metric
+    file_name_filename:
+      type: string
+      queryable: true
+      description: file_name_filename metric
+    file_name_mid_pathid:
+      type: string
+      queryable: true
+      description: file_name_mid_pathid metric
+    file_name_mid_crvsn:
+      type: string
+      queryable: true
+      description: file_name_mid_crvsn metric
 dopen:
   source_file: measurefiles/dopencsv
   ddl_record: ZMSDOPEN
@@ -1874,6 +3194,62 @@ dopen:
         \ this open; RATE ON \xE2\u2020\u2019 % (MANUAL DEF: DP2 process busy-time\
         \ accumulated while DP2 was working on SQL subset requests on behalf of this\
         \ DISCOPEN. Counter type: Busy.)"
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
+    file_name_volume:
+      type: string
+      queryable: true
+      description: file_name_volume metric
+    file_name_subvol:
+      type: string
+      queryable: true
+      description: file_name_subvol metric
+    file_name_filename:
+      type: string
+      queryable: true
+      description: file_name_filename metric
+    file_name_mid_pathid:
+      type: string
+      queryable: true
+      description: file_name_mid_pathid metric
+    file_name_mid_crvsn:
+      type: string
+      queryable: true
+      description: file_name_mid_crvsn metric
 file:
   source_file: measurefiles/filecsv
   ddl_record: ZMSFILE
@@ -2443,6 +3819,94 @@ file:
         fcntl(), and the socket APIs connect(), setsockopt(), accept(), and shutdown().)
         (DERIVED METRIC: For OSS, this counter totals operations that increase FILE-BUSY-TIME
         but are not READS, WRITES, or INFO-CALLS.)'
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    ip_family:
+      type: integer
+      queryable: true
+      description: ip_family metric
+    ip_port:
+      type: integer
+      queryable: true
+      description: ip_port metric
+    ip_ip_addr:
+      type: string
+      queryable: true
+      description: ip_ip_addr metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
+    file_name_volume:
+      type: string
+      queryable: true
+      description: file_name_volume metric
+    file_name_subvol:
+      type: string
+      queryable: true
+      description: file_name_subvol metric
+    file_name_filename:
+      type: string
+      queryable: true
+      description: file_name_filename metric
+    opener_program_filename_volume:
+      type: string
+      queryable: true
+      description: opener_program_filename_volume metric
+    opener_program_filename_subvol:
+      type: string
+      queryable: true
+      description: opener_program_filename_subvol metric
+    opener_program_filename_filename:
+      type: string
+      queryable: true
+      description: opener_program_filename_filename metric
+    file_name_mid_pathid:
+      type: string
+      queryable: true
+      description: file_name_mid_pathid metric
+    file_name_mid_crvsn:
+      type: string
+      queryable: true
+      description: file_name_mid_crvsn metric
+    opener_program_fname_mid_pathid:
+      type: string
+      queryable: true
+      description: opener_program_fname_mid_pathid metric
+    opener_program_fname_mid_crvsn:
+      type: string
+      queryable: true
+      description: opener_program_fname_mid_crvsn metric
 ossns:
   source_file: measurefiles/ossnscsv
   ddl_record: ZMSOSSNS
@@ -2715,6 +4179,54 @@ ossns:
       description: 'Number of settime requests sent to a pipe server or local server
         (MANUAL DEF: Number of settime requests sent by the OSS name server to a pipe
         server or local server. Counter type: Incrementing.)'
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
+    program_file_name_volume:
+      type: string
+      queryable: true
+      description: program_file_name_volume metric
+    program_file_name_subvol:
+      type: string
+      queryable: true
+      description: program_file_name_subvol metric
+    program_file_name_filename:
+      type: string
+      queryable: true
+      description: program_file_name_filename metric
 proc:
   source_file: measurefiles/proccsv
   ddl_record: ZMSPROC
@@ -3817,6 +5329,110 @@ proc:
       description: 'Number of redirected requests sent to OSS name servers (MANUAL
         DEF: Number of redirected requests sent to OSS name servers. Counter type:
         Incrementing.)'
+    u_gmom_gmom_gmom_jobid:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_jobid metric
+    interrupts:
+      type: integer
+      queryable: true
+      description: interrupts metric
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    userid_group:
+      type: integer
+      queryable: true
+      description: userid_group metric
+    userid_user:
+      type: integer
+      queryable: true
+      description: userid_user metric
+    creatorid_group:
+      type: integer
+      queryable: true
+      description: creatorid_group metric
+    creatorid_user:
+      type: integer
+      queryable: true
+      description: creatorid_user metric
+    u_gmom_gmom_gmom_node:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_node metric
+    u_gmom_gmom_gmom_cpu:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_cpu metric
+    u_gmom_gmom_gmom_pin:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_pin metric
+    hometerm_name_device:
+      type: string
+      queryable: true
+      description: hometerm_name_device metric
+    hometerm_name_subdevice:
+      type: string
+      queryable: true
+      description: hometerm_name_subdevice metric
+    hometerm_name_qualifier:
+      type: string
+      queryable: true
+      description: hometerm_name_qualifier metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
+    program_file_name_volume:
+      type: string
+      queryable: true
+      description: program_file_name_volume metric
+    program_file_name_subvol:
+      type: string
+      queryable: true
+      description: program_file_name_subvol metric
+    program_file_name_filename:
+      type: string
+      queryable: true
+      description: program_file_name_filename metric
+    program_file_name_mid_pathid:
+      type: string
+      queryable: true
+      description: program_file_name_mid_pathid metric
+    program_file_name_mid_crvsn:
+      type: string
+      queryable: true
+      description: program_file_name_mid_crvsn metric
 tmf:
   source_file: measurefiles/tmfcsv
   ddl_record: ZMSTMF
@@ -4025,6 +5641,42 @@ tmf:
       counter_type: Accumulating
       description: 'Number of PIO bytes received by the CPU (MANUAL DEF: Number of
         PIO bytes received by the CPU. Counter type: Accumulating.)'
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
 udef:
   source_file: measurefiles/udefcsv
   ddl_record: ZMSUDEF
@@ -4225,6 +5877,94 @@ udef:
         \ type (MANUAL DEF: (ZMS Style only) Value of a user\u2011defined counter.)"
       derived_formula: None specified
       thresholds: None specified
+    os_version_number:
+      type: integer
+      queryable: true
+      description: os_version_number metric
+    format_version_number:
+      type: integer
+      queryable: true
+      description: format_version_number metric
+    data_version_number:
+      type: integer
+      queryable: true
+      description: data_version_number metric
+    userid_group:
+      type: integer
+      queryable: true
+      description: userid_group metric
+    userid_user:
+      type: integer
+      queryable: true
+      description: userid_user metric
+    creatorid_group:
+      type: integer
+      queryable: true
+      description: creatorid_group metric
+    creatorid_user:
+      type: integer
+      queryable: true
+      description: creatorid_user metric
+    u_gmom_gmom_gmom_node:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_node metric
+    u_gmom_gmom_gmom_cpu:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_cpu metric
+    u_gmom_gmom_gmom_pin:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_pin metric
+    u_gmom_gmom_gmom_jobid:
+      type: integer
+      queryable: true
+      description: u_gmom_gmom_gmom_jobid metric
+    u_loadid_loadid:
+      type: string
+      queryable: true
+      description: u_loadid_loadid metric
+    u_loadid_load_id_prefix_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_prefix_id metric
+    u_loadid_load_id_interval_id:
+      type: string
+      queryable: true
+      description: u_loadid_load_id_interval_id metric
+    program_file_name_mid_pathid:
+      type: string
+      queryable: true
+      description: program_file_name_mid_pathid metric
+    os_version_letter:
+      type: string
+      queryable: true
+      description: os_version_letter metric
+    program_file_name_mid_crvsn:
+      type: string
+      queryable: true
+      description: program_file_name_mid_crvsn metric
+    program_file_name_volume:
+      type: string
+      queryable: true
+      description: program_file_name_volume metric
+    program_file_name_subvol:
+      type: string
+      queryable: true
+      description: program_file_name_subvol metric
+    format_version_letter:
+      type: string
+      queryable: true
+      description: format_version_letter metric
+    program_file_name_filename:
+      type: string
+      queryable: true
+      description: program_file_name_filename metric
+    data_version_letter:
+      type: string
+      queryable: true
+      description: data_version_letter metric
 derived_metrics:
   cpu.FROM_TIMESTAMP: When using the CSV[A], JSON, or XML report format, the timestamp
     is emitted as ISO 8601 date and time of day representation, extended format, fractional
