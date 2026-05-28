@@ -12,6 +12,7 @@ export interface QueryResponse {
   error?: string
   debug_prompt?: string
   raw_llm_output?: string
+  inferred_query?: string
 }
 
 export interface HistoryEntry {
@@ -77,6 +78,20 @@ export async function runSqlDirect(sql: string): Promise<QueryResponse> {
     method: 'POST',
     body: JSON.stringify({ sql }),
   })
+}
+
+export async function runImageQuery(file: File): Promise<QueryResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${API_BASE}/api/image-to-query`, {
+    method: 'POST',
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
 }
 
 export async function exportReport(
