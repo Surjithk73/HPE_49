@@ -3,16 +3,18 @@ import { Bug, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 
 interface Props {
   prompt: string
+  rawOutput?: string
 }
 
-export default function PromptDebugPanel({ prompt }: Props) {
+export default function PromptDebugPanel({ prompt, rawOutput }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const isCacheHit = prompt.startsWith('[Cache Hit]')
 
   const copyPrompt = async () => {
-    await navigator.clipboard.writeText(prompt)
+    const textToCopy = rawOutput ? `Prompt:\n${prompt}\n\nRaw Output:\n${rawOutput}` : prompt
+    await navigator.clipboard.writeText(textToCopy)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -90,7 +92,7 @@ export default function PromptDebugPanel({ prompt }: Props) {
             fontSize: '11px', fontWeight: 600, color: '#a855f7',
             letterSpacing: '0.08em', textTransform: 'uppercase',
           }}>
-            Debug — LLM Prompt
+            Debug — LLM Prompt & Reasoning
           </span>
           {isCacheHit && (
             <span style={{
@@ -129,27 +131,62 @@ export default function PromptDebugPanel({ prompt }: Props) {
           </div>
 
           {/* Prompt content */}
-          <div style={{
-            overflowX: 'auto',
-            maxHeight: '500px',
-            overflowY: 'auto',
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#333 transparent',
-          }}>
-            <pre
-              style={{
-                fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
-                fontSize: '11px',
-                lineHeight: 1.65,
-                color: '#cbd5e1',
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                paddingRight: '80px',
-              }}
-              dangerouslySetInnerHTML={{ __html: highlightPrompt(prompt) }}
-            />
+          <div style={{ marginBottom: rawOutput ? '16px' : '0' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#a855f7', marginBottom: '8px' }}>
+              Prompt Sent:
+            </div>
+            <div style={{
+              overflowX: 'auto',
+              maxHeight: '400px',
+              overflowY: 'auto',
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#333 transparent',
+            }}>
+              <pre
+                style={{
+                  fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+                  fontSize: '11px',
+                  lineHeight: 1.65,
+                  color: '#cbd5e1',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  paddingRight: '80px',
+                }}
+                dangerouslySetInnerHTML={{ __html: highlightPrompt(prompt) }}
+              />
+            </div>
           </div>
+
+          {/* Raw Output content */}
+          {rawOutput && (
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#a855f7', marginBottom: '8px', paddingTop: '16px', borderTop: '1px solid rgba(168,85,247,0.1)' }}>
+                Raw LLM Reasoning & Output:
+              </div>
+              <div style={{
+                overflowX: 'auto',
+                maxHeight: '400px',
+                overflowY: 'auto',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#333 transparent',
+              }}>
+                <pre
+                  style={{
+                    fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+                    fontSize: '11px',
+                    lineHeight: 1.65,
+                    color: '#94a3b8',
+                    margin: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {rawOutput}
+                </pre>
+              </div>
+            </div>
+          )}
 
           {/* Footer stats */}
           {!isCacheHit && (

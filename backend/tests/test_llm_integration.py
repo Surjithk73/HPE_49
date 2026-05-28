@@ -60,7 +60,7 @@ def test_full_pipeline_with_llm():
         
         # Step 4: Generate SQL with retry
         print("\n[6/6] Generating SQL with LLM (with retry logic)...")
-        sql = llm_engine.generate_sql_with_retry(
+        sql, raw = llm_engine.generate_sql_with_retry(
             prompt=prompt,
             validator=validator,
             prompt_builder=builder,
@@ -146,7 +146,7 @@ def test_multiple_queries():
             )
             
             # Generate SQL
-            sql = llm_engine.generate_sql_with_retry(
+            sql, raw = llm_engine.generate_sql_with_retry(
                 prompt=prompt,
                 validator=validator,
                 prompt_builder=builder,

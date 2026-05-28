@@ -36,13 +36,13 @@ class BaseLLMEngine:
 
     model_name: str = ""
 
-    def generate_sql(self, prompt: str) -> str:  # pragma: no cover - abstract
+    def generate_sql(self, prompt: str) -> tuple[str, str]:  # pragma: no cover - abstract
         raise NotImplementedError
 
     def generate_text(self, prompt: str) -> str:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    def generate_sql_with_retry(self, prompt: str, validator, prompt_builder, max_retries: int = 2) -> str:
+    def generate_sql_with_retry(self, prompt: str, validator, prompt_builder, max_retries: int = 2) -> tuple[str, str]:
         """
         Generate SQL with automatic retry on validation failure.
 
@@ -53,7 +53,7 @@ class BaseLLMEngine:
             max_retries: Maximum number of retry attempts
 
         Returns:
-            Valid SQL string
+            Tuple of (Valid SQL string, Raw LLM response string)
 
         Raises:
             LLMError: If all retries fail
@@ -66,12 +66,12 @@ class BaseLLMEngine:
             print(f"[LLM] Attempt {attempt + 1}/{max_retries + 1}...")
 
             try:
-                sql = self.generate_sql(current_prompt)
+                sql, raw_text = self.generate_sql(current_prompt)
                 result = validator.validate(sql)
 
                 if result.valid:
                     print(f"[LLM] ✓ Valid SQL generated on attempt {attempt + 1}")
-                    return result.sanitized_sql
+                    return result.sanitized_sql, raw_text
                 else:
                     print(f"[LLM] ✗ Validation failed: {result.error}")
                     last_error = result.error
@@ -133,7 +133,7 @@ class LLMEngine(BaseLLMEngine):
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel(self.model_name)
 
-    def generate_sql(self, prompt: str) -> str:
+    def generate_sql(self, prompt: str) -> tuple[str, str]:
         """
         Generate SQL from a prompt.
 
@@ -141,7 +141,7 @@ class LLMEngine(BaseLLMEngine):
             prompt: Complete prompt string
 
         Returns:
-            Raw SQL string
+            Tuple of (Raw SQL string, Raw LLM response string)
 
         Raises:
             LLMError: If generation fails
@@ -152,7 +152,7 @@ class LLMEngine(BaseLLMEngine):
             if not response or not response.text:
                 raise LLMError("Empty response from LLM")
 
-            return self._extract_sql(response.text)
+            return self._extract_sql(response.text), response.text
 
         except Exception as e:
             raise LLMError(f"Failed to generate SQL: {str(e)}")
@@ -249,7 +249,7 @@ SQL:"""
         
         # Generate SQL
         print("\nGenerating SQL...")
-        sql = engine.generate_sql(test_prompt)
+        sql, raw = engine.generate_sql(test_prompt)
         
         print("\n" + "-" * 80)
         print("Generated SQL:")

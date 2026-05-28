@@ -120,7 +120,7 @@ if not ready:
 model = embeddings.get()
 print(f"  {GREEN}✓ BGE-large model ready{RESET} (loaded in {elapsed:.1f}s)")
 print(f"  Model: {embeddings.MODEL_NAME}")
-print(f"  Embedding dim: {model.get_embedding_dimension()}")
+print(f"  Embedding dim: {model.get_sentence_embedding_dimension()}")
 
 # Ensure table embeddings are built
 emb_ok = linker._ensure_table_embeddings()
@@ -256,7 +256,7 @@ else:
     all_passed = False
 
 # 5d: Embedding dimension check
-dim = model.get_embedding_dimension()
+dim = model.get_sentence_embedding_dimension()
 if dim == 1024:
     print(f"  {GREEN}✓{RESET} Embedding dimension is 1024 (BGE-large confirmed)")
 else:
@@ -284,7 +284,7 @@ else:
 header("Summary")
 print(f"""
   Embedding Model:  {embeddings.MODEL_NAME}
-  Embedding Dim:    {model.get_embedding_dimension()}
+  Embedding Dim:    {model.get_sentence_embedding_dimension()}
   BM25 Index:       {len(linker._bm25_table_names)} tables
   Table Embeddings: {linker._table_embeddings.shape}
   Tables:           {', '.join(table_names)}

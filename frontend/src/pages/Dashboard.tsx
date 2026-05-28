@@ -379,9 +379,9 @@ export default function Dashboard() {
                   domain={result.domain}
                 />
 
-                {/* Debug: show the exact prompt sent to the LLM */}
+                {/* Debug: show the exact prompt sent to the LLM and raw output */}
                 {result.debug_prompt && (
-                  <PromptDebugPanel prompt={result.debug_prompt} />
+                  <PromptDebugPanel prompt={result.debug_prompt} rawOutput={result.raw_llm_output} />
                 )}
 
                 {/* Stats + view controls */}

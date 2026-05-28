@@ -11,6 +11,7 @@ export interface QueryResponse {
   domain: string
   error?: string
   debug_prompt?: string
+  raw_llm_output?: string
 }
 
 export interface HistoryEntry {

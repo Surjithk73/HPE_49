@@ -53,7 +53,7 @@ class OllamaEngine(BaseLLMEngine):
                 "(e.g. OLLAMA_MODEL=llama3.1)."
             )
 
-    def generate_sql(self, prompt: str) -> str:
+    def generate_sql(self, prompt: str) -> tuple[str, str]:
         """
         Generate SQL by calling Ollama's /api/generate endpoint.
 
@@ -61,7 +61,7 @@ class OllamaEngine(BaseLLMEngine):
             prompt: Complete prompt string
 
         Returns:
-            Cleaned SQL string
+            Tuple of (Cleaned SQL string, Raw LLM response string)
 
         Raises:
             LLMError: If the call fails or returns no text
@@ -119,7 +119,7 @@ class OllamaEngine(BaseLLMEngine):
             err = data.get("error") or "empty response"
             raise LLMError(f"Ollama returned no text: {err}")
 
-        return self._extract_sql(text)
+        return self._extract_sql(text), text
 
     def generate_text(self, prompt: str) -> str:
         """
@@ -204,7 +204,7 @@ if __name__ == "__main__":  # pragma: no cover
             "SQL:"
         )
 
-        sql = engine.generate_sql(test_prompt)
+        sql, raw = engine.generate_sql(test_prompt)
         print("\nGenerated SQL:\n" + sql)
 
         if "SELECT" in sql.upper() and "FROM" in sql.upper():

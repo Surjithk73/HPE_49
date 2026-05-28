@@ -65,47 +65,41 @@ class PromptBuilder:
                 + "\n"
             )
         
-        # Assemble the complete prompt using the exact template from Project_Overview.md
+        # Assemble the complete prompt using the refactored layout
         prompt = f"""You are a SQL expert for HPE NonStop performance monitoring systems.
 Generate a single valid PostgreSQL SELECT query for the schema 'macht413'.
 
-STRICT RULES:
-- You must output a brief `<thought>` block before writing the SQL. Use this block to explicitly map the user's requested metrics to the specific schema tables/columns and explain your reasoning.
-- After the `<thought>` block, output ONLY the raw SQL query wrapped in standard markdown code fences (```sql\n...\n```). No other explanation.
-- Only SELECT statements. No DDL/DML.
-- Always qualify tables: macht413.table_name.
-- Only use columns shown in the schema context; never invent column names.
-- Use from_timestamp / to_timestamp for time filtering.
+OUTPUT CONTRACT:
+1. You MUST output a `<thought>` block explaining your reasoning and explicitly mapping requested metrics to the specific schema tables/columns.
+2. If a requested metric does not exist in the schema, explicitly state in your `<thought>` block which substitute column you chose or how you derived it, or state that the metric is being omitted.
+3. Immediately after the `<thought>` block, output ONLY the raw SQL query wrapped in standard markdown code fences (```sql\n...\n```). Do not output any other text.
+4. Only SELECT statements. No DDL/DML.
+5. Always qualify tables: macht413.table_name.
+6. Only use columns shown in the schema context; never invent column names.
+7. Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 
-COUNTER MATH RULES:
-- delta_time is the SAME value for every row in the same measurement interval, but CRITICALLY, it is in SECONDS, while most busy/queue counters are in MICROSECONDS.
-- When grouping rows, your denominator MUST account for multiple time intervals and convert seconds to microseconds for busy/queue counters!
-  ALWAYS use `(MAX(delta_time) * COUNT(DISTINCT from_timestamp))` as the base denominator.
-- [Busy counter]       percentage  = col * 100.0 / NULLIF(MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp), 0)
-- [Queue counter]      avg queue   = col * 1.0   / NULLIF(MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp), 0)
-- [Queue-Busy counter] percentage  = col * 100.0 / NULLIF(MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp), 0)
-- [Incrementing counter] rate/sec  = col * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)
-- [Accumulating counter] bytes/sec = col * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)
+FORMULA REFERENCE LEGEND:
+The `delta_time` column represents the measurement interval and is measured in MICROSECONDS. 
+When computing metrics, you must account for multiple intervals/CPUs in your denominator.
+Define `base_time_us` = (MAX(delta_time) * COUNT(DISTINCT from_timestamp))
+Apply these formulas based on the counter tags in the schema:
+- [Busy counter]       percentage  = col * 100.0 / NULLIF(base_time_us, 0)
+- [Queue counter]      avg queue   = col * 1.0   / NULLIF(base_time_us, 0)
+- [Queue-Busy counter] percentage  = col * 100.0 / NULLIF(base_time_us, 0)
+- [Incrementing counter] rate/sec  = col * 1000000.0 / NULLIF(base_time_us, 0)
+- [Accumulating counter] bytes/sec = col * 1000000.0 / NULLIF(base_time_us, 0)
 - [Response-time counter] avg time = col / NULLIF(transaction_count_col, 0)
 - [Lockwait counter]  avg wait µs  = col / NULLIF(requests_blocked, 0)
 - [Snapshot counter]  use directly — no rate conversion needed.
-- The column comments in SCHEMA CONTEXT show each column's counter type and formula.
-  Always follow the formula shown there.
 
-AGGREGATION RULES:
-- When computing process-category breakdowns from macht413.proc grouped by cpu_num,
-  use SUM(CASE WHEN ...) for the numerator and MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp) for the denominator.
-- When a query asks for "percentage of interval" or "utilization %", always divide
-  the Busy/Queue counter by (MAX(delta_time) * 1000000.0 * COUNT(DISTINCT from_timestamp)).
-- For cache hit ratios: hits * 100.0 / NULLIF(hits + misses, 0) — do NOT involve delta_time.
-- For lock wait averages: lockwait_time / NULLIF(requests_blocked, 0).
+AGGREGATION & MATH RULES:
+- If a specific formula is provided directly in the schema comment for a column, it strictly overrides the global FORMULA REFERENCE LEGEND.
+- When computing process-category breakdowns from macht413.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
+- Use from_timestamp / to_timestamp for time filtering.
 
-CROSS-TABLE RULES:
-- CRITICAL — cross-table joins on timestamps: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
-- CRITICAL — multi-table aggregation performance: When joining 3 or more tables that each have many rows (proc has 110k rows, file has 61k rows), ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results. Flat multi-table joins with DATE_TRUNC will time out. Pattern: WITH t1 AS (SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name, AGG(...) FROM macht413.table GROUP BY 1,2), ... SELECT ... FROM t1 LEFT JOIN t2 ON t1.system_name=t2.system_name AND t1.ts=t2.ts
-
-- Intent Mapping: If a user asks for a metric using non-technical terms (e.g., "bottleneck", "sluggish"), map their intent to the closest matching column provided in the SCHEMA CONTEXT. If absolutely no logical match exists, use the most relevant primary metric for that table (e.g., cpu_busy_time for cpu).
-- Always include LIMIT {self.max_rows} unless a smaller limit is specified.
+CROSS-TABLE & JOIN RULES:
+- CRITICAL: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
+- CRITICAL: When joining 3 or more tables that each have many rows, ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results.
 
 SCHEMA CONTEXT:
 {schema_context}

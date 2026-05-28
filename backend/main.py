@@ -319,6 +319,7 @@ def run_query(req: QueryRequest):
 
         # Track the prompt sent to the LLM for debugging
         debug_prompt = None
+        raw_llm_output = None
 
         if cache_result.hit:
             sql = cache_result.sql
@@ -357,7 +358,7 @@ def run_query(req: QueryRequest):
             _builder.build_retry_prompt = _counting_retry
 
             try:
-                sql = _llm_engine.generate_sql_with_retry(
+                sql, raw_llm_output = _llm_engine.generate_sql_with_retry(
                     prompt=prompt,
                     validator=_validator,
                     prompt_builder=_builder,
@@ -425,9 +426,8 @@ def run_query(req: QueryRequest):
             "cache_hit":         cache_result.hit,
             "chart_type":        chart_type,
             "domain":            domain,
-            # debug_prompt is only included when DEBUG_PROMPTS=true in .env
-            # to avoid leaking the full prompt in production responses.
-            **({"debug_prompt": debug_prompt} if os.getenv("DEBUG_PROMPTS", "").lower() == "true" else {}),
+            "debug_prompt":      debug_prompt,
+            "raw_llm_output":    raw_llm_output,
         }
 
     except HTTPException:

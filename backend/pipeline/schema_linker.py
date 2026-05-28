@@ -366,24 +366,7 @@ class SchemaLinker:
     # The hint is intentionally terse so it fits on one comment line without
     # blowing up the context window.  The prompt rules reinforce the same
     # formulas at a higher level.
-    _COUNTER_FORMULA: Dict[str, str] = {
-        # Busy counters: value is microseconds busy → divide by delta_time for %
-        "Busy":          "% = col*100.0/NULLIF(delta_time*1000000.0,0); use (MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp)) when grouping",
-        # Queue counters: value is cumulative queue time → divide by delta_time for AQL
-        "Queue":         "AQL = col*1.0/NULLIF(delta_time*1000000.0,0); use (MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp)) when grouping",
-        # Queue-Busy: time queue was non-empty → divide by delta_time for %
-        "Queue-Busy":    "% = col*100.0/NULLIF(delta_time*1000000.0,0); use (MAX(delta_time)*1000000.0*COUNT(DISTINCT from_timestamp)) when grouping",
-        # Incrementing: event count → divide by delta_time (seconds) for per-second rate
-        "Incrementing":  "rate/s = col*1.0/NULLIF(delta_time,0); use (MAX(delta_time)*COUNT(DISTINCT from_timestamp)) when grouping",
-        # Accumulating: byte/block count → divide by delta_time (seconds) for throughput/s
-        "Accumulating":  "throughput/s = col*1.0/NULLIF(delta_time,0); use (MAX(delta_time)*COUNT(DISTINCT from_timestamp)) when grouping",
-        # Response-time: cumulative time → divide by transaction count for avg
-        "Response-time": "avg = col/NULLIF(transaction_count,0)",
-        # Lockwait: cumulative lock wait → divide by requests_blocked for avg
-        "Lockwait":      "avg_us = col/NULLIF(requests_blocked,0)",
-        # Snapshot: point-in-time value — no formula needed, use directly
-        "Snapshot":      "point-in-time value; use directly, no rate conversion",
-    }
+    _COUNTER_FORMULA: Dict[str, str] = {}
 
     @staticmethod
     def _build_col_comment(col_def: Dict) -> str:
