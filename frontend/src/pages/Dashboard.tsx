@@ -9,7 +9,7 @@ import ReportDownload from '../components/ReportDownload'
 import AIExplanation from '../components/AIExplanation'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
-import { runQuery, runSqlDirect, getHistory, getHealth, runRetryAnalysis, setModel, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
+import { runQuery, runSqlDirect, runImageQuery, getHistory, getHealth, runRetryAnalysis, setModel, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -89,12 +89,17 @@ export default function Dashboard() {
 
   useEffect(() => { refreshHistory() }, [refreshHistory])
 
-  const handleQuery = async (query: string, mode: InputMode = 'nl') => {
+  const handleQuery = async (payload: string | File, mode: InputMode = 'nl') => {
     setLoading(true)
     setError(null)
-    setCurrentQuery(query)
+    if (typeof payload === 'string') setCurrentQuery(payload)
+    else setCurrentQuery(`[Image] ${payload.name}`)
     try {
-      const res = mode === 'sql' ? await runSqlDirect(query) : await runQuery(query)
+      const res =
+        mode === 'image' && payload instanceof File ? await runImageQuery(payload)
+        : mode === 'sql' ? await runSqlDirect(payload as string)
+        : await runQuery(payload as string)
+      if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
       setResult(res)
       // Auto-select chart kind based on data shape
       if (res.chart_type === 'line') {

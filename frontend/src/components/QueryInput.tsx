@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
-import { Send, Loader2, Sparkles, Code2 } from 'lucide-react'
+import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
+import { Send, Loader2, Sparkles, Code2, Image as ImageIcon, Upload } from 'lucide-react'
 
-export type InputMode = 'nl' | 'sql'
+export type InputMode = 'nl' | 'sql' | 'image'
 
 interface Props {
-  onSubmit: (query: string, mode: InputMode) => void
+  onSubmit: (payload: string | File, mode: InputMode) => void
   loading: boolean
   error: string | null
   initialValue?: string
@@ -46,14 +46,46 @@ export function highlightSQL(sql: string): string {
 export default function QueryInput({ onSubmit, loading, error, initialValue = '', initialMode = 'nl' }: Props) {
   const [mode, setMode]   = useState<InputMode>(initialMode)
   const [value, setValue] = useState(initialValue)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef      = useRef<HTMLInputElement>(null)
 
   // Sync initialValue when parent changes it (e.g. history re-run)
   useEffect(() => { setValue(initialValue) }, [initialValue])
 
+  // Revoke preview URL when it changes / on unmount
+  useEffect(() => {
+    return () => { if (imagePreview) URL.revokeObjectURL(imagePreview) }
+  }, [imagePreview])
+
+  // Paste support — only active in image mode
+  useEffect(() => {
+    if (mode !== 'image') return
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const f = item.getAsFile()
+          if (f) { e.preventDefault(); handleFile(f); return }
+        }
+      }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
   const handleSubmit = () => {
+    if (loading) return
+    if (mode === 'image') {
+      if (!imageFile) return
+      onSubmit(imageFile, mode)
+      return
+    }
     const q = value.trim()
-    if (!q || loading) return
+    if (!q) return
     if (q.length > MAX_QUERY_LENGTH) return   // guard — button is also disabled
     onSubmit(q, mode)
   }
@@ -68,10 +100,29 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
   const switchMode = (m: InputMode) => {
     setMode(m)
     setValue('')
-    setTimeout(() => textareaRef.current?.focus(), 50)
+    if (m !== 'image') {
+      setImageFile(null)
+      if (imagePreview) { URL.revokeObjectURL(imagePreview); setImagePreview(null) }
+    }
+    if (m !== 'image') {
+      setTimeout(() => textareaRef.current?.focus(), 50)
+    }
+  }
+
+  const handleFile = (f: File | null | undefined) => {
+    if (!f) return
+    if (!f.type.startsWith('image/')) return
+    if (imagePreview) URL.revokeObjectURL(imagePreview)
+    setImageFile(f)
+    setImagePreview(URL.createObjectURL(f))
+  }
+
+  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    handleFile(e.target.files?.[0])
   }
 
   const isSql = mode === 'sql'
+  const isImage = mode === 'image'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -90,8 +141,8 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
               borderRadius: '6px', padding: '5px 14px', fontSize: '11px',
               border: 'none', cursor: 'pointer', fontFamily: 'inherit',
               fontWeight: 600, letterSpacing: '0.05em',
-              background: !isSql ? 'rgba(59,130,246,0.15)' : 'transparent',
-              color:      !isSql ? '#60a5fa' : '#555',
+              background: mode === 'nl' ? 'rgba(59,130,246,0.15)' : 'transparent',
+              color:      mode === 'nl' ? '#60a5fa' : '#555',
               transition: 'all 0.15s',
             }}
           >
@@ -115,22 +166,90 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             <Code2 size={11} />
             SQL Query
           </button>
+
+          {/* Image button */}
+          <button
+            onClick={() => switchMode('image')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              borderRadius: '6px', padding: '5px 14px', fontSize: '11px',
+              border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+              fontWeight: 600, letterSpacing: '0.05em',
+              background: isImage ? 'rgba(168,85,247,0.15)' : 'transparent',
+              color:      isImage ? '#c084fc' : '#555',
+              transition: 'all 0.15s',
+            }}
+          >
+            <ImageIcon size={11} />
+            Image
+          </button>
         </div>
 
         {/* Mode hint */}
         <span style={{ fontSize: '11px', color: '#333' }}>
-          {isSql ? 'Direct SQL — bypasses LLM' : 'AI-powered — generates SQL for you'}
+          {isImage ? 'Chart image — Gemini infers an NL question, then SQL'
+            : isSql ? 'Direct SQL — bypasses LLM'
+            : 'AI-powered — generates SQL for you'}
         </span>
       </div>
 
       {/* ── Input box ── */}
       <div style={{
         borderRadius: '10px',
-        border: `1px solid ${error ? 'rgba(239,68,68,0.4)' : isSql ? 'rgba(16,185,129,0.2)' : '#2a2a2a'}`,
+        border: `1px solid ${error
+          ? 'rgba(239,68,68,0.4)'
+          : isImage ? 'rgba(168,85,247,0.2)'
+          : isSql ? 'rgba(16,185,129,0.2)' : '#2a2a2a'}`,
         background: error ? 'rgba(239,68,68,0.05)' : '#161616',
         transition: 'border-color 0.15s',
         position: 'relative',
       }}>
+        {isImage ? (
+          <div
+            onDragOver={e => { e.preventDefault() }}
+            onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]) }}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: '10px',
+              padding: imagePreview ? '14px' : '32px 16px',
+              cursor: loading ? 'default' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={onFileChange}
+              disabled={loading}
+            />
+            {imagePreview ? (
+              <>
+                <img
+                  src={imagePreview}
+                  alt="upload preview"
+                  style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '6px', border: '1px solid #2a2a2a' }}
+                />
+                <span style={{ fontSize: '11px', color: '#666' }}>
+                  {imageFile?.name} — click to replace
+                </span>
+              </>
+            ) : (
+              <>
+                <Upload size={20} style={{ color: '#c084fc' }} />
+                <span style={{ fontSize: '12px', color: '#aaa' }}>
+                  Drop, paste (Ctrl+V), or click to choose a chart screenshot
+                </span>
+                <span style={{ fontSize: '10px', color: '#444' }}>
+                  PNG / JPG · max 8 MB
+                </span>
+              </>
+            )}
+          </div>
+        ) : (
+        <>
         <textarea
           ref={textareaRef}
           value={value}
@@ -170,6 +289,8 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             schema: macht413
           </div>
         )}
+        </>
+        )}
 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -177,10 +298,13 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '11px', color: '#333' }}>
-              {isSql ? 'Only SELECT statements · Ctrl+Enter to run' : 'Ctrl+Enter to run'}
+              {isImage
+                ? (imageFile ? 'Ready — click Analyze Image' : 'Pick or drop a chart image')
+                : isSql ? 'Only SELECT statements · Ctrl+Enter to run'
+                : 'Ctrl+Enter to run'}
             </span>
             {/* Character counter — turns amber near limit, red at limit */}
-            {value.length > 0 && (
+            {!isImage && value.length > 0 && (
               <span style={{
                 fontSize: '10px',
                 color: value.length >= MAX_QUERY_LENGTH
@@ -194,29 +318,40 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
               </span>
             )}
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={!value.trim() || loading || value.length > MAX_QUERY_LENGTH}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '6px 14px', borderRadius: '7px',
-              background: !value.trim() || loading || value.length > MAX_QUERY_LENGTH
-                ? '#1a1a1a'
-                : isSql ? '#059669' : '#3b82f6',
-              color: !value.trim() || loading || value.length > MAX_QUERY_LENGTH ? '#444' : '#fff',
-              border: 'none',
-              cursor: !value.trim() || loading || value.length > MAX_QUERY_LENGTH ? 'not-allowed' : 'pointer',
-              fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
-              transition: 'background 0.15s',
-            }}
-          >
-            {loading
-              ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Running...</>
-              : isSql
-                ? <><Code2 size={12} /> Run SQL</>
-                : <><Send size={12} /> Generate Report</>
-            }
-          </button>
+          {(() => {
+            const disabled = loading
+              || (isImage ? !imageFile : !value.trim() || value.length > MAX_QUERY_LENGTH)
+            const bg = disabled
+              ? '#1a1a1a'
+              : isImage ? '#9333ea'
+              : isSql ? '#059669'
+              : '#3b82f6'
+            return (
+              <button
+                onClick={handleSubmit}
+                disabled={disabled}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '6px 14px', borderRadius: '7px',
+                  background: bg,
+                  color: disabled ? '#444' : '#fff',
+                  border: 'none',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {loading
+                  ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Running...</>
+                  : isImage
+                    ? <><ImageIcon size={12} /> Analyze Image</>
+                    : isSql
+                      ? <><Code2 size={12} /> Run SQL</>
+                      : <><Send size={12} /> Generate Report</>
+                }
+              </button>
+            )
+          })()}
         </div>
       </div>
 
@@ -232,7 +367,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
       )}
 
       {/* ── Suggestions ── */}
-      {!value && !loading && (
+      {!isImage && !value && !loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <span style={{ fontSize: '10px', color: '#333', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             {isSql ? 'Example queries' : 'Try asking'}

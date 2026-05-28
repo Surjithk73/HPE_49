@@ -21,7 +21,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -438,6 +438,65 @@ def run_query(req: QueryRequest):
         tb = traceback.format_exc()
         logger.error(f"[/api/query] Unexpected error: {e}\n{tb}")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+# POST /api/image-to-query
+@app.post("/api/image-to-query")
+async def image_to_query(file: UploadFile = File(...)):
+    """
+    Image-based query entry point.
+
+    Pipeline: chart image → Gemini multimodal (image→NL question) → /api/query.
+    Returns the standard QueryResponse plus the inferred natural-language prompt.
+    """
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Uploaded file must be an image")
+
+    image_bytes = await file.read()
+    if len(image_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Empty image upload")
+    if len(image_bytes) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 8 MB)")
+
+    try:
+        from config import GEMINI_API_KEY
+        import google.generativeai as genai
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gemini SDK not available: {e}")
+
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
+
+    model_name = (_llm_engine.model_name if _llm_engine else None) or GEMINI_MODEL
+
+    instruction = (
+        "You are looking at a chart screenshot from HPE NonStop Measure performance reports. "
+        "The underlying dataset is in PostgreSQL schema `macht413` with tables: "
+        "cpu, proc, disc, file, dfile, dopen, tmf, ossns, udef. "
+        "Write ONE concise natural-language analytics question that this chart would answer, "
+        "phrased so it can be translated into a SQL query against that schema. "
+        "Do NOT write SQL. Do NOT describe the chart. Output only the question, on a single line."
+    )
+
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(model_name)
+        resp = model.generate_content([
+            instruction,
+            {"mime_type": file.content_type, "data": image_bytes},
+        ])
+        nl_question = (resp.text or "").strip().splitlines()[0].strip()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gemini image call failed: {e}")
+
+    if not nl_question:
+        raise HTTPException(status_code=502, detail="Gemini returned an empty question for the image")
+
+    # Reuse the existing NL→SQL pipeline.
+    result = run_query(QueryRequest(query=nl_question))
+    if isinstance(result, dict):
+        result["inferred_query"] = nl_question
+    return result
 
 
 # POST /api/sql
