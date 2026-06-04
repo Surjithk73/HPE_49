@@ -155,6 +155,13 @@ export async function clearCache(): Promise<void> {
   })
 }
 
+export async function acceptQueryCache(query: string, sql: string, rowCount: number): Promise<{status: string, message: string}> {
+  return request<{status: string, message: string}>('/api/cache/accept', {
+    method: 'POST',
+    body: JSON.stringify({ query, sql, row_count: rowCount }),
+  })
+}
+
 export interface RetryAnalysisSample {
   id: number
   timestamp: string

@@ -76,7 +76,7 @@ _few_shots     = []
 async def lifespan(app: FastAPI):
     """Initialise all pipeline components at startup."""
     global _schema_loader, _schema, _normalizer, _linker, _builder
-    global _llm_engine, _validator, _executor, _cache, _audit, _few_shots
+    global _llm_engine, _validator, _executor, _cache, _audit, _few_shots, _few_shot_retriever
 
     print("\n[QueryCraft] Starting up...")
 
@@ -99,10 +99,9 @@ async def lifespan(app: FastAPI):
     # Executor — creates the connection pool
     _executor = QueryExecutor()
 
-    # Semantic cache — embedding model loads in background thread
-    # API is available immediately; cache returns misses until model is ready
+    # Semantic cache — embedding model loads synchronously
     _cache = SemanticCache(persist_path="cache_store")
-    print(f"[QueryCraft] Cache initialised — {_cache.count()} entries (model loading in background)")
+    print(f"[QueryCraft] Cache initialised — {_cache.count()} entries (model loaded)")
 
     # Audit log
     _audit = AuditLog(AUDIT_LOG_PATH)
@@ -122,6 +121,9 @@ async def lifespan(app: FastAPI):
     _few_shot_retriever = FewShotRetriever(_few_shots, persist_path="cache_store")
     print("[QueryCraft] Few-shot retriever ready")
 
+    print("[QueryCraft] Pre-embedding schema tables...")
+    _linker._ensure_bm25_index()
+    _linker._ensure_table_embeddings()
     print("[QueryCraft] Startup complete\n")
     yield
 
@@ -151,6 +153,11 @@ app.add_middleware(
 # ── Request / Response models ─────────────────────────────────────────────────
 class QueryRequest(BaseModel):
     query: str
+
+class CacheAcceptRequest(BaseModel):
+    query: str
+    sql: str
+    row_count: int
 
 class SqlRequest(BaseModel):
     sql: str
@@ -403,15 +410,7 @@ def run_query(req: QueryRequest):
         # Step 8 — Chart type
         chart_type = detect_chart_type(result.columns, result.rows)
 
-        # Step 9 — Store in cache (only on cache miss, with execution metadata)
-        if not cache_result.hit:
-            _cache.store(
-                norm_text,
-                sql,
-                execution_success=execution_success,
-                row_count=result.row_count,
-            )
-
+        # Step 9 — (Removed auto-caching)
         # Step 10 — Audit log
         log_entry["row_count"]         = result.row_count
         log_entry["execution_time_ms"] = result.execution_time_ms
@@ -642,7 +641,20 @@ def delete_cache_entry(query: str = Query(..., description="The query text to de
             "normalized": norm_text,
         }
     raise HTTPException(status_code=404, detail="Cache entry not found")
-
+# POST /api/cache/accept
+@app.post("/api/cache/accept")
+async def accept_cache(req: CacheAcceptRequest):
+    if _cache is None:
+        raise HTTPException(status_code=503, detail="Cache not available")
+        
+    norm_text = normalize_text(req.query)
+    _cache.store(
+        norm_text,
+        req.sql,
+        execution_success=True,
+        row_count=req.row_count,
+    )
+    return {"status": "ok", "message": "Added to cache"}
 
 # GET /api/cache/threshold  ── NEW ────────────────────────────────────────────
 @app.get("/api/cache/threshold")

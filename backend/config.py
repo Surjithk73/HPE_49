@@ -5,8 +5,8 @@ Loads all environment variables and exposes them as typed constants.
 import os
 from dotenv import load_dotenv
 
-# Load .env file
-load_dotenv()
+# Load .env file (override system environment variables to ensure we use the file's API key)
+load_dotenv(override=True)
 
 # PostgreSQL Configuration
 DB_HOST = os.getenv("DB_HOST")

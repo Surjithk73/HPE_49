@@ -1,1059 +1,149 @@
 examples:
-  # ==========================================================================
-  # SIMPLE QUERIES - Basic single-table operations
-  # ==========================================================================
-  
   - domain: cpu
-    query: "Show average CPU busy time per CPU"
-    sql: "SELECT cpu_num, AVG(cpu_busy_time) AS avg_busy_time FROM macht413.cpu GROUP BY cpu_num ORDER BY cpu_num LIMIT 10000;"
-  
+    query: Show average CPU busy time per CPU
+    sql: SELECT cpu_num, AVG(cpu_busy_time) AS avg_busy_time FROM macht413.cpu GROUP BY cpu_num ORDER BY cpu_num LIMIT 10000;
   - domain: cpu
-    query: "Show comprehensive CPU performance metrics including type, memory, PCBs, queue lengths, busy percentages, overhead, swaps, dispatches, cache hits, and disk I/Os per second"
-    sql: |
-      SELECT 
-        cpu_num,
-        cpu_type,
-        mem_mb,
-        pcbs,
-        cpu_qtime * 1000000.0 / NULLIF(delta_time, 0) AS queue_length_total,
-        cpu_busy_time * 100.0 / NULLIF(delta_time, 0) AS process_busy_pct,
-        intr_busy_time * 100.0 / NULLIF(delta_time, 0) AS interrupt_busy_pct,
-        (cpu_busy_time + intr_busy_time) * 100.0 / NULLIF(delta_time, 0) AS total_busy_pct,
-        process_ovhd * 100.0 / NULLIF(delta_time, 0) AS process_overhead_pct,
-        swaps * 1000000.0 / NULLIF(delta_time, 0) AS memory_swaps_per_sec,
-        dispatches * 1000000.0 / NULLIF(delta_time, 0) AS process_dispatches_per_sec,
-        cache_hits * 1000000.0 / NULLIF(delta_time, 0) AS cache_hits_per_sec,
-        disc_ios * 1000000.0 / NULLIF(delta_time, 0) AS disk_ios_per_sec
-      FROM macht413.cpu
-      ORDER BY cpu_num
-      LIMIT 10000;
-  
+    query: Show comprehensive CPU performance metrics including type, memory, PCBs, queue lengths, busy percentages, overhead, swaps, dispatches, cache hits, and disk I/Os per second
+    sql: "SELECT \n  cpu_num,\n  cpu_type,\n  mem_mb,\n  pcbs,\n  cpu_qtime * 1000000.0 / NULLIF(delta_time, 0) AS queue_length_total,\n  cpu_busy_time * 100.0 / NULLIF(delta_time, 0) AS process_busy_pct,\n  intr_busy_time * 100.0 / NULLIF(delta_time, 0) AS interrupt_busy_pct,\n  (cpu_busy_time + intr_busy_time) * 100.0 / NULLIF(delta_time, 0) AS total_busy_pct,\n  process_ovhd * 100.0 / NULLIF(delta_time, 0) AS process_overhead_pct,\n  swaps * 1000000.0 / NULLIF(delta_time, 0) AS memory_swaps_per_sec,\n  dispatches * 1000000.0 / NULLIF(delta_time, 0) AS process_dispatches_per_sec,\n  cache_hits * 1000000.0 / NULLIF(delta_time, 0) AS cache_hits_per_sec,\n  disc_ios * 1000000.0 / NULLIF(delta_time, 0) AS disk_ios_per_sec\nFROM macht413.cpu\nORDER BY cpu_num\nLIMIT 10000;\n"
   - domain: disc
-    query: "Show disk read and write counts per device"
-    sql: "SELECT device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;"
-  
+    query: Show disk read and write counts per device
+    sql: SELECT device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;
   - domain: proc
-    query: "List all process names with their CPU usage"
-    sql: "SELECT process_name, cpu_busy_time FROM macht413.proc ORDER BY cpu_busy_time DESC LIMIT 10000;"
-  
+    query: List all process names with their CPU usage
+    sql: SELECT process_name, cpu_busy_time FROM macht413.proc ORDER BY cpu_busy_time DESC LIMIT 10000;
   - domain: tmf
-    query: "Show transaction backout counts"
-    sql: "SELECT SUM(aborting_trans) AS total_aborts FROM macht413.tmf LIMIT 10000;"
-  
-  # ==========================================================================
-  # COMPLEX ANALYTICAL QUERIES - Multi-table joins, advanced calculations
-  # ==========================================================================
-  
+    query: Show transaction backout counts
+    sql: SELECT SUM(aborting_trans) AS total_aborts FROM macht413.tmf LIMIT 10000;
   - domain: multi
-    query: "Analyze CPU utilization with memory pressure and identify bottlenecks by correlating CPU busy time, page faults, and queue times across all CPUs"
-    sql: |
-      SELECT 
-        c.cpu_num,
-        c.from_timestamp,
-        c.cpu_busy_time / NULLIF(c.delta_time, 0) * 100 AS cpu_utilization_pct,
-        c.cpu_qtime / NULLIF(c.delta_time, 0) AS avg_queue_length,
-        c.page_requests,
-        c.page_scans,
-        c.ending_free_mem - c.starting_free_mem AS mem_delta,
-        CASE 
-          WHEN c.page_scans > c.page_requests * 5 THEN 'MEMORY_PRESSURE'
-          WHEN c.cpu_qtime / NULLIF(c.delta_time, 0) > 2 THEN 'CPU_BOTTLENECK'
-          ELSE 'NORMAL'
-        END AS bottleneck_type
-      FROM macht413.cpu c
-      WHERE c.cpu_busy_time > 0
-      ORDER BY cpu_utilization_pct DESC, c.from_timestamp
-      LIMIT 10000;
-  
+    query: Analyze CPU utilization with memory pressure and identify bottlenecks by correlating CPU busy time, page faults, and queue times across all CPUs
+    sql: "SELECT \n  c.cpu_num,\n  c.from_timestamp,\n  c.cpu_busy_time / NULLIF(c.delta_time, 0) * 100 AS cpu_utilization_pct,\n  c.cpu_qtime / NULLIF(c.delta_time, 0) AS avg_queue_length,\n  c.page_requests,\n  c.page_scans,\n  c.ending_free_mem - c.starting_free_mem AS mem_delta,\n  CASE \n    WHEN c.page_scans > c.page_requests * 5 THEN 'MEMORY_PRESSURE'\n    WHEN c.cpu_qtime / NULLIF(c.delta_time, 0) > 2 THEN 'CPU_BOTTLENECK'\n    ELSE 'NORMAL'\n  END AS bottleneck_type\nFROM macht413.cpu c\nWHERE c.cpu_busy_time > 0\nORDER BY cpu_utilization_pct DESC, c.from_timestamp\nLIMIT 10000;\n"
   - domain: multi
-    query: "Identify disk I/O hotspots by analyzing cache hit ratios, queue times, and correlating with file-level activity to find poorly cached files"
-    sql: |
-      SELECT 
-        d.device_name,
-        d.from_timestamp,
-        d.reads + d.writes AS total_ios,
-        CASE WHEN (d.reads + d.writes) > 0 
-          THEN (d.cache_hits * 100.0 / (d.reads + d.writes)) 
-          ELSE 0 
-        END AS cache_hit_ratio_pct,
-        d.request_qtime / NULLIF(d.delta_time, 0) AS avg_request_queue_length,
-        d.read_qtime / NULLIF(d.delta_time, 0) AS avg_read_queue_length,
-        d.write_qtime / NULLIF(d.delta_time, 0) AS avg_write_queue_length,
-        d.ending_free_space / 1024 / 1024 AS free_space_mb,
-        df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS top_file,
-        df.driver_input_calls + df.driver_output_calls AS file_total_ops
-      FROM macht413.disc d
-      LEFT JOIN macht413.dfile df 
-        ON d.system_name = df.system_name 
-        AND d.device_name = df.device_name 
-        AND DATE_TRUNC('second', d.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)
-      WHERE d.reads + d.writes > 100
-      ORDER BY cache_hit_ratio_pct ASC, total_ios DESC
-      LIMIT 10000;
-  
+    query: Identify disk I/O hotspots by analyzing cache hit ratios, queue times, and correlating with file-level activity to find poorly cached files
+    sql: "SELECT \n  d.device_name,\n  d.from_timestamp,\n  d.reads + d.writes AS total_ios,\n  CASE WHEN (d.reads + d.writes) > 0 \n    THEN (d.cache_hits * 100.0 / (d.reads + d.writes)) \n    ELSE 0 \n  END AS cache_hit_ratio_pct,\n  d.request_qtime / NULLIF(d.delta_time, 0) AS avg_request_queue_length,\n  d.read_qtime / NULLIF(d.delta_time, 0) AS avg_read_queue_length,\n  d.write_qtime / NULLIF(d.delta_time, 0) AS avg_write_queue_length,\n  d.ending_free_space / 1024 / 1024 AS free_space_mb,\n  df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS top_file,\n  df.driver_input_calls + df.driver_output_calls AS file_total_ops\nFROM macht413.disc d\nLEFT JOIN macht413.dfile df \n  ON d.system_name = df.system_name \n  AND d.device_name = df.device_name \n  AND DATE_TRUNC('second', d.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)\nWHERE d.reads + d.writes > 100\nORDER BY cache_hit_ratio_pct ASC, total_ios DESC\nLIMIT 10000;\n"
   - domain: multi
-    query: "Perform deep process analysis correlating CPU usage, memory consumption, messaging activity, and file I/O to identify resource-intensive processes"
-    sql: |
-      SELECT 
-        p.process_name,
-        p.cpu_num,
-        p.from_timestamp,
-        p.cpu_busy_time / NULLIF(p.delta_time, 0) * 100 AS cpu_usage_pct,
-        p.ready_time / NULLIF(p.delta_time, 0) * 100 AS ready_time_pct,
-        p.pres_pages_end AS memory_pages,
-        p.page_faults,
-        p.messages_sent + p.messages_received AS total_messages,
-        (p.sent_bytes + p.received_bytes) / 1024 AS message_kb,
-        f.reads + f.writes AS file_operations,
-        f.file_busy_time / NULLIF(f.delta_time, 0) * 100 AS file_io_pct,
-        CASE 
-          WHEN p.page_faults > 1000 THEN 'HIGH_PAGING'
-          WHEN p.cpu_busy_time / NULLIF(p.delta_time, 0) > 0.8 THEN 'CPU_INTENSIVE'
-          WHEN (p.sent_bytes + p.received_bytes) > 10000000 THEN 'MESSAGE_INTENSIVE'
-          WHEN f.reads + f.writes > 5000 THEN 'IO_INTENSIVE'
-          ELSE 'BALANCED'
-        END AS workload_profile
-      FROM macht413.proc p
-      LEFT JOIN macht413.file f 
-        ON p.system_name = f.system_name 
-        AND p.cpu_num = f.cpu_num 
-        AND p.pin = f.opener_pin 
-        AND DATE_TRUNC('second', p.from_timestamp) = DATE_TRUNC('second', f.from_timestamp)
-      WHERE p.cpu_busy_time > 0
-      ORDER BY cpu_usage_pct DESC, memory_pages DESC
-      LIMIT 10000;
-  
+    query: Perform deep process analysis correlating CPU usage, memory consumption, messaging activity, and file I/O to identify resource-intensive processes
+    sql: "SELECT \n  p.process_name,\n  p.cpu_num,\n  p.from_timestamp,\n  p.cpu_busy_time / NULLIF(p.delta_time, 0) * 100 AS cpu_usage_pct,\n  p.ready_time / NULLIF(p.delta_time, 0) * 100 AS ready_time_pct,\n  p.pres_pages_end AS memory_pages,\n  p.page_faults,\n  p.messages_sent + p.messages_received AS total_messages,\n  (p.sent_bytes + p.received_bytes) / 1024 AS message_kb,\n  f.reads + f.writes AS file_operations,\n  f.file_busy_time / NULLIF(f.delta_time, 0) * 100 AS file_io_pct,\n  CASE \n    WHEN p.page_faults > 1000 THEN 'HIGH_PAGING'\n    WHEN p.cpu_busy_time / NULLIF(p.delta_time, 0) > 0.8 THEN 'CPU_INTENSIVE'\n    WHEN (p.sent_bytes + p.received_bytes) > 10000000 THEN 'MESSAGE_INTENSIVE'\n    WHEN f.reads + f.writes > 5000 THEN 'IO_INTENSIVE'\n    ELSE 'BALANCED'\n  END AS workload_profile\nFROM macht413.proc p\nLEFT JOIN macht413.file f \n  ON p.system_name = f.system_name \n  AND p.cpu_num = f.cpu_num \n  AND p.pin = f.opener_pin \n  AND DATE_TRUNC('second', p.from_timestamp)\
+      \ = DATE_TRUNC('second', f.from_timestamp)\nWHERE p.cpu_busy_time > 0\nORDER BY cpu_usage_pct DESC, memory_pages DESC\nLIMIT 10000;\n"
   - domain: multi
-    query: "Analyze transaction performance by correlating TMF statistics with process activity and disk I/O to identify transaction bottlenecks and backout patterns"
-    sql: |
-      SELECT 
-        t.from_timestamp,
-        t.cpu_num,
-        t.home_trans AS transactions_started,
-        t.aborting_trans AS transactions_aborted,
-        CASE WHEN t.home_trans > 0 
-          THEN (t.aborting_trans * 100.0 / t.home_trans) 
-          ELSE 0 
-        END AS abort_rate_pct,
-        t.trans_backout_qtime / NULLIF(t.delta_time, 0) AS avg_backout_queue_length,
-        t.home_trans_qtime / NULLIF(t.home_trans, 0) AS avg_trans_lifetime_us,
-        p.process_name,
-        p.begin_trans AS process_trans_begun,
-        p.abort_trans AS process_trans_aborted,
-        d.control_points AS disk_control_points,
-        d.control_point_writes AS disk_cp_writes
-      FROM macht413.tmf t
-      LEFT JOIN macht413.proc p 
-        ON t.system_name = p.system_name 
-        AND t.cpu_num = p.cpu_num 
-        AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
-      LEFT JOIN macht413.disc d 
-        ON t.system_name = d.system_name 
-        AND t.cpu_num = d.cpu_num 
-        AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)
-      WHERE t.home_trans > 0
-      ORDER BY abort_rate_pct DESC, transactions_started DESC
-      LIMIT 10000;
-  
+    query: Analyze transaction performance by correlating TMF statistics with process activity and disk I/O to identify transaction bottlenecks and backout patterns
+    sql: "SELECT \n  t.from_timestamp,\n  t.cpu_num,\n  t.home_trans AS transactions_started,\n  t.aborting_trans AS transactions_aborted,\n  CASE WHEN t.home_trans > 0 \n    THEN (t.aborting_trans * 100.0 / t.home_trans) \n    ELSE 0 \n  END AS abort_rate_pct,\n  t.trans_backout_qtime / NULLIF(t.delta_time, 0) AS avg_backout_queue_length,\n  t.home_trans_qtime / NULLIF(t.home_trans, 0) AS avg_trans_lifetime_us,\n  p.process_name,\n  p.begin_trans AS process_trans_begun,\n  p.abort_trans AS process_trans_aborted,\n  d.control_points AS disk_control_points,\n  d.control_point_writes AS disk_cp_writes\nFROM macht413.tmf t\nLEFT JOIN macht413.proc p \n  ON t.system_name = p.system_name \n  AND t.cpu_num = p.cpu_num \n  AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)\nLEFT JOIN macht413.disc d \n  ON t.system_name = d.system_name \n  AND t.cpu_num = d.cpu_num \n  AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)\nWHERE t.home_trans\
+      \ > 0\nORDER BY abort_rate_pct DESC, transactions_started DESC\nLIMIT 10000;\n"
   - domain: multi
-    query: "Investigate file locking contention by analyzing lock wait times, blocked requests, and correlating with opener processes to identify lock conflicts"
-    sql: |
-      SELECT 
-        df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS file_path,
-        df.from_timestamp,
-        df.requests_blocked AS total_blocked_requests,
-        df.lockwait_time / NULLIF(df.requests_blocked, 0) AS avg_lockwait_us,
-        df.max_lockwait_time AS max_lockwait_us,
-        df.lock_timeouts,
-        df.lock_bounces,
-        do.opener_cpu,
-        do.opener_pin,
-        do.requests_blocked AS opener_blocked_requests,
-        do.lockwait_time AS opener_lockwait_time,
-        p.process_name AS opener_process_name,
-        p.program_file_name_volume || '.' || p.program_file_name_subvol || '.' || p.program_file_name_filename AS opener_program
-      FROM macht413.dfile df
-      LEFT JOIN macht413.dopen do 
-        ON df.system_name = do.system_name 
-        AND df.file_name_volume = do.file_name_volume 
-        AND df.file_name_subvol = do.file_name_subvol 
-        AND df.file_name_filename = do.file_name_filename 
-        AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', do.from_timestamp)
-      LEFT JOIN macht413.proc p 
-        ON do.system_name = p.system_name 
-        AND do.opener_cpu = p.cpu_num 
-        AND do.opener_pin = p.pin 
-        AND DATE_TRUNC('second', do.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
-      WHERE df.requests_blocked > 0
-      ORDER BY df.lockwait_time DESC, df.requests_blocked DESC
-      LIMIT 10000;
-  
+    query: Investigate file locking contention by analyzing lock wait times, blocked requests, and correlating with opener processes to identify lock conflicts
+    sql: "SELECT \n  df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS file_path,\n  df.from_timestamp,\n  df.requests_blocked AS total_blocked_requests,\n  df.lockwait_time / NULLIF(df.requests_blocked, 0) AS avg_lockwait_us,\n  df.max_lockwait_time AS max_lockwait_us,\n  df.lock_timeouts,\n  df.lock_bounces,\n  do.opener_cpu,\n  do.opener_pin,\n  do.requests_blocked AS opener_blocked_requests,\n  do.lockwait_time AS opener_lockwait_time,\n  p.process_name AS opener_process_name,\n  p.program_file_name_volume || '.' || p.program_file_name_subvol || '.' || p.program_file_name_filename AS opener_program\nFROM macht413.dfile df\nLEFT JOIN macht413.dopen do \n  ON df.system_name = do.system_name \n  AND df.file_name_volume = do.file_name_volume \n  AND df.file_name_subvol = do.file_name_subvol \n  AND df.file_name_filename = do.file_name_filename \n  AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', do.from_timestamp)\nLEFT JOIN macht413.proc\
+      \ p \n  ON do.system_name = p.system_name \n  AND do.opener_cpu = p.cpu_num \n  AND do.opener_pin = p.pin \n  AND DATE_TRUNC('second', do.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)\nWHERE df.requests_blocked > 0\nORDER BY df.lockwait_time DESC, df.requests_blocked DESC\nLIMIT 10000;\n"
   - domain: multi
-    query: "Analyze OSS namespace server performance by correlating cache hit ratios, checkpoint activity, and semaphore contention with DP2 messaging patterns"
-    sql: |
-      SELECT 
-        o.process_name AS ns_process,
-        o.cpu_num,
-        o.from_timestamp,
-        o.rr_processed AS resolution_requests,
-        o.ic_lookups AS inode_cache_lookups,
-        CASE WHEN o.ic_lookups > 0 
-          THEN (o.ic_hits * 100.0 / o.ic_lookups) 
-          ELSE 0 
-        END AS inode_cache_hit_pct,
-        o.lc_lookups AS link_cache_lookups,
-        CASE WHEN o.lc_lookups > 0 
-          THEN (o.lc_hits * 100.0 / o.lc_lookups) 
-          ELSE 0 
-        END AS link_cache_hit_pct,
-        o.checkpoint_reqs,
-        o.checkpoint_blks,
-        o.sem_waits,
-        o.sem_wait_qtime / NULLIF(o.sem_waits, 0) AS avg_sem_wait_us,
-        o.dp2_messages,
-        o.dp2_msg_qtime / NULLIF(o.dp2_messages, 0) AS avg_dp2_response_us,
-        p.cpu_busy_time / NULLIF(p.delta_time, 0) * 100 AS ns_cpu_usage_pct,
-        p.messages_sent + p.messages_received AS ns_total_messages
-      FROM macht413.ossns o
-      LEFT JOIN macht413.proc p 
-        ON o.system_name = p.system_name 
-        AND o.cpu_num = p.cpu_num 
-        AND o.pin = p.pin 
-        AND DATE_TRUNC('second', o.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
-      WHERE o.rr_processed > 0
-      ORDER BY inode_cache_hit_pct ASC, resolution_requests DESC
-      LIMIT 10000;
-  
+    query: Analyze OSS namespace server performance by correlating cache hit ratios, checkpoint activity, and semaphore contention with DP2 messaging patterns
+    sql: "SELECT \n  o.process_name AS ns_process,\n  o.cpu_num,\n  o.from_timestamp,\n  o.rr_processed AS resolution_requests,\n  o.ic_lookups AS inode_cache_lookups,\n  CASE WHEN o.ic_lookups > 0 \n    THEN (o.ic_hits * 100.0 / o.ic_lookups) \n    ELSE 0 \n  END AS inode_cache_hit_pct,\n  o.lc_lookups AS link_cache_lookups,\n  CASE WHEN o.lc_lookups > 0 \n    THEN (o.lc_hits * 100.0 / o.lc_lookups) \n    ELSE 0 \n  END AS link_cache_hit_pct,\n  o.checkpoint_reqs,\n  o.checkpoint_blks,\n  o.sem_waits,\n  o.sem_wait_qtime / NULLIF(o.sem_waits, 0) AS avg_sem_wait_us,\n  o.dp2_messages,\n  o.dp2_msg_qtime / NULLIF(o.dp2_messages, 0) AS avg_dp2_response_us,\n  p.cpu_busy_time / NULLIF(p.delta_time, 0) * 100 AS ns_cpu_usage_pct,\n  p.messages_sent + p.messages_received AS ns_total_messages\nFROM macht413.ossns o\nLEFT JOIN macht413.proc p \n  ON o.system_name = p.system_name \n  AND o.cpu_num = p.cpu_num \n  AND o.pin = p.pin \n  AND DATE_TRUNC('second', o.from_timestamp) = DATE_TRUNC('second',\
+      \ p.from_timestamp)\nWHERE o.rr_processed > 0\nORDER BY inode_cache_hit_pct ASC, resolution_requests DESC\nLIMIT 10000;\n"
   - domain: multi
-    query: "Perform comprehensive system health analysis by aggregating CPU, memory, disk, and process metrics to identify overall system bottlenecks and capacity issues"
-    sql: |
-      WITH cpu_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 COUNT(DISTINCT cpu_num) AS total_cpus,
-                 AVG(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS avg_cpu_utilization_pct,
-                 MAX(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS max_cpu_utilization_pct,
-                 AVG(cpu_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_cpu_queue_length,
-                 SUM(ending_free_mem) AS total_free_memory_pages,
-                 SUM(page_requests) AS total_page_requests,
-                 SUM(page_scans) AS total_page_scans
-          FROM macht413.cpu
-          GROUP BY 1, 2
-      ),
-      disc_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 COUNT(DISTINCT device_name) AS total_disks,
-                 SUM(reads + writes) AS total_disk_ios,
-                 AVG(request_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_disk_queue_length,
-                 SUM(ending_free_space) AS total_free_space
-          FROM macht413.disc
-          GROUP BY 1, 2
-      ),
-      proc_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 COUNT(DISTINCT pin) AS active_processes,
-                 SUM(messages_sent + messages_received) AS total_messages
-          FROM macht413.proc
-          GROUP BY 1, 2
-      ),
-      tmf_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 SUM(home_trans) AS total_transactions,
-                 SUM(aborting_trans) AS total_aborted_transactions
-          FROM macht413.tmf
-          GROUP BY 1, 2
-      )
-      SELECT
-          c.ts AS measurement_time,
-          c.total_cpus,
-          c.avg_cpu_utilization_pct,
-          c.max_cpu_utilization_pct,
-          c.avg_cpu_queue_length,
-          c.total_free_memory_pages,
-          c.total_page_requests,
-          c.total_page_scans,
-          d.total_disks,
-          d.total_disk_ios,
-          d.avg_disk_queue_length,
-          d.total_free_space / 1024 / 1024 / 1024 AS total_free_disk_gb,
-          p.active_processes,
-          p.total_messages,
-          t.total_transactions,
-          t.total_aborted_transactions,
-          CASE
-              WHEN c.avg_cpu_utilization_pct > 85 THEN 'CPU_SATURATED'
-              WHEN c.total_page_scans > c.total_page_requests * 5 THEN 'MEMORY_PRESSURE'
-              WHEN d.avg_disk_queue_length > 5 THEN 'DISK_BOTTLENECK'
-              WHEN d.total_free_space / 1024 / 1024 / 1024 < 100 THEN 'LOW_DISK_SPACE'
-              ELSE 'HEALTHY'
-          END AS system_health_status
-      FROM cpu_agg c
-      LEFT JOIN disc_agg d ON c.system_name = d.system_name AND c.ts = d.ts
-      LEFT JOIN proc_agg p ON c.system_name = p.system_name AND c.ts = p.ts
-      LEFT JOIN tmf_agg t  ON c.system_name = t.system_name AND c.ts = t.ts
-      ORDER BY c.ts
-      LIMIT 10000;
-  
+    query: Perform comprehensive system health analysis by aggregating CPU, memory, disk, and process metrics to identify overall system bottlenecks and capacity issues
+    sql: "WITH cpu_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           COUNT(DISTINCT cpu_num) AS total_cpus,\n           AVG(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS avg_cpu_utilization_pct,\n           MAX(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS max_cpu_utilization_pct,\n           AVG(cpu_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_cpu_queue_length,\n           SUM(ending_free_mem) AS total_free_memory_pages,\n           SUM(page_requests) AS total_page_requests,\n           SUM(page_scans) AS total_page_scans\n    FROM macht413.cpu\n    GROUP BY 1, 2\n),\ndisc_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           COUNT(DISTINCT device_name) AS total_disks,\n           SUM(reads + writes) AS total_disk_ios,\n           AVG(request_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_disk_queue_length,\n           SUM(ending_free_space) AS total_free_space\n    FROM macht413.disc\n    GROUP BY 1, 2\n),\n\
+      proc_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           COUNT(DISTINCT pin) AS active_processes,\n           SUM(messages_sent + messages_received) AS total_messages\n    FROM macht413.proc\n    GROUP BY 1, 2\n),\ntmf_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           SUM(home_trans) AS total_transactions,\n           SUM(aborting_trans) AS total_aborted_transactions\n    FROM macht413.tmf\n    GROUP BY 1, 2\n)\nSELECT\n    c.ts AS measurement_time,\n    c.total_cpus,\n    c.avg_cpu_utilization_pct,\n    c.max_cpu_utilization_pct,\n    c.avg_cpu_queue_length,\n    c.total_free_memory_pages,\n    c.total_page_requests,\n    c.total_page_scans,\n    d.total_disks,\n    d.total_disk_ios,\n    d.avg_disk_queue_length,\n    d.total_free_space / 1024 / 1024 / 1024 AS total_free_disk_gb,\n    p.active_processes,\n    p.total_messages,\n    t.total_transactions,\n    t.total_aborted_transactions,\n    CASE\n    \
+      \    WHEN c.avg_cpu_utilization_pct > 85 THEN 'CPU_SATURATED'\n        WHEN c.total_page_scans > c.total_page_requests * 5 THEN 'MEMORY_PRESSURE'\n        WHEN d.avg_disk_queue_length > 5 THEN 'DISK_BOTTLENECK'\n        WHEN d.total_free_space / 1024 / 1024 / 1024 < 100 THEN 'LOW_DISK_SPACE'\n        ELSE 'HEALTHY'\n    END AS system_health_status\nFROM cpu_agg c\nLEFT JOIN disc_agg d ON c.system_name = d.system_name AND c.ts = d.ts\nLEFT JOIN proc_agg p ON c.system_name = p.system_name AND c.ts = p.ts\nLEFT JOIN tmf_agg t  ON c.system_name = t.system_name AND c.ts = t.ts\nORDER BY c.ts\nLIMIT 10000;\n"
   - domain: multi
-    query: "Analyze disk cache effectiveness across all cache levels by calculating hit ratios, fault rates, and dirty block queue times to optimize cache configuration"
-    sql: |
-      SELECT 
-        d.device_name,
-        d.from_timestamp,
-        d.c0_blks AS cache_512b_blocks,
-        d.c1_blks AS cache_1kb_blocks,
-        d.c2_blks AS cache_2kb_blocks,
-        d.c3_blks AS cache_4kb_blocks,
-        CASE WHEN (d.c0_hits + d.c0_misses) > 0 
-          THEN (d.c0_hits * 100.0 / (d.c0_hits + d.c0_misses)) 
-          ELSE 0 
-        END AS cache_512b_hit_pct,
-        CASE WHEN (d.c1_hits + d.c1_misses) > 0 
-          THEN (d.c1_hits * 100.0 / (d.c1_hits + d.c1_misses)) 
-          ELSE 0 
-        END AS cache_1kb_hit_pct,
-        CASE WHEN (d.c2_hits + d.c2_misses) > 0 
-          THEN (d.c2_hits * 100.0 / (d.c2_hits + d.c2_misses)) 
-          ELSE 0 
-        END AS cache_2kb_hit_pct,
-        CASE WHEN (d.c3_hits + d.c3_misses) > 0 
-          THEN (d.c3_hits * 100.0 / (d.c3_hits + d.c3_misses)) 
-          ELSE 0 
-        END AS cache_4kb_hit_pct,
-        d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults AS total_cache_faults,
-        CASE WHEN (d.reads + d.writes) > 0 
-          THEN ((d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults) * 100.0 / (d.reads + d.writes)) 
-          ELSE 0 
-        END AS fault_rate_pct,
-        (d.c0_blks_dirty_qtime + d.c1_blks_dirty_qtime + d.c2_blks_dirty_qtime + d.c3_blks_dirty_qtime) / NULLIF(d.delta_time, 0) AS avg_dirty_blocks_queued,
-        d.reads + d.writes AS total_ios,
-        d.cache_hits AS total_cache_hits
-      FROM macht413.disc d
-      WHERE d.reads + d.writes > 0
-      ORDER BY fault_rate_pct DESC, total_ios DESC
-      LIMIT 10000;
-  
+    query: Analyze disk cache effectiveness across all cache levels by calculating hit ratios, fault rates, and dirty block queue times to optimize cache configuration
+    sql: "SELECT \n  d.device_name,\n  d.from_timestamp,\n  d.c0_blks AS cache_512b_blocks,\n  d.c1_blks AS cache_1kb_blocks,\n  d.c2_blks AS cache_2kb_blocks,\n  d.c3_blks AS cache_4kb_blocks,\n  CASE WHEN (d.c0_hits + d.c0_misses) > 0 \n    THEN (d.c0_hits * 100.0 / (d.c0_hits + d.c0_misses)) \n    ELSE 0 \n  END AS cache_512b_hit_pct,\n  CASE WHEN (d.c1_hits + d.c1_misses) > 0 \n    THEN (d.c1_hits * 100.0 / (d.c1_hits + d.c1_misses)) \n    ELSE 0 \n  END AS cache_1kb_hit_pct,\n  CASE WHEN (d.c2_hits + d.c2_misses) > 0 \n    THEN (d.c2_hits * 100.0 / (d.c2_hits + d.c2_misses)) \n    ELSE 0 \n  END AS cache_2kb_hit_pct,\n  CASE WHEN (d.c3_hits + d.c3_misses) > 0 \n    THEN (d.c3_hits * 100.0 / (d.c3_hits + d.c3_misses)) \n    ELSE 0 \n  END AS cache_4kb_hit_pct,\n  d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults AS total_cache_faults,\n  CASE WHEN (d.reads + d.writes) > 0 \n    THEN ((d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults) * 100.0 / (d.reads + d.writes)) \n    ELSE\
+      \ 0 \n  END AS fault_rate_pct,\n  (d.c0_blks_dirty_qtime + d.c1_blks_dirty_qtime + d.c2_blks_dirty_qtime + d.c3_blks_dirty_qtime) / NULLIF(d.delta_time, 0) AS avg_dirty_blocks_queued,\n  d.reads + d.writes AS total_ios,\n  d.cache_hits AS total_cache_hits\nFROM macht413.disc d\nWHERE d.reads + d.writes > 0\nORDER BY fault_rate_pct DESC, total_ios DESC\nLIMIT 10000;\n"
   - domain: multi
-    query: "Identify messaging bottlenecks by analyzing inter-process communication patterns, queue times, and correlating with CPU and process activity"
-    sql: |
-      SELECT 
-        p.process_name,
-        p.cpu_num,
-        p.from_timestamp,
-        p.messages_sent AS msgs_sent_as_linker,
-        p.messages_received AS msgs_received_as_listener,
-        (p.sent_bytes + p.returned_bytes) / 1024 AS linker_kb,
-        (p.received_bytes + p.reply_bytes) / 1024 AS listener_kb,
-        p.msgs_sent_qtime / NULLIF(p.messages_sent, 0) AS avg_msg_response_time_us,
-        p.recv_qtime / NULLIF(p.messages_received, 0) AS avg_receive_queue_time_us,
-        p.mqc_allocations AS mqc_allocated,
-        p.mqc_alloc_failures AS mqc_failures,
-        p.mqcs_inuse_qtime / NULLIF(p.delta_time, 0) AS avg_mqcs_in_use,
-        c.cpu_busy_time / NULLIF(c.delta_time, 0) * 100 AS cpu_utilization_pct,
-        c.cpu_qtime / NULLIF(c.delta_time, 0) AS cpu_queue_length,
-        CASE 
-          WHEN p.mqc_alloc_failures > 0 THEN 'MQC_EXHAUSTION'
-          WHEN p.msgs_sent_qtime / NULLIF(p.messages_sent, 0) > 100000 THEN 'SLOW_RESPONSE'
-          WHEN p.recv_qtime / NULLIF(p.messages_received, 0) > 50000 THEN 'RECEIVE_QUEUE_BUILDUP'
-          ELSE 'NORMAL'
-        END AS messaging_health
-      FROM macht413.proc p
-      LEFT JOIN macht413.cpu c 
-        ON p.system_name = c.system_name 
-        AND p.cpu_num = c.cpu_num 
-        AND DATE_TRUNC('second', p.from_timestamp) = DATE_TRUNC('second', c.from_timestamp)
-      WHERE p.messages_sent + p.messages_received > 0
-      ORDER BY avg_msg_response_time_us DESC, msgs_sent_as_linker DESC
-      LIMIT 10000;
-  
+    query: Identify messaging bottlenecks by analyzing inter-process communication patterns, queue times, and correlating with CPU and process activity
+    sql: "SELECT \n  p.process_name,\n  p.cpu_num,\n  p.from_timestamp,\n  p.messages_sent AS msgs_sent_as_linker,\n  p.messages_received AS msgs_received_as_listener,\n  (p.sent_bytes + p.returned_bytes) / 1024 AS linker_kb,\n  (p.received_bytes + p.reply_bytes) / 1024 AS listener_kb,\n  p.msgs_sent_qtime / NULLIF(p.messages_sent, 0) AS avg_msg_response_time_us,\n  p.recv_qtime / NULLIF(p.messages_received, 0) AS avg_receive_queue_time_us,\n  p.mqc_allocations AS mqc_allocated,\n  p.mqc_alloc_failures AS mqc_failures,\n  p.mqcs_inuse_qtime / NULLIF(p.delta_time, 0) AS avg_mqcs_in_use,\n  c.cpu_busy_time / NULLIF(c.delta_time, 0) * 100 AS cpu_utilization_pct,\n  c.cpu_qtime / NULLIF(c.delta_time, 0) AS cpu_queue_length,\n  CASE \n    WHEN p.mqc_alloc_failures > 0 THEN 'MQC_EXHAUSTION'\n    WHEN p.msgs_sent_qtime / NULLIF(p.messages_sent, 0) > 100000 THEN 'SLOW_RESPONSE'\n    WHEN p.recv_qtime / NULLIF(p.messages_received, 0) > 50000 THEN 'RECEIVE_QUEUE_BUILDUP'\n    ELSE 'NORMAL'\n  END\
+      \ AS messaging_health\nFROM macht413.proc p\nLEFT JOIN macht413.cpu c \n  ON p.system_name = c.system_name \n  AND p.cpu_num = c.cpu_num \n  AND DATE_TRUNC('second', p.from_timestamp) = DATE_TRUNC('second', c.from_timestamp)\nWHERE p.messages_sent + p.messages_received > 0\nORDER BY avg_msg_response_time_us DESC, msgs_sent_as_linker DESC\nLIMIT 10000;\n"
   - domain: multi
-    query: "Analyze file I/O patterns by correlating logical operations with physical disk I/O, cache behavior, and DBIO usage to identify optimization opportunities"
-    sql: |
-      SELECT 
-        f.file_name_volume || '.' || f.file_name_subvol || '.' || f.file_name_filename AS file_path,
-        f.from_timestamp,
-        f.reads AS logical_reads,
-        f.writes AS logical_writes,
-        f.dbio_reads AS direct_bulk_reads,
-        f.dbio_writes AS direct_bulk_writes,
-        (f.dbio_read_bytes + f.dbio_write_bytes) / 1024 / 1024 AS dbio_mb,
-        df.driver_input_calls AS physical_reads,
-        df.driver_output_calls AS physical_writes,
-        df.cache_read_hits,
-        CASE WHEN df.driver_input_calls > 0 
-          THEN (df.cache_read_hits * 100.0 / df.driver_input_calls) 
-          ELSE 0 
-        END AS read_cache_hit_pct,
-        df.requests_blocked AS lock_conflicts,
-        df.lockwait_time / NULLIF(df.requests_blocked, 0) AS avg_lock_wait_us,
-        df.block_splits,
-        d.device_name,
-        d.request_qtime / NULLIF(d.delta_time, 0) AS disk_queue_length,
-        CASE 
-          WHEN df.cache_read_hits * 100.0 / NULLIF(df.driver_input_calls, 1) < 50 THEN 'POOR_CACHE_EFFICIENCY'
-          WHEN df.block_splits > 100 THEN 'HIGH_FRAGMENTATION'
-          WHEN df.requests_blocked > 50 THEN 'LOCK_CONTENTION'
-          WHEN (f.dbio_read_bytes + f.dbio_write_bytes) / 1024 / 1024 > 100 THEN 'DBIO_INTENSIVE'
-          ELSE 'NORMAL'
-        END AS io_pattern_classification
-      FROM macht413.file f
-      LEFT JOIN macht413.dfile df 
-        ON f.system_name = df.system_name 
-        AND f.file_name_volume = df.file_name_volume 
-        AND f.file_name_subvol = df.file_name_subvol 
-        AND f.file_name_filename = df.file_name_filename 
-        AND DATE_TRUNC('second', f.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)
-      LEFT JOIN macht413.disc d 
-        ON df.system_name = d.system_name 
-        AND df.device_name = d.device_name 
-        AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)
-      WHERE f.reads + f.writes > 0
-      ORDER BY logical_reads + logical_writes DESC
-      LIMIT 10000;
-
-  
+    query: Analyze file I/O patterns by correlating logical operations with physical disk I/O, cache behavior, and DBIO usage to identify optimization opportunities
+    sql: "SELECT \n  f.file_name_volume || '.' || f.file_name_subvol || '.' || f.file_name_filename AS file_path,\n  f.from_timestamp,\n  f.reads AS logical_reads,\n  f.writes AS logical_writes,\n  f.dbio_reads AS direct_bulk_reads,\n  f.dbio_writes AS direct_bulk_writes,\n  (f.dbio_read_bytes + f.dbio_write_bytes) / 1024 / 1024 AS dbio_mb,\n  df.driver_input_calls AS physical_reads,\n  df.driver_output_calls AS physical_writes,\n  df.cache_read_hits,\n  CASE WHEN df.driver_input_calls > 0 \n    THEN (df.cache_read_hits * 100.0 / df.driver_input_calls) \n    ELSE 0 \n  END AS read_cache_hit_pct,\n  df.requests_blocked AS lock_conflicts,\n  df.lockwait_time / NULLIF(df.requests_blocked, 0) AS avg_lock_wait_us,\n  df.block_splits,\n  d.device_name,\n  d.request_qtime / NULLIF(d.delta_time, 0) AS disk_queue_length,\n  CASE \n    WHEN df.cache_read_hits * 100.0 / NULLIF(df.driver_input_calls, 1) < 50 THEN 'POOR_CACHE_EFFICIENCY'\n    WHEN df.block_splits > 100 THEN 'HIGH_FRAGMENTATION'\n   \
+      \ WHEN df.requests_blocked > 50 THEN 'LOCK_CONTENTION'\n    WHEN (f.dbio_read_bytes + f.dbio_write_bytes) / 1024 / 1024 > 100 THEN 'DBIO_INTENSIVE'\n    ELSE 'NORMAL'\n  END AS io_pattern_classification\nFROM macht413.file f\nLEFT JOIN macht413.dfile df \n  ON f.system_name = df.system_name \n  AND f.file_name_volume = df.file_name_volume \n  AND f.file_name_subvol = df.file_name_subvol \n  AND f.file_name_filename = df.file_name_filename \n  AND DATE_TRUNC('second', f.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)\nLEFT JOIN macht413.disc d \n  ON df.system_name = d.system_name \n  AND df.device_name = d.device_name \n  AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)\nWHERE f.reads + f.writes > 0\nORDER BY logical_reads + logical_writes DESC\nLIMIT 10000;\n"
   - domain: ossns
-    query: "Average out all the server net values and show them to me"
-    sql: |
-      SELECT 
-        AVG(rr_processed) AS avg_rr_processed,
-        AVG(rr_redir_sent) AS avg_rr_redir_sent,
-        AVG(rr_redir_processed) AS avg_rr_redir_processed,
-        AVG(ic_lookups) AS avg_ic_lookups,
-        AVG(ic_hits) AS avg_ic_hits,
-        AVG(ic_dirty_qtime) AS avg_ic_dirty_qtime,
-        AVG(lc_lookups) AS avg_lc_lookups,
-        AVG(lc_hits) AS avg_lc_hits,
-        AVG(lc_inuse_qtime) AS avg_lc_inuse_qtime,
-        AVG(checkpoint_reqs) AS avg_checkpoint_reqs,
-        AVG(checkpoint_blks) AS avg_checkpoint_blks,
-        AVG(sem_waits) AS avg_sem_waits,
-        AVG(sem_wait_qtime) AS avg_sem_wait_qtime,
-        AVG(dp2_dd_reqs) AS avg_dp2_dd_reqs,
-        AVG(dp2_messages) AS avg_dp2_messages,
-        AVG(dp2_msg_qtime) AS avg_dp2_msg_qtime,
-        AVG(ps_messages) AS avg_ps_messages,
-        AVG(ps_msg_qtime) AS avg_ps_msg_qtime,
-        AVG(ls_messages) AS avg_ls_messages,
-        AVG(ls_msg_qtime) AS avg_ls_msg_qtime,
-        AVG(gettime_reqs) AS avg_gettime_reqs,
-        AVG(settime_reqs) AS avg_settime_reqs
-      FROM macht413.ossns
-      LIMIT 10000;
-
-  - domain: disc
-    query: "Show disk cache performance for all devices including requests per second, cache hits and misses per second, and cache hit percentage"
-    sql: |
-      SELECT
-        device_name,
-        requests * 1000000.0 / NULLIF(delta_time, 0) AS requests_per_sec,
-        (c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
-         c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
-         c6_hits + c6_misses + c7_hits + c7_misses) * 1000000.0 / NULLIF(delta_time, 0)
-          AS cache_ops_per_sec,
-        CASE
-          WHEN (c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
-                c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
-                c6_hits + c6_misses + c7_hits + c7_misses) > 0
-          THEN (c0_misses + c1_misses + c2_misses + c3_misses + c4_misses +
-                c5_misses + c6_misses + c7_misses) * 100.0 /
-               (c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
-                c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
-                c6_hits + c6_misses + c7_hits + c7_misses)
-          ELSE 0
-        END AS cache_miss_pct,
-        CASE
-          WHEN (c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
-                c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
-                c6_hits + c6_misses + c7_hits + c7_misses) > 0
-          THEN (c0_hits + c1_hits + c2_hits + c3_hits + c4_hits +
-                c5_hits + c6_hits + c7_hits) * 100.0 /
-               (c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
-                c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
-                c6_hits + c6_misses + c7_hits + c7_misses)
-          ELSE 0
-        END AS cache_hit_pct
-      FROM macht413.disc
-      WHERE requests > 0
-      ORDER BY requests DESC
-      LIMIT 10000;
-
-  # ==========================================================================
-  # dfile — per-file disk-level statistics
-  # ==========================================================================
-
+    query: Average out all the server net values and show them to me
+    sql: "SELECT \n  AVG(rr_processed) AS avg_rr_processed,\n  AVG(rr_redir_sent) AS avg_rr_redir_sent,\n  AVG(rr_redir_processed) AS avg_rr_redir_processed,\n  AVG(ic_lookups) AS avg_ic_lookups,\n  AVG(ic_hits) AS avg_ic_hits,\n  AVG(ic_dirty_qtime) AS avg_ic_dirty_qtime,\n  AVG(lc_lookups) AS avg_lc_lookups,\n  AVG(lc_hits) AS avg_lc_hits,\n  AVG(lc_inuse_qtime) AS avg_lc_inuse_qtime,\n  AVG(checkpoint_reqs) AS avg_checkpoint_reqs,\n  AVG(checkpoint_blks) AS avg_checkpoint_blks,\n  AVG(sem_waits) AS avg_sem_waits,\n  AVG(sem_wait_qtime) AS avg_sem_wait_qtime,\n  AVG(dp2_dd_reqs) AS avg_dp2_dd_reqs,\n  AVG(dp2_messages) AS avg_dp2_messages,\n  AVG(dp2_msg_qtime) AS avg_dp2_msg_qtime,\n  AVG(ps_messages) AS avg_ps_messages,\n  AVG(ps_msg_qtime) AS avg_ps_msg_qtime,\n  AVG(ls_messages) AS avg_ls_messages,\n  AVG(ls_msg_qtime) AS avg_ls_msg_qtime,\n  AVG(gettime_reqs) AS avg_gettime_reqs,\n  AVG(settime_reqs) AS avg_settime_reqs\nFROM macht413.ossns\nLIMIT 10000;\n"
   - domain: dfile
-    query: "Top 20 files by total physical I/O calls"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        device_name,
-        CAST(driver_input_calls AS BIGINT) + CAST(driver_output_calls AS BIGINT) AS total_driver_calls,
-        CAST(driver_input_calls AS BIGINT) AS reads,
-        CAST(driver_output_calls AS BIGINT) AS writes
-      FROM macht413.dfile
-      ORDER BY total_driver_calls DESC
-      LIMIT 20;
-
-  - domain: dfile
-    query: "Show per-file cache read-hit ratio for files with at least 100 driver input calls"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        cache_read_hits,
-        CAST(driver_input_calls AS BIGINT) AS driver_input_calls,
-        cache_read_hits * 100.0 / NULLIF(CAST(driver_input_calls AS BIGINT), 0) AS read_cache_hit_pct
-      FROM macht413.dfile
-      WHERE CAST(driver_input_calls AS BIGINT) >= 100
-      ORDER BY read_cache_hit_pct ASC
-      LIMIT 10000;
-
-  - domain: dfile
-    query: "Show files with the most block splits and extent allocations, indicating fragmentation"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        device_name,
-        block_splits,
-        CAST(extent_allocations AS BIGINT) AS extent_allocations,
-        starting_eof,
-        ending_eof
-      FROM macht413.dfile
-      WHERE block_splits > 0 OR CAST(extent_allocations AS BIGINT) > 0
-      ORDER BY block_splits DESC, extent_allocations DESC
-      LIMIT 10000;
-
-  - domain: dfile
-    query: "Show SQL DML activity per file: inserts, updates, deletes"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        CAST(sql_inserts AS BIGINT) AS inserts,
-        CAST(sql_updates AS BIGINT) AS updates,
-        sql_deletes,
-        CAST(sql_inserts AS BIGINT) + CAST(sql_updates AS BIGINT) + sql_deletes AS total_dml,
-        CAST(ending_rows AS BIGINT) - CAST(starting_rows AS BIGINT) AS row_delta
-      FROM macht413.dfile
-      WHERE CAST(sql_inserts AS BIGINT) + CAST(sql_updates AS BIGINT) + sql_deletes > 0
-      ORDER BY total_dml DESC
-      LIMIT 10000;
-
-  # ==========================================================================
-  # dopen — per-open file activity (opener-side)
-  # ==========================================================================
-
+    query: Top 20 files by total physical I/O calls
+    sql: "SELECT\n  file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,\n  device_name,\n  CAST(driver_input_calls AS BIGINT) + CAST(driver_output_calls AS BIGINT) AS total_driver_calls,\n  CAST(driver_input_calls AS BIGINT) AS reads,\n  CAST(driver_output_calls AS BIGINT) AS writes\nFROM macht413.dfile\nORDER BY total_driver_calls DESC\nLIMIT 20;\n"
   - domain: dopen
-    query: "Count active opens per file and total requests across all openers"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        COUNT(*) AS open_count,
-        SUM(requests) AS total_requests,
-        SUM(requests_blocked) AS total_blocked,
-        SUM(lockwait_time) AS total_lockwait_us
-      FROM macht413.dopen
-      GROUP BY file_name_volume, file_name_subvol, file_name_filename
-      ORDER BY total_requests DESC
-      LIMIT 10000;
-
-  - domain: dopen
-    query: "Show openers with the worst lockwait times per file"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        opener_cpu,
-        opener_pin,
-        requests_blocked,
-        lockwait_time,
-        max_lockwait_time,
-        lockwait_time / NULLIF(requests_blocked, 0) AS avg_lockwait_us
-      FROM macht413.dopen
-      WHERE requests_blocked > 0
-      ORDER BY max_lockwait_time DESC, lockwait_time DESC
-      LIMIT 10000;
-
-  - domain: dopen
-    query: "Join dopen with proc to identify which process names are causing the most file block splits"
-    sql: |
-      SELECT
-        p.process_name,
-        do.file_name_volume || '.' || do.file_name_subvol || '.' || do.file_name_filename AS file_path,
-        do.block_splits,
-        do.requests,
-        do.requests_blocked
-      FROM macht413.dopen do
-      LEFT JOIN macht413.proc p
-        ON do.system_name = p.system_name
-        AND CAST(do.opener_cpu AS BIGINT) = p.cpu_num
-        AND do.opener_pin = p.pin
-        AND DATE_TRUNC('second', do.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)
-      WHERE do.block_splits > 0
-      ORDER BY do.block_splits DESC
-      LIMIT 10000;
-
-  # ==========================================================================
-  # udef — user-defined process counters (key/value)
-  # ==========================================================================
-
+    query: Count active opens per file and total requests across all openers
+    sql: "SELECT\n  file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,\n  COUNT(*) AS open_count,\n  SUM(requests) AS total_requests,\n  SUM(requests_blocked) AS total_blocked,\n  SUM(lockwait_time) AS total_lockwait_us\nFROM macht413.dopen\nGROUP BY file_name_volume, file_name_subvol, file_name_filename\nORDER BY total_requests DESC\nLIMIT 10000;\n"
   - domain: udef
-    query: "List all distinct user-defined counter names and how many processes set each"
-    sql: |
-      SELECT
-        name,
-        COUNT(DISTINCT pin) AS process_count,
-        COUNT(*) AS row_count
-      FROM macht413.udef
-      WHERE name IS NOT NULL
-      GROUP BY name
-      ORDER BY process_count DESC
-      LIMIT 10000;
-
-  - domain: udef
-    query: "Show all user-defined counter values for each process along with its program file"
-    sql: |
-      SELECT
-        process_name,
-        pin,
-        cpu_num,
-        program_file_name_volume || '.' || program_file_name_subvol || '.' || program_file_name_filename AS program_path,
-        type,
-        name,
-        index,
-        value
-      FROM macht413.udef
-      WHERE name IS NOT NULL
-      ORDER BY process_name, name
-      LIMIT 10000;
-
-  - domain: udef
-    query: "Show ancestor process chain for each process via udef ancestor fields"
-    sql: |
-      SELECT
-        process_name,
-        cpu_num,
-        pin,
-        ancestor_sysname,
-        ancestor_cpu,
-        ancestor_pin,
-        ancestor_process_name,
-        gmom_process_name
-      FROM macht413.udef
-      WHERE ancestor_process_name IS NOT NULL
-      ORDER BY process_name
-      LIMIT 10000;
-
-  # ==========================================================================
-  # file — per-file logical I/O (opener-side, OS-level)
-  # ==========================================================================
-
+    query: List all distinct user-defined counter names and how many processes set each
+    sql: "SELECT\n  name,\n  COUNT(DISTINCT pin) AS process_count,\n  COUNT(*) AS row_count\nFROM macht413.udef\nWHERE name IS NOT NULL\nGROUP BY name\nORDER BY process_count DESC\nLIMIT 10000;\n"
   - domain: file
-    query: "Top 20 files by logical reads + writes"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        opener_processname,
-        reads,
-        writes,
-        reads + writes AS total_io,
-        (read_bytes + write_bytes) / 1024 / 1024 AS total_mb
-      FROM macht413.file
-      ORDER BY total_io DESC
-      LIMIT 20;
-
-  - domain: file
-    query: "Show file-level lock waits and timeouts per opener process"
-    sql: |
-      SELECT
-        opener_processname,
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        lock_waits,
-        CAST(timeouts_or_cancels AS BIGINT) AS timeouts_or_cancels,
-        CAST(escalations AS BIGINT) AS escalations
-      FROM macht413.file
-      WHERE lock_waits > 0 OR CAST(timeouts_or_cancels AS BIGINT) > 0
-      ORDER BY lock_waits DESC, timeouts_or_cancels DESC
-      LIMIT 10000;
-
-  - domain: file
-    query: "Compare logical reads to physical disc_reads to find files served well by cache"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        opener_processname,
-        reads AS logical_reads,
-        disc_reads AS physical_reads,
-        (reads - disc_reads) * 100.0 / NULLIF(reads, 0) AS implied_cache_hit_pct
-      FROM macht413.file
-      WHERE reads > 100
-      ORDER BY implied_cache_hit_pct DESC
-      LIMIT 10000;
-
-  - domain: file
-    query: "Show DBIO byte volume and OSS cache activity per file"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        opener_processname,
-        dbio_reads,
-        dbio_writes,
-        (dbio_read_bytes + dbio_write_bytes) / 1024 / 1024 AS dbio_mb,
-        oss_cache_reads,
-        oss_cache_writes,
-        (oss_cache_read_bytes + oss_cache_write_bytes) / 1024 / 1024 AS oss_cache_mb
-      FROM macht413.file
-      WHERE dbio_reads + dbio_writes + oss_cache_reads + oss_cache_writes > 0
-      ORDER BY dbio_mb DESC, oss_cache_mb DESC
-      LIMIT 10000;
-
-  - domain: file
-    query: "Group file-level I/O by opener program to find which programs drive the most file traffic"
-    sql: |
-      SELECT
-        opener_program_filename_volume || '.' || opener_program_filename_subvol || '.' || opener_program_filename_filename AS opener_program,
-        COUNT(*) AS open_count,
-        SUM(reads + writes) AS total_io,
-        SUM(file_busy_time) AS total_busy_time,
-        SUM(messages) AS total_messages,
-        SUM(message_bytes) / 1024 / 1024 AS total_message_mb
-      FROM macht413.file
-      GROUP BY opener_program_filename_volume, opener_program_filename_subvol, opener_program_filename_filename
-      ORDER BY total_io DESC
-      LIMIT 10000;
-
+    query: Top 20 files by logical reads + writes
+    sql: "SELECT\n  file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,\n  opener_processname,\n  reads,\n  writes,\n  reads + writes AS total_io,\n  (read_bytes + write_bytes) / 1024 / 1024 AS total_mb\nFROM macht413.file\nORDER BY total_io DESC\nLIMIT 20;\n"
   - domain: multi
-    query: "Compare average cpu_busy_time with per-process cpu_busy_time by cpu_num"
-    sql: |
-      WITH cpu_avg AS (
-        SELECT system_name, cpu_num, AVG(cpu_busy_time) AS overall_avg_cpu_busy_time
-        FROM macht413.cpu
-        GROUP BY system_name, cpu_num
-      ),
-      proc_avg AS (
-        SELECT system_name, cpu_num, AVG(cpu_busy_time) AS processes_avg_cpu_busy_time
-        FROM macht413.proc
-        GROUP BY system_name, cpu_num
-      )
-      SELECT
-        ca.system_name,
-        ca.cpu_num,
-        ca.overall_avg_cpu_busy_time,
-        pa.processes_avg_cpu_busy_time,
-        ca.overall_avg_cpu_busy_time - pa.processes_avg_cpu_busy_time AS difference_cpu_vs_proc_busy_time
-      FROM cpu_avg AS ca
-      JOIN proc_avg AS pa ON ca.system_name = pa.system_name AND ca.cpu_num = pa.cpu_num
-      ORDER BY ca.system_name, ca.cpu_num
-      LIMIT 10000;
-
-  - domain: multi
-    query: "For each timestamp interval show total CPU busy time across all CPUs, total disk I/O requests across all devices, total processes running, total file opens, and total TMF transactions — give me a single unified view"
-    sql: |
-      WITH cpu_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 SUM(cpu_busy_time) AS total_cpu_busy_time
-          FROM macht413.cpu
-          GROUP BY 1, 2
-      ),
-      disc_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 SUM(reads + writes) AS total_disk_io_requests
-          FROM macht413.disc
-          GROUP BY 1, 2
-      ),
-      proc_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 COUNT(DISTINCT pin) AS total_processes
-          FROM macht413.proc
-          GROUP BY 1, 2
-      ),
-      file_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 COUNT(DISTINCT opener_pin) AS total_file_opens
-          FROM macht413.file
-          GROUP BY 1, 2
-      ),
-      tmf_agg AS (
-          SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,
-                 SUM(home_trans + remote_trans) AS total_tmf_transactions
-          FROM macht413.tmf
-          GROUP BY 1, 2
-      )
-      SELECT
-          c.ts AS measurement_time,
-          c.total_cpu_busy_time,
-          d.total_disk_io_requests,
-          p.total_processes,
-          f.total_file_opens,
-          t.total_tmf_transactions
-      FROM cpu_agg c
-      LEFT JOIN disc_agg d ON c.system_name = d.system_name AND c.ts = d.ts
-      LEFT JOIN proc_agg p ON c.system_name = p.system_name AND c.ts = p.ts
-      LEFT JOIN file_agg f ON c.system_name = f.system_name AND c.ts = f.ts
-      LEFT JOIN tmf_agg t  ON c.system_name = t.system_name AND c.ts = t.ts
-      ORDER BY c.ts
-      LIMIT 10000;
-
-  # ==========================================================================
-  # COUNTER MATH PATTERNS — canonical examples for correct formula usage
-  # These examples exist specifically to teach the LLM the correct denominator
-  # for every counter type across all tables.
-  # ==========================================================================
-
-  # ── Busy counter: percentage from proc table ──────────────────────────────
+    query: "For each CPU show the interrupt busy percentage, backup disc process percentage, primary disc process percentage, other processes percentage, and user processes percentage \u2014 all as a fraction of delta time, ordered by CPU number"
+examples:
+  - domain: cpu
+    query: Show average CPU busy time per CPU
+    sql: SELECT cpu_num, AVG(cpu_busy_time) AS avg_busy_time FROM macht413.cpu GROUP BY cpu_num ORDER BY cpu_num LIMIT 10000;
+  - domain: cpu
+    query: Show comprehensive CPU performance metrics including type, memory, PCBs, queue lengths, busy percentages, overhead, swaps, dispatches, cache hits, and disk I/Os per second
+    sql: "SELECT \n  cpu_num,\n  cpu_type,\n  mem_mb,\n  pcbs,\n  cpu_qtime * 1000000.0 / NULLIF(delta_time, 0) AS queue_length_total,\n  cpu_busy_time * 100.0 / NULLIF(delta_time, 0) AS process_busy_pct,\n  intr_busy_time * 100.0 / NULLIF(delta_time, 0) AS interrupt_busy_pct,\n  (cpu_busy_time + intr_busy_time) * 100.0 / NULLIF(delta_time, 0) AS total_busy_pct,\n  process_ovhd * 100.0 / NULLIF(delta_time, 0) AS process_overhead_pct,\n  swaps * 1000000.0 / NULLIF(delta_time, 0) AS memory_swaps_per_sec,\n  dispatches * 1000000.0 / NULLIF(delta_time, 0) AS process_dispatches_per_sec,\n  cache_hits * 1000000.0 / NULLIF(delta_time, 0) AS cache_hits_per_sec,\n  disc_ios * 1000000.0 / NULLIF(delta_time, 0) AS disk_ios_per_sec\nFROM macht413.cpu\nORDER BY cpu_num\nLIMIT 10000;\n"
+  - domain: disc
+    query: Show disk read and write counts per device
+    sql: SELECT device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM macht413.disc GROUP BY device_name ORDER BY total_reads DESC LIMIT 10000;
   - domain: proc
-    query: "Show CPU busy percentage per CPU from process table"
-    sql: |
-      SELECT
-        cpu_num,
-        SUM(cpu_busy_time) * 100.0 / NULLIF(MAX(delta_time), 0) AS total_proc_busy_pct,
-        SUM(ready_time)    * 100.0 / NULLIF(MAX(delta_time), 0) AS ready_time_pct
-      FROM macht413.proc
-      GROUP BY cpu_num
-      ORDER BY cpu_num
-      LIMIT 10000;
-
-  # ── Busy counter: per-CPU utilization breakdown by process category ───────
-  - domain: proc
-    query: "Show CPU busy percentage broken down by system processes versus user processes per CPU"
-    sql: |
-      SELECT
-        cpu_num,
-        SUM(CASE WHEN process_name LIKE '$%' THEN cpu_busy_time ELSE 0 END)
-          * 100.0 / NULLIF(MAX(delta_time), 0) AS system_proc_busy_pct,
-        SUM(CASE WHEN process_name NOT LIKE '$%' THEN cpu_busy_time ELSE 0 END)
-          * 100.0 / NULLIF(MAX(delta_time), 0) AS user_proc_busy_pct,
-        SUM(cpu_busy_time) * 100.0 / NULLIF(MAX(delta_time), 0) AS total_proc_busy_pct
-      FROM macht413.proc
-      GROUP BY cpu_num
-      ORDER BY cpu_num
-      LIMIT 10000;
-
-  # ── Busy counter: per-CPU utilization from cpu table ─────────────────────
-  - domain: cpu
-    query: "Show CPU utilization percentage including interrupt busy percentage per CPU"
-    sql: |
-      SELECT
-        cpu_num,
-        cpu_busy_time  * 100.0 / NULLIF(delta_time, 0) AS process_busy_pct,
-        intr_busy_time * 100.0 / NULLIF(delta_time, 0) AS interrupt_busy_pct,
-        (cpu_busy_time + intr_busy_time) * 100.0 / NULLIF(delta_time, 0) AS total_busy_pct
-      FROM macht413.cpu
-      ORDER BY cpu_num
-      LIMIT 10000;
-
-  # ── Queue counter: average queue length ──────────────────────────────────
-  - domain: cpu
-    query: "Show average CPU ready queue length per CPU"
-    sql: |
-      SELECT
-        cpu_num,
-        cpu_qtime * 1.0 / NULLIF(delta_time, 0) AS avg_ready_queue_length
-      FROM macht413.cpu
-      ORDER BY avg_ready_queue_length DESC
-      LIMIT 10000;
-
-  # ── Incrementing counter: per-second rate ────────────────────────────────
-  - domain: cpu
-    query: "Show disk I/Os per second and cache hits per second per CPU"
-    sql: |
-      SELECT
-        cpu_num,
-        disc_ios   * 1000000.0 / NULLIF(delta_time, 0) AS disk_ios_per_sec,
-        cache_hits * 1000000.0 / NULLIF(delta_time, 0) AS cache_hits_per_sec
-      FROM macht413.cpu
-      ORDER BY disk_ios_per_sec DESC
-      LIMIT 10000;
-
-  # ── Incrementing counter: disc reads/writes per second ───────────────────
-  - domain: disc
-    query: "Show disk read and write operations per second per device"
-    sql: |
-      SELECT
-        device_name,
-        reads  * 1000000.0 / NULLIF(delta_time, 0) AS reads_per_sec,
-        writes * 1000000.0 / NULLIF(delta_time, 0) AS writes_per_sec,
-        (reads + writes) * 1000000.0 / NULLIF(delta_time, 0) AS total_ios_per_sec
-      FROM macht413.disc
-      ORDER BY total_ios_per_sec DESC
-      LIMIT 10000;
-
-  # ── Queue counter: average disk request queue length ─────────────────────
-  - domain: disc
-    query: "Show average disk request queue length per device"
-    sql: |
-      SELECT
-        device_name,
-        request_qtime * 1.0 / NULLIF(delta_time, 0) AS avg_request_queue_length,
-        read_qtime    * 1.0 / NULLIF(delta_time, 0) AS avg_read_queue_length,
-        write_qtime   * 1.0 / NULLIF(delta_time, 0) AS avg_write_queue_length
-      FROM macht413.disc
-      ORDER BY avg_request_queue_length DESC
-      LIMIT 10000;
-
-  # ── Cache hit ratio: no delta_time involved ───────────────────────────────
-  - domain: disc
-    query: "Show cache hit ratio per disk device across all cache levels"
-    sql: |
-      SELECT
-        device_name,
-        (c0_hits + c1_hits + c2_hits + c3_hits + c4_hits + c5_hits + c6_hits + c7_hits)
-          * 100.0 / NULLIF(
-            c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
-            c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
-            c6_hits + c6_misses + c7_hits + c7_misses, 0
-          ) AS overall_cache_hit_pct
-      FROM macht413.disc
-      WHERE (c0_hits + c0_misses + c1_hits + c1_misses + c2_hits + c2_misses +
-             c3_hits + c3_misses + c4_hits + c4_misses + c5_hits + c5_misses +
-             c6_hits + c6_misses + c7_hits + c7_misses) > 0
-      ORDER BY overall_cache_hit_pct ASC
-      LIMIT 10000;
-
-  # ── Lockwait counter: average lock wait time ─────────────────────────────
-  - domain: dfile
-    query: "Show average lock wait time per file"
-    sql: |
-      SELECT
-        file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,
-        requests_blocked,
-        lockwait_time / NULLIF(requests_blocked, 0) AS avg_lockwait_us,
-        max_lockwait_time
-      FROM macht413.dfile
-      WHERE requests_blocked > 0
-      ORDER BY avg_lockwait_us DESC
-      LIMIT 10000;
-
-  # ── Response-time counter: average transaction response time ─────────────
-  - domain: cpu
-    query: "Show average terminal transaction response time per CPU"
-    sql: |
-      SELECT
-        cpu_num,
-        transactions,
-        response_time / NULLIF(transactions, 0) AS avg_response_time_us
-      FROM macht413.cpu
-      WHERE transactions > 0
-      ORDER BY avg_response_time_us DESC
-      LIMIT 10000;
-
-  # ── Accumulating counter: throughput in bytes per second ─────────────────
-  - domain: disc
-    query: "Show disk read and write throughput in MB per second per device"
-    sql: |
-      SELECT
-        device_name,
-        input_bytes  * 1000000.0 / NULLIF(delta_time, 0) / 1048576 AS read_mb_per_sec,
-        output_bytes * 1000000.0 / NULLIF(delta_time, 0) / 1048576 AS write_mb_per_sec
-      FROM macht413.disc
-      ORDER BY read_mb_per_sec + write_mb_per_sec DESC
-      LIMIT 10000;
-
-  # ── Proc: per-process CPU percentage (single row per process, no GROUP BY) ─
-  - domain: proc
-    query: "Show CPU usage percentage per process"
-    sql: |
-      SELECT
-        process_name,
-        cpu_num,
-        cpu_busy_time * 100.0 / NULLIF(delta_time, 0) AS cpu_busy_pct,
-        ready_time    * 100.0 / NULLIF(delta_time, 0) AS ready_time_pct
-      FROM macht413.proc
-      WHERE cpu_busy_time > 0
-      ORDER BY cpu_busy_pct DESC
-      LIMIT 10000;
-
-  # ── TMF: abort rate (ratio, no delta_time) ───────────────────────────────
+    query: List all process names with their CPU usage
+    sql: SELECT process_name, cpu_busy_time FROM macht413.proc ORDER BY cpu_busy_time DESC LIMIT 10000;
   - domain: tmf
-    query: "Show transaction abort rate percentage per CPU"
-    sql: |
-      SELECT
-        cpu_num,
-        SUM(home_trans)     AS total_transactions,
-        SUM(aborting_trans) AS total_aborted,
-        SUM(aborting_trans) * 100.0 / NULLIF(SUM(home_trans), 0) AS abort_rate_pct
-      FROM macht413.tmf
-      GROUP BY cpu_num
-      ORDER BY abort_rate_pct DESC
-      LIMIT 10000;
-
-  # ── OSSNS: cache hit ratio (ratio, no delta_time) ────────────────────────
-  - domain: ossns
-    query: "Show inode cache hit ratio and link cache hit ratio for OSS namespace"
-    sql: |
-      SELECT
-        process_name,
-        ic_hits * 100.0 / NULLIF(ic_lookups, 0) AS inode_cache_hit_pct,
-        lc_hits * 100.0 / NULLIF(lc_lookups, 0) AS link_cache_hit_pct,
-        ic_lookups,
-        lc_lookups
-      FROM macht413.ossns
-      WHERE ic_lookups > 0 OR lc_lookups > 0
-      ORDER BY inode_cache_hit_pct ASC
-      LIMIT 10000;
-
-  # ==========================================================================
-  # CPU + PROC BREAKDOWN — interrupt from cpu table, categories from proc table
-  #
-  # IMPORTANT — process naming in this dataset (macht413.proc):
-  #   Disk processes:   $DATA01–$DATA10, $SSD01, $AUDIT (LIKE '$DATA%' OR '$SSD%' OR '$AUDIT%')
-  #   System processes: $SYSTEM, $MONITOR, $MSENGER, $VIRTUAL, $NULL, $OSS,
-  #                     $SWAP, $SWAP01, $SWAP23, $SWAP34, $NCP, $TMP
-  #   User/app procs:   Everything else starting with $ ($BEER, $CHAMP, $GANESH, etc.)
-  #   NOTE: ALL processes in this dataset start with '$'. There are NO processes
-  #         without a '$' prefix. Do NOT use "NOT LIKE '$%'" for user processes.
-  #
-  # intr_busy_time lives in macht413.cpu — NEVER in macht413.proc.
-  # Always use MAX(delta_time) as denominator when grouping proc rows.
-  # ==========================================================================
-
+    query: Show transaction backout counts
+    sql: SELECT SUM(aborting_trans) AS total_aborts FROM macht413.tmf LIMIT 10000;
   - domain: multi
-    query: "For each CPU show the interrupt busy percentage, backup disc process percentage, primary disc process percentage, other processes percentage, and user processes percentage — all as a fraction of delta time, ordered by CPU number"
-    sql: |
-      WITH cpu_stats AS (
-          SELECT
-              DATE_TRUNC('second', from_timestamp) AS ts,
-              system_name,
-              cpu_num,
-              intr_busy_time,
-              delta_time
-          FROM macht413.cpu
-      ),
-      proc_stats AS (
-          SELECT
-              DATE_TRUNC('second', from_timestamp) AS ts,
-              system_name,
-              cpu_num,
-              SUM(CASE WHEN process_name LIKE '$DATA%'
-                            OR process_name LIKE '$SSD%'
-                            OR process_name LIKE '$AUDIT%'
-                       THEN cpu_busy_time ELSE 0 END) AS disc_busy_time,
-              SUM(CASE WHEN process_name IN ('$SYSTEM','$MONITOR','$MSENGER',
-                                             '$VIRTUAL','$NULL','$OSS',
-                                             '$SWAP','$SWAP01','$SWAP23','$SWAP34',
-                                             '$NCP','$TMP')
-                       THEN cpu_busy_time ELSE 0 END) AS system_busy_time,
-              SUM(CASE WHEN process_name NOT LIKE '$DATA%'
-                            AND process_name NOT LIKE '$SSD%'
-                            AND process_name NOT LIKE '$AUDIT%'
-                            AND process_name NOT IN ('$SYSTEM','$MONITOR','$MSENGER',
-                                                     '$VIRTUAL','$NULL','$OSS',
-                                                     '$SWAP','$SWAP01','$SWAP23','$SWAP34',
-                                                     '$NCP','$TMP')
-                       THEN cpu_busy_time ELSE 0 END) AS user_app_busy_time,
-              MAX(delta_time) AS delta_time
-          FROM macht413.proc
-          GROUP BY 1, 2, 3
-      )
-      SELECT
-          c.cpu_num,
-          AVG(c.intr_busy_time         * 100.0 / NULLIF(c.delta_time, 0)) AS interrupt_busy_pct,
-          AVG(p.disc_busy_time         * 100.0 / NULLIF(p.delta_time, 0)) AS disc_proc_pct,
-          AVG(p.system_busy_time       * 100.0 / NULLIF(p.delta_time, 0)) AS system_proc_pct,
-          AVG(p.user_app_busy_time     * 100.0 / NULLIF(p.delta_time, 0)) AS user_app_proc_pct
-      FROM cpu_stats AS c
-      JOIN proc_stats AS p
-          ON c.ts = p.ts
-          AND c.system_name = p.system_name
-          AND c.cpu_num = p.cpu_num
-      GROUP BY c.cpu_num
-      ORDER BY c.cpu_num
-      LIMIT 10000;
-
+    query: Analyze CPU utilization with memory pressure and identify bottlenecks by correlating CPU busy time, page faults, and queue times across all CPUs
+    sql: "SELECT \n  c.cpu_num,\n  c.from_timestamp,\n  c.cpu_busy_time / NULLIF(c.delta_time, 0) * 100 AS cpu_utilization_pct,\n  c.cpu_qtime / NULLIF(c.delta_time, 0) AS avg_queue_length,\n  c.page_requests,\n  c.page_scans,\n  c.ending_free_mem - c.starting_free_mem AS mem_delta,\n  CASE \n    WHEN c.page_scans > c.page_requests * 5 THEN 'MEMORY_PRESSURE'\n    WHEN c.cpu_qtime / NULLIF(c.delta_time, 0) > 2 THEN 'CPU_BOTTLENECK'\n    ELSE 'NORMAL'\n  END AS bottleneck_type\nFROM macht413.cpu c\nWHERE c.cpu_busy_time > 0\nORDER BY cpu_utilization_pct DESC, c.from_timestamp\nLIMIT 10000;\n"
+  - domain: multi
+    query: Identify disk I/O hotspots by analyzing cache hit ratios, queue times, and correlating with file-level activity to find poorly cached files
+    sql: "SELECT \n  d.device_name,\n  d.from_timestamp,\n  d.reads + d.writes AS total_ios,\n  CASE WHEN (d.reads + d.writes) > 0 \n    THEN (d.cache_hits * 100.0 / (d.reads + d.writes)) \n    ELSE 0 \n  END AS cache_hit_ratio_pct,\n  d.request_qtime / NULLIF(d.delta_time, 0) AS avg_request_queue_length,\n  d.read_qtime / NULLIF(d.delta_time, 0) AS avg_read_queue_length,\n  d.write_qtime / NULLIF(d.delta_time, 0) AS avg_write_queue_length,\n  d.ending_free_space / 1024 / 1024 AS free_space_mb,\n  df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS top_file,\n  df.driver_input_calls + df.driver_output_calls AS file_total_ops\nFROM macht413.disc d\nLEFT JOIN macht413.dfile df \n  ON d.system_name = df.system_name \n  AND d.device_name = df.device_name \n  AND DATE_TRUNC('second', d.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)\nWHERE d.reads + d.writes > 100\nORDER BY cache_hit_ratio_pct ASC, total_ios DESC\nLIMIT 10000;\n"
+  - domain: multi
+    query: Perform deep process analysis correlating CPU usage, memory consumption, messaging activity, and file I/O to identify resource-intensive processes
+    sql: "SELECT \n  p.process_name,\n  p.cpu_num,\n  p.from_timestamp,\n  p.cpu_busy_time / NULLIF(p.delta_time, 0) * 100 AS cpu_usage_pct,\n  p.ready_time / NULLIF(p.delta_time, 0) * 100 AS ready_time_pct,\n  p.pres_pages_end AS memory_pages,\n  p.page_faults,\n  p.messages_sent + p.messages_received AS total_messages,\n  (p.sent_bytes + p.received_bytes) / 1024 AS message_kb,\n  f.reads + f.writes AS file_operations,\n  f.file_busy_time / NULLIF(f.delta_time, 0) * 100 AS file_io_pct,\n  CASE \n    WHEN p.page_faults > 1000 THEN 'HIGH_PAGING'\n    WHEN p.cpu_busy_time / NULLIF(p.delta_time, 0) > 0.8 THEN 'CPU_INTENSIVE'\n    WHEN (p.sent_bytes + p.received_bytes) > 10000000 THEN 'MESSAGE_INTENSIVE'\n    WHEN f.reads + f.writes > 5000 THEN 'IO_INTENSIVE'\n    ELSE 'BALANCED'\n  END AS workload_profile\nFROM macht413.proc p\nLEFT JOIN macht413.file f \n  ON p.system_name = f.system_name \n  AND p.cpu_num = f.cpu_num \n  AND p.pin = f.opener_pin \n  AND DATE_TRUNC('second', p.from_timestamp)\n      \ = DATE_TRUNC('second', f.from_timestamp)\nWHERE p.cpu_busy_time > 0\nORDER BY cpu_usage_pct DESC, memory_pages DESC\nLIMIT 10000;\n"
+  - domain: multi
+    query: Analyze transaction performance by correlating TMF statistics with process activity and disk I/O to identify transaction bottlenecks and backout patterns
+    sql: "SELECT \n  t.from_timestamp,\n  t.cpu_num,\n  t.home_trans AS transactions_started,\n  t.aborting_trans AS transactions_aborted,\n  CASE WHEN t.home_trans > 0 \n    THEN (t.aborting_trans * 100.0 / t.home_trans) \n    ELSE 0 \n  END AS abort_rate_pct,\n  t.trans_backout_qtime / NULLIF(t.delta_time, 0) AS avg_backout_queue_length,\n  t.home_trans_qtime / NULLIF(t.home_trans, 0) AS avg_trans_lifetime_us,\n  p.process_name,\n  p.begin_trans AS process_trans_begun,\n  p.abort_trans AS process_trans_aborted,\n  d.control_points AS disk_control_points,\n  d.control_point_writes AS disk_cp_writes\nFROM macht413.tmf t\nLEFT JOIN macht413.proc p \n  ON t.system_name = p.system_name \n  AND t.cpu_num = p.cpu_num \n  AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)\nLEFT JOIN macht413.disc d \n  ON t.system_name = d.system_name \n  AND t.cpu_num = d.cpu_num \n  AND DATE_TRUNC('second', t.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)\nWHERE t.home_trans\n      \ > 0\nORDER BY abort_rate_pct DESC, transactions_started DESC\nLIMIT 10000;\n"
+  - domain: multi
+    query: Investigate file locking contention by analyzing lock wait times, blocked requests, and correlating with opener processes to identify lock conflicts
+    sql: "SELECT \n  df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS file_path,\n  df.from_timestamp,\n  df.requests_blocked AS total_blocked_requests,\n  df.lockwait_time / NULLIF(df.requests_blocked, 0) AS avg_lockwait_us,\n  df.max_lockwait_time AS max_lockwait_us,\n  df.lock_timeouts,\n  df.lock_bounces,\n  do.opener_cpu,\n  do.opener_pin,\n  do.requests_blocked AS opener_blocked_requests,\n  do.lockwait_time AS opener_lockwait_time,\n  p.process_name AS opener_process_name,\n  p.program_file_name_volume || '.' || p.program_file_name_subvol || '.' || p.program_file_name_filename AS opener_program\nFROM macht413.dfile df\nLEFT JOIN macht413.dopen do \n  ON df.system_name = do.system_name \n  AND df.file_name_volume = do.file_name_volume \n  AND df.file_name_subvol = do.file_name_subvol \n  AND df.file_name_filename = do.file_name_filename \n  AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', do.from_timestamp)\nLEFT JOIN macht413.proc\n      \ p \n  ON do.system_name = p.system_name \n  AND do.opener_cpu = p.cpu_num \n  AND do.opener_pin = p.pin \n  AND DATE_TRUNC('second', do.from_timestamp) = DATE_TRUNC('second', p.from_timestamp)\nWHERE df.requests_blocked > 0\nORDER BY df.lockwait_time DESC, df.requests_blocked DESC\nLIMIT 10000;\n"
+  - domain: multi
+    query: Analyze OSS namespace server performance by correlating cache hit ratios, checkpoint activity, and semaphore contention with DP2 messaging patterns
+    sql: "SELECT \n  o.process_name AS ns_process,\n  o.cpu_num,\n  o.from_timestamp,\n  o.rr_processed AS resolution_requests,\n  o.ic_lookups AS inode_cache_lookups,\n  CASE WHEN o.ic_lookups > 0 \n    THEN (o.ic_hits * 100.0 / o.ic_lookups) \n    ELSE 0 \n  END AS inode_cache_hit_pct,\n  o.lc_lookups AS link_cache_lookups,\n  CASE WHEN o.lc_lookups > 0 \n    THEN (o.lc_hits * 100.0 / o.lc_lookups) \n    ELSE 0 \n  END AS link_cache_hit_pct,\n  o.checkpoint_reqs,\n  o.checkpoint_blks,\n  o.sem_waits,\n  o.sem_wait_qtime / NULLIF(o.sem_waits, 0) AS avg_sem_wait_us,\n  o.dp2_messages,\n  o.dp2_msg_qtime / NULLIF(o.dp2_messages, 0) AS avg_dp2_response_us,\n  p.cpu_busy_time / NULLIF(p.delta_time, 0) * 100 AS ns_cpu_usage_pct,\n  p.messages_sent + p.messages_received AS ns_total_messages\nFROM macht413.ossns o\nLEFT JOIN macht413.proc p \n  ON o.system_name = p.system_name \n  AND o.cpu_num = p.cpu_num \n  AND o.pin = p.pin \n  AND DATE_TRUNC('second', o.from_timestamp) = DATE_TRUNC('second',\n      \ p.from_timestamp)\nWHERE o.rr_processed > 0\nORDER BY inode_cache_hit_pct ASC, resolution_requests DESC\nLIMIT 10000;\n"
+  - domain: multi
+    query: Perform comprehensive system health analysis by aggregating CPU, memory, disk, and process metrics to identify overall system bottlenecks and capacity issues
+    sql: "WITH cpu_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           COUNT(DISTINCT cpu_num) AS total_cpus,\n           AVG(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS avg_cpu_utilization_pct,\n           MAX(cpu_busy_time * 100.0 / NULLIF(delta_time, 0)) AS max_cpu_utilization_pct,\n           AVG(cpu_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_cpu_queue_length,\n           SUM(ending_free_mem) AS total_free_memory_pages,\n           SUM(page_requests) AS total_page_requests,\n           SUM(page_scans) AS total_page_scans\n    FROM macht413.cpu\n    GROUP BY 1, 2\n),\ndisc_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           COUNT(DISTINCT device_name) AS total_disks,\n           SUM(reads + writes) AS total_disk_ios,\n           AVG(request_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_disk_queue_length,\n           SUM(ending_free_space) AS total_free_space\n    FROM macht413.disc\n    GROUP BY 1, 2\n),\n\
+      proc_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           COUNT(DISTINCT pin) AS active_processes,\n           SUM(messages_sent + messages_received) AS total_messages\n    FROM macht413.proc\n    GROUP BY 1, 2\n),\ntmf_agg AS (\n    SELECT DATE_TRUNC('second', from_timestamp) AS ts, system_name,\n           SUM(home_trans) AS total_transactions,\n           SUM(aborting_trans) AS total_aborted_transactions\n    FROM macht413.tmf\n    GROUP BY 1, 2\n)\nSELECT\n    c.ts AS measurement_time,\n    c.total_cpus,\n    c.avg_cpu_utilization_pct,\n    c.max_cpu_utilization_pct,\n    c.avg_cpu_queue_length,\n    c.total_free_memory_pages,\n    c.total_page_requests,\n    c.total_page_scans,\n    d.total_disks,\n    d.total_disk_ios,\n    d.avg_disk_queue_length,\n    d.total_free_space / 1024 / 1024 / 1024 AS total_free_disk_gb,\n    p.active_processes,\n    p.total_messages,\n    t.total_transactions,\n    t.total_aborted_transactions,\n    CASE\n    \
+      \    WHEN c.avg_cpu_utilization_pct > 85 THEN 'CPU_SATURATED'\n        WHEN c.total_page_scans > c.total_page_requests * 5 THEN 'MEMORY_PRESSURE'\n        WHEN d.avg_disk_queue_length > 5 THEN 'DISK_BOTTLENECK'\n        WHEN d.total_free_space / 1024 / 1024 / 1024 < 100 THEN 'LOW_DISK_SPACE'\n        ELSE 'HEALTHY'\n    END AS system_health_status\nFROM cpu_agg c\nLEFT JOIN disc_agg d ON c.system_name = d.system_name AND c.ts = d.ts\nLEFT JOIN proc_agg p ON c.system_name = p.system_name AND c.ts = p.ts\nLEFT JOIN tmf_agg t  ON c.system_name = t.system_name AND c.ts = t.ts\nORDER BY c.ts\nLIMIT 10000;\n"
+  - domain: multi
+    query: Analyze disk cache effectiveness across all cache levels by calculating hit ratios, fault rates, and dirty block queue times to optimize cache configuration
+    sql: "SELECT \n  d.device_name,\n  d.from_timestamp,\n  d.c0_blks AS cache_512b_blocks,\n  d.c1_blks AS cache_1kb_blocks,\n  d.c2_blks AS cache_2kb_blocks,\n  d.c3_blks AS cache_4kb_blocks,\n  CASE WHEN (d.c0_hits + d.c0_misses) > 0 \n    THEN (d.c0_hits * 100.0 / (d.c0_hits + d.c0_misses)) \n    ELSE 0 \n  END AS cache_512b_hit_pct,\n  CASE WHEN (d.c1_hits + d.c1_misses) > 0 \n    THEN (d.c1_hits * 100.0 / (d.c1_hits + d.c1_misses)) \n    ELSE 0 \n  END AS cache_1kb_hit_pct,\n  CASE WHEN (d.c2_hits + d.c2_misses) > 0 \n    THEN (d.c2_hits * 100.0 / (d.c2_hits + d.c2_misses)) \n    ELSE 0 \n  END AS cache_2kb_hit_pct,\n  CASE WHEN (d.c3_hits + d.c3_misses) > 0 \n    THEN (d.c3_hits * 100.0 / (d.c3_hits + d.c3_misses)) \n    ELSE 0 \n  END AS cache_4kb_hit_pct,\n  d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults AS total_cache_faults,\n  CASE WHEN (d.reads + d.writes) > 0 \n    THEN ((d.c0_faults + d.c1_faults + d.c2_faults + d.c3_faults) * 100.0 / (d.reads + d.writes)) \n    ELSE\
+      \ 0 \n  END AS fault_rate_pct,\n  (d.c0_blks_dirty_qtime + d.c1_blks_dirty_qtime + d.c2_blks_dirty_qtime + d.c3_blks_dirty_qtime) / NULLIF(d.delta_time, 0) AS avg_dirty_blocks_queued,\n  d.reads + d.writes AS total_ios,\n  d.cache_hits AS total_cache_hits\nFROM macht413.disc d\nWHERE d.reads + d.writes > 0\nORDER BY fault_rate_pct DESC, total_ios DESC\nLIMIT 10000;\n"
+  - domain: multi
+    query: Identify messaging bottlenecks by analyzing inter-process communication patterns, queue times, and correlating with CPU and process activity
+    sql: "SELECT \n  p.process_name,\n  p.cpu_num,\n  p.from_timestamp,\n  p.messages_sent AS msgs_sent_as_linker,\n  p.messages_received AS msgs_received_as_listener,\n  (p.sent_bytes + p.returned_bytes) / 1024 AS linker_kb,\n  (p.received_bytes + p.reply_bytes) / 1024 AS listener_kb,\n  p.msgs_sent_qtime / NULLIF(p.messages_sent, 0) AS avg_msg_response_time_us,\n  p.recv_qtime / NULLIF(p.messages_received, 0) AS avg_receive_queue_time_us,\n  p.mqc_allocations AS mqc_allocated,\n  p.mqc_alloc_failures AS mqc_failures,\n  p.mqcs_inuse_qtime / NULLIF(p.delta_time, 0) AS avg_mqcs_in_use,\n  c.cpu_busy_time / NULLIF(c.delta_time, 0) * 100 AS cpu_utilization_pct,\n  c.cpu_qtime / NULLIF(c.delta_time, 0) AS cpu_queue_length,\n  CASE \n    WHEN p.mqc_alloc_failures > 0 THEN 'MQC_EXHAUSTION'\n    WHEN p.msgs_sent_qtime / NULLIF(p.messages_sent, 0) > 100000 THEN 'SLOW_RESPONSE'\n    WHEN p.recv_qtime / NULLIF(p.messages_received, 0) > 50000 THEN 'RECEIVE_QUEUE_BUILDUP'\n    ELSE 'NORMAL'\n  END\
+      \ AS messaging_health\nFROM macht413.proc p\nLEFT JOIN macht413.cpu c \n  ON p.system_name = c.system_name \n  AND p.cpu_num = c.cpu_num \n  AND DATE_TRUNC('second', p.from_timestamp) = DATE_TRUNC('second', c.from_timestamp)\nWHERE p.messages_sent + p.messages_received > 0\nORDER BY avg_msg_response_time_us DESC, msgs_sent_as_linker DESC\nLIMIT 10000;\n"
+  - domain: multi
+    query: Analyze file I/O patterns by correlating logical operations with physical disk I/O, cache behavior, and DBIO usage to identify optimization opportunities
+    sql: "SELECT \n  f.file_name_volume || '.' || f.file_name_subvol || '.' || f.file_name_filename AS file_path,\n  f.from_timestamp,\n  f.reads AS logical_reads,\n  f.writes AS logical_writes,\n  f.dbio_reads AS direct_bulk_reads,\n  f.dbio_writes AS direct_bulk_writes,\n  (f.dbio_read_bytes + f.dbio_write_bytes) / 1024 / 1024 AS dbio_mb,\n  df.driver_input_calls AS physical_reads,\n  df.driver_output_calls AS physical_writes,\n  df.cache_read_hits,\n  CASE WHEN df.driver_input_calls > 0 \n    THEN (df.cache_read_hits * 100.0 / df.driver_input_calls) \n    ELSE 0 \n  END AS read_cache_hit_pct,\n  df.requests_blocked AS lock_conflicts,\n  df.lockwait_time / NULLIF(df.requests_blocked, 0) AS avg_lock_wait_us,\n  df.block_splits,\n  d.device_name,\n  d.request_qtime / NULLIF(d.delta_time, 0) AS disk_queue_length,\n  CASE \n    WHEN df.cache_read_hits * 100.0 / NULLIF(df.driver_input_calls, 1) < 50 THEN 'POOR_CACHE_EFFICIENCY'\n    WHEN df.block_splits > 100 THEN 'HIGH_FRAGMENTATION'\n   \
+      \ WHEN df.requests_blocked > 50 THEN 'LOCK_CONTENTION'\n    WHEN (f.dbio_read_bytes + f.dbio_write_bytes) / 1024 / 1024 > 100 THEN 'DBIO_INTENSIVE'\n    ELSE 'NORMAL'\n  END AS io_pattern_classification\nFROM macht413.file f\nLEFT JOIN macht413.dfile df \n  ON f.system_name = df.system_name \n  AND f.file_name_volume = df.file_name_volume \n  AND f.file_name_subvol = df.file_name_subvol \n  AND f.file_name_filename = df.file_name_filename \n  AND DATE_TRUNC('second', f.from_timestamp) = DATE_TRUNC('second', df.from_timestamp)\nLEFT JOIN macht413.disc d \n  ON df.system_name = d.system_name \n  AND df.device_name = d.device_name \n  AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', d.from_timestamp)\nWHERE f.reads + f.writes > 0\nORDER BY logical_reads + logical_writes DESC\nLIMIT 10000;\n"
+  - domain: ossns
+    query: Average out all the server net values and show them to me
+    sql: "SELECT \n  AVG(rr_processed) AS avg_rr_processed,\n  AVG(rr_redir_sent) AS avg_rr_redir_sent,\n  AVG(rr_redir_processed) AS avg_rr_redir_processed,\n  AVG(ic_lookups) AS avg_ic_lookups,\n  AVG(ic_hits) AS avg_ic_hits,\n  AVG(ic_dirty_qtime) AS avg_ic_dirty_qtime,\n  AVG(lc_lookups) AS avg_lc_lookups,\n  AVG(lc_hits) AS avg_lc_hits,\n  AVG(lc_inuse_qtime) AS avg_lc_inuse_qtime,\n  AVG(checkpoint_reqs) AS avg_checkpoint_reqs,\n  AVG(checkpoint_blks) AS avg_checkpoint_blks,\n  AVG(sem_waits) AS avg_sem_waits,\n  AVG(sem_wait_qtime) AS avg_sem_wait_qtime,\n  AVG(dp2_dd_reqs) AS avg_dp2_dd_reqs,\n  AVG(dp2_messages) AS avg_dp2_messages,\n  AVG(dp2_msg_qtime) AS avg_dp2_msg_qtime,\n  AVG(ps_messages) AS avg_ps_messages,\n  AVG(ps_msg_qtime) AS avg_ps_msg_qtime,\n  AVG(ls_messages) AS avg_ls_messages,\n  AVG(ls_msg_qtime) AS avg_ls_msg_qtime,\n  AVG(gettime_reqs) AS avg_gettime_reqs,\n  AVG(settime_reqs) AS avg_settime_reqs\nFROM macht413.ossns\nLIMIT 10000;\n"
+  - domain: dfile
+    query: Top 20 files by total physical I/O calls
+    sql: "SELECT\n  file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,\n  device_name,\n  CAST(driver_input_calls AS BIGINT) + CAST(driver_output_calls AS BIGINT) AS total_driver_calls,\n  CAST(driver_input_calls AS BIGINT) AS reads,\n  CAST(driver_output_calls AS BIGINT) AS writes\nFROM macht413.dfile\nORDER BY total_driver_calls DESC\nLIMIT 20;\n"
+  - domain: dopen
+    query: Count active opens per file and total requests across all openers
+    sql: "SELECT\n  file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,\n  COUNT(*) AS open_count,\n  SUM(requests) AS total_requests,\n  SUM(requests_blocked) AS total_blocked,\n  SUM(lockwait_time) AS total_lockwait_us\nFROM macht413.dopen\nGROUP BY file_name_volume, file_name_subvol, file_name_filename\nORDER BY total_requests DESC\nLIMIT 10000;\n"
+  - domain: udef
+    query: List all distinct user-defined counter names and how many processes set each
+    sql: "SELECT\n  name,\n  COUNT(DISTINCT pin) AS process_count,\n  COUNT(*) AS row_count\nFROM macht413.udef\nWHERE name IS NOT NULL\nGROUP BY name\nORDER BY process_count DESC\nLIMIT 10000;\n"
+  - domain: file
+    query: Top 20 files by logical reads + writes
+    sql: "SELECT\n  file_name_volume || '.' || file_name_subvol || '.' || file_name_filename AS file_path,\n  opener_processname,\n  reads,\n  writes,\n  reads + writes AS total_io,\n  (read_bytes + write_bytes) / 1024 / 1024 AS total_mb\nFROM macht413.file\nORDER BY total_io DESC\nLIMIT 20;\n"
+  - domain: multi
+    query: "For each CPU show the interrupt busy percentage, backup disc process percentage, primary disc process percentage, other processes percentage, and user processes percentage \u2014 all as a fraction of delta time, ordered by CPU number"
+    sql: "WITH cpu_stats AS (\n    SELECT\n        DATE_TRUNC('second', from_timestamp) AS ts,\n        system_name,\n        cpu_num,\n        intr_busy_time,\n        delta_time\n    FROM macht413.cpu\n),\nproc_stats AS (\n    SELECT\n        DATE_TRUNC('second', from_timestamp) AS ts,\n        system_name,\n        cpu_num,\n        SUM(CASE WHEN process_name LIKE '$DATA%'\n                      OR process_name LIKE '$SSD%'\n                      OR process_name LIKE '$AUDIT%'\n                 THEN cpu_busy_time ELSE 0 END) AS disc_busy_time,\n        SUM(CASE WHEN process_name IN ('$SYSTEM','$MONITOR','$MSENGER',\n                                       '$VIRTUAL','$NULL','$OSS',\n                                       '$SWAP','$SWAP01','$SWAP23','$SWAP34',\n                                       '$NCP','$TMP')\n                 THEN cpu_busy_time ELSE 0 END) AS system_busy_time,\n        SUM(CASE WHEN process_name NOT LIKE '$DATA%'\n                      AND process_name NOT LIKE '$SSD%'\n\
+      \                      AND process_name NOT LIKE '$AUDIT%'\n                      AND process_name NOT IN ('$SYSTEM','$MONITOR','$MSENGER',\n                                               '$VIRTUAL','$NULL','$OSS',\n                                               '$SWAP','$SWAP01','$SWAP23','$SWAP34',\n                                               '$NCP','$TMP')\n                 THEN cpu_busy_time ELSE 0 END) AS user_app_busy_time,\n        MAX(delta_time) AS delta_time\n    FROM macht413.proc\n    GROUP BY 1, 2, 3\n)\nSELECT\n    c.cpu_num,\n    AVG(c.intr_busy_time         * 100.0 / NULLIF(c.delta_time, 0)) AS interrupt_busy_pct,\n    AVG(p.disc_busy_time         * 100.0 / NULLIF(p.delta_time, 0)) AS disc_proc_pct,\n    AVG(p.system_busy_time       * 100.0 / NULLIF(p.delta_time, 0)) AS system_proc_pct,\n    AVG(p.user_app_busy_time     * 100.0 / NULLIF(p.delta_time, 0)) AS user_app_proc_pct\nFROM cpu_stats AS c\nJOIN proc_stats AS p\n    ON c.ts = p.ts\n    AND c.system_name = p.system_name\n\
+      \    AND c.cpu_num = p.cpu_num\nGROUP BY c.cpu_num\nORDER BY c.cpu_num\nLIMIT 10000;\n"
+  - domain: cpu
+    query: Show the average CPU ready queue length per CPU, ensuring small values do not round to 0.
+    sql: "SELECT\n  cpu_num,\n  CAST(SUM(cpu_qtime) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS NUMERIC(10,4)) AS avg_ready_queue_length\nFROM macht413.cpu\nGROUP BY cpu_num\nORDER BY avg_ready_queue_length DESC\nLIMIT 10000;"
+  - domain: disc
+    query: Analyze the disk cache effectiveness for each device by showing the overall cache hit percentage and the total cache faults as a percentage of total I/Os.
+    sql: "SELECT\n  device_name,\n  CAST(SUM(c0_hits + c1_hits + c2_hits + c3_hits + c4_hits + c5_hits + c6_hits + c7_hits) * 100.0 / NULLIF(SUM(c0_hits + c1_hits + c2_hits + c3_hits + c4_hits + c5_hits + c6_hits + c7_hits + c0_misses + c1_misses + c2_misses + c3_misses + c4_misses + c5_misses + c6_misses + c7_misses), 0) AS NUMERIC(10,4)) AS overall_cache_hit_pct,\n  CAST(SUM(c0_faults + c1_faults + c2_faults + c3_faults + c4_faults + c5_faults + c6_faults + c7_faults) * 100.0 / NULLIF(SUM(reads + writes), 0) AS NUMERIC(10,4)) AS fault_rate_pct\nFROM macht413.disc\nGROUP BY device_name\nORDER BY fault_rate_pct DESC\nLIMIT 10000;"

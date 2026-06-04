@@ -94,6 +94,7 @@ Apply these formulas based on the counter tags in the schema:
 
 AGGREGATION & MATH RULES:
 - If a specific formula is provided directly in the schema comment for a column, it strictly overrides the global FORMULA REFERENCE LEGEND.
+- When calculating Queue lengths or ratios that may result in very small decimals, explicitly CAST the final result to NUMERIC(10,4) so it does not truncate to 0.
 - When computing process-category breakdowns from macht413.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
 - Use from_timestamp / to_timestamp for time filtering.
 

@@ -3,7 +3,7 @@ Semantic Cache for QueryCraft
 ChromaDB-backed cache using BAAI/bge-large-en-v1.5 embeddings.
 
 Improvements:
-- Background thread model load — API available immediately, cache returns misses until ready
+- Synchronous model load — API waits for model load to complete
 - Cache entry metadata: validated_at, execution_success, row_count for auditability
 - Runtime threshold adjustment via set_threshold() / get_threshold()
 """
@@ -124,10 +124,7 @@ class SemanticCache:
     """
     Semantic query cache backed by ChromaDB + sentence-transformers.
 
-    The embedding model is loaded in a background thread so the API is
-    available immediately on startup.  While the model is loading every
-    lookup returns a cache miss (safe fallback — the LLM pipeline runs
-    normally).  Once the thread finishes, caching works as usual.
+    The embedding model is loaded synchronously.
     """
 
     COLLECTION_NAME = "querycraft_cache"
@@ -161,7 +158,7 @@ class SemanticCache:
 
         print(f"[Cache] ChromaDB ready — {self.collection.count()} entries.")
 
-        # Shared embedding model — kicks off background load on first caller.
+        # Shared embedding model — kicks off load on first caller.
         embeddings.start_loading()
 
     # ── Model access ──────────────────────────────────────────────────────────

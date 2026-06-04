@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown } from 'lucide-react'
+import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import QueryInput, { type InputMode } from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
@@ -9,7 +9,7 @@ import ReportDownload from '../components/ReportDownload'
 import AIExplanation from '../components/AIExplanation'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
-import { runQuery, runSqlDirect, runImageQuery, getHistory, getHealth, runRetryAnalysis, setModel, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
+import { runQuery, runSqlDirect, runImageQuery, getHistory, getHealth, runRetryAnalysis, setModel, acceptQueryCache, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -33,7 +33,7 @@ export default function Dashboard() {
   const [retryLoading, setRetryLoading] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
   const [retryOpen, setRetryOpen] = useState(false)
-
+  const [cacheDecision, setCacheDecision] = useState<'pending' | 'accepted' | 'rejected'>('pending')
   // Model switcher state
   const AVAILABLE_MODELS = [
     { id: 'gemini-3.1-flash-lite',  label: 'Gemini 3.1 Flash Lite',  badge: 'fast'    },
@@ -76,6 +76,17 @@ export default function Dashboard() {
     }
   }
 
+  const handleAcceptCache = async () => {
+    if (!result || !currentQuery) return
+    try {
+      await acceptQueryCache(currentQuery, result.sql, result.row_count)
+      setCacheDecision('accepted')
+    } catch (err: any) {
+      console.error('Failed to accept cache:', err)
+      alert(err.message || 'Failed to save to cache')
+    }
+  }
+
   useEffect(() => {
     getHealth().then(h => {
       setHealth(h)
@@ -101,6 +112,7 @@ export default function Dashboard() {
         : await runQuery(payload as string)
       if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
       setResult(res)
+      setCacheDecision('pending')
       // Auto-select chart kind based on data shape
       if (res.chart_type === 'line') {
         setChartKind('line')
@@ -456,6 +468,49 @@ export default function Dashboard() {
                   ? <ChartView chartType={chartKind} columns={result.columns} rows={result.rows} />
                   : <ResultsTable columns={result.columns} rows={result.rows} />
                 }
+
+                {!result.cache_hit && cacheDecision !== 'rejected' && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '16px', background: '#111', border: '1px solid #1c1c1c', borderRadius: '12px',
+                    marginTop: '8px'
+                  }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 4px', fontSize: '13px', color: '#f0f0f0', fontWeight: 600 }}>Train the AI</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#888' }}>
+                        {cacheDecision === 'pending' ? 'Would you like to add this successful query to the system cache?' : 'Query successfully added to the cache.'}
+                      </p>
+                    </div>
+                    {cacheDecision === 'pending' ? (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => setCacheDecision('rejected')}
+                          style={{
+                            padding: '6px 12px', background: 'transparent', border: '1px solid #2a2a2a',
+                            color: '#888', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                          }}
+                        >
+                          <X size={12} /> Reject
+                        </button>
+                        <button
+                          onClick={handleAcceptCache}
+                          style={{
+                            padding: '6px 12px', background: '#a855f7', border: '1px solid #a855f7',
+                            color: '#fff', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600
+                          }}
+                        >
+                          <Check size={12} /> Accept
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#22c55e', fontSize: '12px', fontWeight: 600 }}>
+                        <Check size={14} /> Added
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <AIExplanation sql={result.sql} queryText={currentQuery} columns={result.columns} rows={result.rows} />
 

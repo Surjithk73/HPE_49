@@ -3947,7 +3947,7 @@ proc:
       counter_type: Snapshot
       description: 'Pages in main memory sponsored by this process at interval end
         Number of pages in main memory sponsored by the measured process at the end
-        of the measurement interval. Counter type: Snapshot.'
+        of the measurement interval. Counter type: Snapshot. | DERIVED FORMULA: To calculate average memory pages used, average the pres_pages_start and pres_pages_end columns together.'
     abs_segs_qtime:
       queryable: true
       type: integer
