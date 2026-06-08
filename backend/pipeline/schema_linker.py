@@ -550,7 +550,7 @@ class SchemaLinker:
         return schema_str
     
     def _select_relevant_columns(self, table_name: str, table_def: Dict,
-                                  query_text: str, max_cols: int = 20) -> List[Tuple[str, Dict]]:
+                                  query_text: str, max_cols: int = 40) -> List[Tuple[str, Dict]]:
         """
         Select the most relevant columns for the query.
 
@@ -584,6 +584,7 @@ class SchemaLinker:
 
         selected_keys: List[Tuple[str, Dict]] = []
         exact_matches: List[Tuple[str, Dict]] = []
+        partial_matches: List[Tuple[str, Dict]] = []
         remaining: List[Tuple[str, Dict]] = []
 
         for col_name, col_def in columns.items():
@@ -611,11 +612,24 @@ class SchemaLinker:
             )
             if is_exact:
                 exact_matches.append((col_name, col_def))
+                continue
+
+            # Tier 2.5 check: partial token match
+            col_parts = set(re.split(r'[^a-z0-9]+', col_lower))
+            stop_words = {'time', 'busy', 'count', 'pct', 'rate', 'val', 'num', 'id', 'name', 'bytes', 'sec', 'avg', 'min', 'max', 'sum', 'total', 'start', 'end', 'from', 'to', 'interval', 'delta', 'value', 'file', 'program', 'process', 'device', 'cpu', 'system'}
+            distinctive_parts = {p for p in col_parts if len(p) > 2 and p not in stop_words}
+            
+            is_partial = False
+            if distinctive_parts and any(part in query_tokens for part in distinctive_parts):
+                is_partial = True
+
+            if is_partial:
+                partial_matches.append((col_name, col_def))
             else:
                 remaining.append((col_name, col_def))
 
         # Fill remaining slots with semantic / BM25 ranking
-        used = len(selected_keys) + len(exact_matches)
+        used = len(selected_keys) + len(exact_matches) + len(partial_matches)
         remaining_slots = max(0, max_cols - used)
         ranked_remaining: List[Tuple[str, Dict]] = []
         if remaining and remaining_slots > 0:
@@ -623,8 +637,8 @@ class SchemaLinker:
                 table_name, remaining, query_text
             )[:remaining_slots]
 
-        # Combine: keys first, then exact matches, then ranked remainder
-        result = selected_keys + exact_matches + ranked_remaining
+        # Combine: keys first, then exact matches, then partial matches, then ranked remainder
+        result = selected_keys + exact_matches + partial_matches + ranked_remaining
         return result[:max_cols]
 
     def _rank_columns_by_relevance(

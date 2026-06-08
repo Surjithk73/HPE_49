@@ -334,6 +334,19 @@ def run_query(req: QueryRequest):
             log_entry["generated_sql"]     = sql
             log_entry["validation_passed"] = True
             debug_prompt = "[Cache Hit] No prompt was sent to the LLM — SQL was served from the semantic cache."
+            raw_llm_output = ""
+            
+            # Step 7 — Execute (No Retry for Cache Hit)
+            try:
+                result = _executor.execute(sql)
+                execution_success = True
+            except ExecutionError as e:
+                log_entry["validation_error"] = str(e)
+                _audit.log_query(log_entry)
+                _cache.flag_failed(norm_text)
+                logger.error(f"[/api/query] Execution error from cache — SQL: {sql}\nError: {e}")
+                raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
         else:
             # Step 3 — Schema linking
             schema_context = _linker.link_schema(norm_text, domain)
@@ -352,60 +365,70 @@ def run_query(req: QueryRequest):
                 print(prompt)
                 print("=" * 80 + "\n")
 
-            # Step 5 — LLM generation with retry
-            # We monkey-patch the builder temporarily to count retries
-            retry_count = 0
-            original_build_retry = _builder.build_retry_prompt
+            # Autonomous Self-Correction Loop (Auto-Healing)
+            max_exec_retries = 2
+            exec_retry_count = 0
+            
+            while exec_retry_count <= max_exec_retries:
+                # Step 5 — LLM generation with retry
+                # We monkey-patch the builder temporarily to count retries
+                retry_count = 0
+                original_build_retry = _builder.build_retry_prompt
 
-            def _counting_retry(original_prompt, failed_sql, error):
-                nonlocal retry_count
-                retry_count += 1
-                return original_build_retry(original_prompt, failed_sql, error)
+                def _counting_retry(original_prompt, failed_sql, error):
+                    nonlocal retry_count
+                    retry_count += 1
+                    return original_build_retry(original_prompt, failed_sql, error)
 
-            _builder.build_retry_prompt = _counting_retry
+                _builder.build_retry_prompt = _counting_retry
 
-            try:
-                sql, raw_llm_output = _llm_engine.generate_sql_with_retry(
-                    prompt=prompt,
-                    validator=_validator,
-                    prompt_builder=_builder,
-                    max_retries=2
-                )
-            except LLMError as e:
-                log_entry["validation_error"] = str(e)
-                log_entry["llm_retries"]      = retry_count
-                _audit.log_query(log_entry)
-                logger.error(f"[/api/query] LLM error: {e}")
-                raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
-            finally:
-                _builder.build_retry_prompt = original_build_retry
+                try:
+                    sql, raw_llm_output = _llm_engine.generate_sql_with_retry(
+                        prompt=prompt,
+                        validator=_validator,
+                        prompt_builder=_builder,
+                        max_retries=2
+                    )
+                except LLMError as e:
+                    log_entry["validation_error"] = str(e)
+                    log_entry["llm_retries"]      = log_entry.get("llm_retries", 0) + retry_count
+                    _audit.log_query(log_entry)
+                    logger.error(f"[/api/query] LLM error: {e}")
+                    raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+                finally:
+                    _builder.build_retry_prompt = original_build_retry
 
-            log_entry["llm_retries"] = retry_count
+                log_entry["llm_retries"] = log_entry.get("llm_retries", 0) + retry_count
 
-            # Step 6 — Final validation
-            val = _validator.validate(sql)
-            if not val.valid:
-                log_entry["validation_error"] = val.error
-                _audit.log_query(log_entry)
-                raise HTTPException(status_code=400, detail=f"SQL validation failed: {val.error}")
+                # Step 6 — Final validation
+                val = _validator.validate(sql)
+                if not val.valid:
+                    log_entry["validation_error"] = val.error
+                    _audit.log_query(log_entry)
+                    raise HTTPException(status_code=400, detail=f"SQL validation failed: {val.error}")
 
-            sql = val.sanitized_sql
-            log_entry["generated_sql"]     = sql
-            log_entry["validation_passed"] = True
-
-        # Step 7 — Execute
-        execution_success = False
-        try:
-            result = _executor.execute(sql)
-            execution_success = True
-        except ExecutionError as e:
-            log_entry["validation_error"] = str(e)
-            _audit.log_query(log_entry)
-            # If this was a cache hit that failed, flag the entry as bad
-            if cache_result.hit:
-                _cache.flag_failed(norm_text)
-            logger.error(f"[/api/query] Execution error — SQL: {sql}\nError: {e}")
-            raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+                sql = val.sanitized_sql
+                log_entry["generated_sql"]     = sql
+                log_entry["validation_passed"] = True
+                
+                # Step 7 — Execute generated SQL
+                execution_success = False
+                try:
+                    result = _executor.execute(sql)
+                    execution_success = True
+                    break  # Success! Break out of the execution loop
+                except ExecutionError as e:
+                    if exec_retry_count < max_exec_retries:
+                        logger.warning(f"[/api/query] Execution error on attempt {exec_retry_count + 1}, triggering Auto-Heal... Error: {e}")
+                        # Append the Postgres error to the prompt for the next LLM attempt
+                        prompt = _builder.build_retry_prompt(prompt, sql, f"PostgreSQL Execution Error: {str(e)}")
+                        exec_retry_count += 1
+                        continue
+                    else:
+                        log_entry["validation_error"] = str(e)
+                        _audit.log_query(log_entry)
+                        logger.error(f"[/api/query] Execution error after retries — SQL: {sql}\nError: {e}")
+                        raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
         # Step 8 — Chart type
         chart_type = detect_chart_type(result.columns, result.rows)
