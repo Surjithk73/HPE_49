@@ -132,7 +132,7 @@ class SchemaLinker:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def link_schema(self, normalized_text: str, domain_category: str) -> str:
+    def link_schema(self, normalized_text: str, domain_category: str, target_db: str = "macht413") -> str:
         """
         Select relevant tables and columns for the query.
 
@@ -147,6 +147,7 @@ class SchemaLinker:
         Args:
             normalized_text: Normalized query text
             domain_category: Domain category from normalizer
+            target_db: Database schema prefix
 
         Returns:
             Filtered schema context as DDL string
@@ -160,7 +161,7 @@ class SchemaLinker:
             selected_tables = self._score_and_select_tables(normalized_text, top_n=4)
 
         # Step 2: Build filtered schema context
-        schema_context = self._build_schema_context(selected_tables, normalized_text)
+        schema_context = self._build_schema_context(selected_tables, normalized_text, target_db=target_db)
 
         # Step 3: Fallback — if single-domain produced a very thin context
         # (only key columns, no domain-specific columns), the classifier may
@@ -178,7 +179,7 @@ class SchemaLinker:
             if len(domain_lines) < 4:
                 hybrid_tables = self._score_and_select_tables(normalized_text, top_n=2)
                 if hybrid_tables and hybrid_tables[0] != domain_category:
-                    hybrid_context = self._build_schema_context(hybrid_tables, normalized_text)
+                    hybrid_context = self._build_schema_context(hybrid_tables, normalized_text, target_db=target_db)
                     hybrid_lines = [
                         l for l in hybrid_context.split('\n')
                         if l.strip() and not l.strip().startswith('--')
@@ -421,7 +422,7 @@ class SchemaLinker:
         'tmf':   'proc',   # tmf transaction stats pair with proc for process context
     }
 
-    def _inject_companion_table(self, primary_table: str, query_text: str) -> str:
+    def _inject_companion_table(self, primary_table: str, query_text: str, target_db: str) -> str:
         """
         Return a minimal DDL block for the companion table of primary_table.
 
@@ -460,9 +461,9 @@ class SchemaLinker:
             return ''
 
         ddl = (
-            f"-- Reference table: macht413.{companion} "
+            f"-- Reference table: {target_db}.{companion} "
             f"(included for correct denominator columns)\n"
-            f"CREATE TABLE macht413.{companion} (\n"
+            f"CREATE TABLE {target_db}.{companion} (\n"
             + ',\n'.join(col_lines)
             + "\n);\n"
         )
@@ -470,7 +471,7 @@ class SchemaLinker:
 
     # ── Schema context builder ────────────────────────────────────────────────
 
-    def _build_schema_context(self, table_names: List[str], query_text: str) -> str:
+    def _build_schema_context(self, table_names: List[str], query_text: str, target_db: str = "macht413") -> str:
         """
         Build filtered schema context with relevant columns.
 
@@ -485,6 +486,7 @@ class SchemaLinker:
         Args:
             table_names: List of table names to include
             query_text: Query text for column relevance scoring
+            target_db: Database schema prefix
 
         Returns:
             DDL-style schema context string
@@ -504,12 +506,12 @@ class SchemaLinker:
                 continue
 
             # Build CREATE TABLE DDL
-            ddl = f"-- Table: macht413.{table_name}\n"
+            ddl = f"-- Table: {target_db}.{table_name}\n"
 
             if 'purpose' in table_def:
                 ddl += f"-- Purpose: {table_def['purpose'][:200]}...\n"
 
-            ddl += f"CREATE TABLE macht413.{table_name} (\n"
+            ddl += f"CREATE TABLE {target_db}.{table_name} (\n"
 
             col_lines = []
             for col_name, col_def in columns:

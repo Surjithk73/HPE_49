@@ -66,23 +66,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export async function runQuery(query: string): Promise<QueryResponse> {
+export async function runQuery(query: string, target_db: string = "macht413"): Promise<QueryResponse> {
   return request<QueryResponse>('/api/query', {
     method: 'POST',
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, target_db }),
   })
 }
 
-export async function runSqlDirect(sql: string): Promise<QueryResponse> {
+export async function runSqlDirect(sql: string, target_db: string = "macht413"): Promise<QueryResponse> {
   return request<QueryResponse>('/api/sql', {
     method: 'POST',
-    body: JSON.stringify({ sql }),
+    body: JSON.stringify({ sql, target_db }),
   })
 }
 
-export async function runImageQuery(file: File): Promise<QueryResponse> {
+export async function runImageQuery(file: File, target_db: string = "macht413"): Promise<QueryResponse> {
   const form = new FormData()
   form.append('file', file)
+  form.append('target_db', target_db)
   const res = await fetch(`${API_BASE}/api/image-to-query`, {
     method: 'POST',
     body: form,

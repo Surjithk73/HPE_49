@@ -5,7 +5,7 @@
 QueryCraft lets analysts query HPE NonStop server performance data using plain English. Type a question, get back a SQL query, results table or chart, and a downloadable report — no SQL knowledge required.
 
 **Stack:** FastAPI · React · PostgreSQL · Google Gemini API · ChromaDB  
-**Database:** `macht413` schema · 9 tables · 212,689 rows of real HPE NonStop measurement data
+**Database:** `macht413` schema · 11 tables · 212,689+ rows of real HPE NonStop measurement data
 
 ---
 
@@ -98,6 +98,8 @@ Or manually via psql (update the paths to match your system):
 \copy macht413.proc  FROM 'C:/path/to/HPE_49/measurefiles/proccsv'  WITH (FORMAT csv, HEADER true, NULL '');
 \copy macht413.tmf   FROM 'C:/path/to/HPE_49/measurefiles/tmfcsv'   WITH (FORMAT csv, HEADER true, NULL '');
 \copy macht413.udef  FROM 'C:/path/to/HPE_49/measurefiles/udefcsv'  WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.sqlp  FROM 'C:/path/to/HPE_49/backend/data/D2/sqlpcsv'  WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.sqls  FROM 'C:/path/to/HPE_49/backend/data/D2/sqlscsv'  WITH (FORMAT csv, HEADER true, NULL '');
 ```
 
 ### 2.4 Verify

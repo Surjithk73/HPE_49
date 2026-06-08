@@ -118,12 +118,13 @@ class SQLValidator:
                     new_columns[col_normalized] = col_def
             table_def['columns'] = new_columns
     
-    def validate(self, sql: str) -> ValidationResult:
+    def validate(self, sql: str, target_db: str = "macht413") -> ValidationResult:
         """
         Validate SQL query for security and correctness.
         
         Args:
             sql: SQL query string to validate
+            target_db: Target database schema prefix
             
         Returns:
             ValidationResult with validation status and sanitized SQL or error
@@ -163,10 +164,13 @@ class SQLValidator:
         if not isinstance(parsed, exp.Select):
             return ValidationResult(False, None, "Only SELECT statements are permitted")
         
-        # Check 3 & 4 already done above before parsing
+        # Check 3: Math AST Audit for delta_time division
+        math_check = self._audit_math_operations(parsed)
+        if not math_check['valid']:
+            return ValidationResult(False, None, math_check['error'])
         
-        # Check 5: Schema prefix - auto-prepend macht413 if missing
-        sanitized_sql = self._add_schema_prefix(parsed)
+        # Check 5: Schema prefix - auto-prepend target_db if missing
+        sanitized_sql = self._add_schema_prefix(parsed, target_db)
         
         # Re-parse sanitized SQL
         try:
@@ -175,12 +179,12 @@ class SQLValidator:
             return ValidationResult(False, None, f"Failed to parse sanitized SQL: {str(e)}")
         
         # Check 6: Table existence
-        table_check = self._validate_tables(parsed)
+        table_check = self._validate_tables(parsed, target_db)
         if not table_check['valid']:
             return ValidationResult(False, None, table_check['error'])
         
         # Check 7: Column existence
-        column_check = self._validate_columns(parsed)
+        column_check = self._validate_columns(parsed, target_db)
         if not column_check['valid']:
             return ValidationResult(False, None, column_check['error'])
             
@@ -192,12 +196,13 @@ class SQLValidator:
         # All checks passed
         return ValidationResult(True, sanitized_sql, None)
     
-    def _add_schema_prefix(self, parsed: exp.Expression) -> str:
+    def _add_schema_prefix(self, parsed: exp.Expression, target_db: str) -> str:
         """
-        Add macht413 schema prefix to table references if missing.
+        Add schema prefix to table references if missing.
         
         Args:
             parsed: Parsed SQL expression
+            target_db: Database schema prefix
             
         Returns:
             SQL string with schema prefixes added
@@ -210,18 +215,21 @@ class SQLValidator:
             # If this is a CTE reference, do not add schema prefix
             if table.name.lower() in ctes:
                 continue
-            # If no schema/database specified, add macht413
+            # If no schema/database specified, add target_db
             if not table.db:
-                table.set("db", exp.Identifier(this="macht413"))
+                table.set("db", exp.Identifier(this=target_db))
         
         return parsed.sql(dialect="postgres")
     
-    def _validate_tables(self, parsed: exp.Expression) -> Dict:
+
+    
+    def _validate_tables(self, parsed: exp.Expression, target_db: str) -> Dict:
         """
         Validate that all referenced tables exist in schema.
         
         Args:
             parsed: Parsed SQL expression
+            target_db: Database schema prefix
             
         Returns:
             Dict with 'valid' bool and optional 'error' string
@@ -243,7 +251,7 @@ class SQLValidator:
             if table_name not in self.schema:
                 return {
                     'valid': False,
-                    'error': f"Table '{table_name}' does not exist in macht413 schema"
+                    'error': f"Table '{table_name}' does not exist in {target_db} schema"
                 }
         
         return {'valid': True}
@@ -277,7 +285,7 @@ class SQLValidator:
 
         return aliases
 
-    def _validate_columns(self, parsed: exp.Expression) -> Dict:
+    def _validate_columns(self, parsed: exp.Expression, target_db: str) -> Dict:
         """
         Validate that all referenced columns exist in their tables.
         Uses AST scope resolution to map columns to their correct sources.
@@ -380,7 +388,7 @@ class SQLValidator:
                         if normalized_col not in columns_dict:
                             return {
                                 'valid': False,
-                                'error': f"Column '{col_name}' does not exist in macht413.{t_name}"
+                                'error': f"Column '{col_name}' does not exist in {target_db}.{t_name}"
                             }
                     else:
                         src_cols = scope_exports.get(id(source), set())
@@ -421,7 +429,7 @@ class SQLValidator:
                             if isinstance(s_val, exp.Table):
                                 local_tables.append(s_val.name.split('.')[-1])
                         
-                        table_msg = f"macht413.{local_tables[0]}" if len(local_tables) == 1 else "any of the referenced tables"
+                        table_msg = f"{target_db}.{local_tables[0]}" if len(local_tables) == 1 else "any of the referenced tables"
                         return {
                             'valid': False,
                             'error': f"Column '{col_name}' does not exist in {table_msg}"

@@ -4,7 +4,7 @@ import { Send, Loader2, Sparkles, Code2, Image as ImageIcon, Upload } from 'luci
 export type InputMode = 'nl' | 'sql' | 'image'
 
 interface Props {
-  onSubmit: (payload: string | File, mode: InputMode) => void
+  onSubmit: (payload: string | File, mode: InputMode, targetDb: string) => void
   loading: boolean
   error: string | null
   initialValue?: string
@@ -46,6 +46,7 @@ export function highlightSQL(sql: string): string {
 export default function QueryInput({ onSubmit, loading, error, initialValue = '', initialMode = 'nl' }: Props) {
   const [mode, setMode]   = useState<InputMode>(initialMode)
   const [value, setValue] = useState(initialValue)
+  const [targetDb, setTargetDb] = useState('macht413')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
@@ -81,13 +82,13 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
     if (loading) return
     if (mode === 'image') {
       if (!imageFile) return
-      onSubmit(imageFile, mode)
+      onSubmit(imageFile, mode, targetDb)
       return
     }
     const q = value.trim()
     if (!q) return
     if (q.length > MAX_QUERY_LENGTH) return   // guard — button is also disabled
-    onSubmit(q, mode)
+    onSubmit(q, mode, targetDb)
   }
 
   const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -185,12 +186,32 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
           </button>
         </div>
 
-        {/* Mode hint */}
-        <span style={{ fontSize: '11px', color: '#333' }}>
-          {isImage ? 'Chart image — Gemini infers an NL question, then SQL'
-            : isSql ? 'Direct SQL — bypasses LLM'
-            : 'AI-powered — generates SQL for you'}
-        </span>
+        {/* Mode hint and DB Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '11px', color: '#333' }}>
+            {isImage ? 'Chart image — Gemini infers an NL question, then SQL'
+              : isSql ? 'Direct SQL — bypasses LLM'
+              : 'AI-powered — generates SQL for you'}
+          </span>
+          <select
+            value={targetDb}
+            onChange={(e) => setTargetDb(e.target.value)}
+            disabled={loading}
+            style={{
+              background: '#0d0d0d',
+              color: '#f0f0f0',
+              border: '1px solid #2a2a2a',
+              borderRadius: '6px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              outline: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="macht413">macht413</option>
+            <option value="machd500">machd500</option>
+          </select>
+        </div>
       </div>
 
       {/* ── Input box ── */}
@@ -286,7 +307,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             fontSize: '10px', color: '#2a2a2a', pointerEvents: 'none',
             fontFamily: 'JetBrains Mono, monospace',
           }}>
-            schema: macht413
+            schema: {targetDb}
           </div>
         )}
         </>

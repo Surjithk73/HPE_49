@@ -21,7 +21,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -153,6 +153,7 @@ app.add_middleware(
 # ── Request / Response models ─────────────────────────────────────────────────
 class QueryRequest(BaseModel):
     query: str
+    target_db: str = "macht413"
 
 class CacheAcceptRequest(BaseModel):
     query: str
@@ -161,6 +162,7 @@ class CacheAcceptRequest(BaseModel):
 
 class SqlRequest(BaseModel):
     sql: str
+    target_db: str = "macht413"
 
 class ExportRequest(BaseModel):
     sql: str
@@ -349,11 +351,12 @@ def run_query(req: QueryRequest):
 
         else:
             # Step 3 — Schema linking
-            schema_context = _linker.link_schema(norm_text, domain)
+            target_db = req.target_db
+            schema_context = _linker.link_schema(norm_text, domain, target_db)
 
             # Step 4 — Prompt building (RAG for few-shots)
             top_few_shots = _few_shot_retriever.get_top_k(norm_text, k=3) if _few_shot_retriever else []
-            prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots)
+            prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots, target_db)
 
             # Capture the exact prompt for debugging
             debug_prompt = prompt
@@ -401,7 +404,7 @@ def run_query(req: QueryRequest):
                 log_entry["llm_retries"] = log_entry.get("llm_retries", 0) + retry_count
 
                 # Step 6 — Final validation
-                val = _validator.validate(sql)
+                val = _validator.validate(sql, target_db)
                 if not val.valid:
                     log_entry["validation_error"] = val.error
                     _audit.log_query(log_entry)
@@ -464,7 +467,10 @@ def run_query(req: QueryRequest):
 
 # POST /api/image-to-query
 @app.post("/api/image-to-query")
-async def image_to_query(file: UploadFile = File(...)):
+async def image_to_query(
+    file: UploadFile = File(...),
+    target_db: str = Form("macht413")
+):
     """
     Image-based query entry point.
 
@@ -493,7 +499,7 @@ async def image_to_query(file: UploadFile = File(...)):
 
     instruction = (
         "You are looking at a chart screenshot from HPE NonStop Measure performance reports. "
-        "The underlying dataset is in PostgreSQL schema `macht413` with tables: "
+        f"The underlying dataset is in PostgreSQL schema `{target_db}` with tables: "
         "cpu, proc, disc, file, dfile, dopen, tmf, ossns, udef. "
         "Write ONE concise natural-language analytics question that this chart would answer, "
         "phrased so it can be translated into a SQL query against that schema. "
@@ -515,7 +521,7 @@ async def image_to_query(file: UploadFile = File(...)):
         raise HTTPException(status_code=502, detail="Gemini returned an empty question for the image")
 
     # Reuse the existing NL→SQL pipeline.
-    result = run_query(QueryRequest(query=nl_question))
+    result = run_query(QueryRequest(query=nl_question, target_db=target_db))
     if isinstance(result, dict):
         result["inferred_query"] = nl_question
     return result
@@ -548,7 +554,7 @@ def run_sql(req: SqlRequest):
         "llm_retries":       0,
     }
 
-    val = _validator.validate(raw_sql)
+    val = _validator.validate(raw_sql, req.target_db)
     if not val.valid:
         log_entry["validation_error"] = val.error
         _audit.log_query(log_entry)

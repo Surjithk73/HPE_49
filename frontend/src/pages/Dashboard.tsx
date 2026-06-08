@@ -100,16 +100,16 @@ export default function Dashboard() {
 
   useEffect(() => { refreshHistory() }, [refreshHistory])
 
-  const handleQuery = async (payload: string | File, mode: InputMode = 'nl') => {
+  const handleQuery = async (payload: string | File, mode: InputMode = 'nl', targetDb: string = 'macht413') => {
     setLoading(true)
     setError(null)
     if (typeof payload === 'string') setCurrentQuery(payload)
     else setCurrentQuery(`[Image] ${payload.name}`)
     try {
       const res =
-        mode === 'image' && payload instanceof File ? await runImageQuery(payload)
-        : mode === 'sql' ? await runSqlDirect(payload as string)
-        : await runQuery(payload as string)
+        mode === 'image' && payload instanceof File ? await runImageQuery(payload, targetDb)
+        : mode === 'sql' ? await runSqlDirect(payload as string, targetDb)
+        : await runQuery(payload as string, targetDb)
       if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
       setResult(res)
       setCacheDecision('pending')
@@ -546,7 +546,7 @@ export default function Dashboard() {
 
           {/* Right column — History */}
           <aside>
-            <QueryHistory history={history} onSelect={q => { setCurrentQuery(q); handleQuery(q, 'nl') }} />
+            <QueryHistory history={history} onSelect={q => { setCurrentQuery(q); handleQuery(q, 'nl', 'macht413') }} />
           </aside>
         </div>
       </main>
