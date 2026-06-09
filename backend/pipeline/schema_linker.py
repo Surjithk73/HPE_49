@@ -540,7 +540,7 @@ class SchemaLinker:
         # so the LLM has the correct denominator columns without needing to
         # guess or join to a table it wasn't told about.
         if len(table_names) == 1:
-            companion_ddl = self._inject_companion_table(table_names[0], query_text)
+            companion_ddl = self._inject_companion_table(table_names[0], query_text, target_db)
             if companion_ddl:
                 schema_str += '\n' + companion_ddl
 
