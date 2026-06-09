@@ -232,7 +232,7 @@ class SemanticCache:
 
     # ── Core operations ───────────────────────────────────────────────────────
 
-    def lookup(self, normalized_text: str, target_db: str = None) -> CacheResult:
+    def lookup(self, normalized_text: str) -> CacheResult:
         """
         Look up a query in the cache.
 
@@ -240,7 +240,6 @@ class SemanticCache:
 
         Args:
             normalized_text: Normalized query string
-            target_db: Optional target schema to filter the cache hits
 
         Returns:
             CacheResult with hit status, SQL, and confidence score
@@ -255,15 +254,10 @@ class SemanticCache:
         # Embed the query
         embedding = self.model.encode([normalized_text]).tolist()
 
-        where_clause = {}
-        if target_db:
-            where_clause["target_db"] = target_db
-
         # Query ChromaDB
         results = self.collection.query(
             query_embeddings=embedding,
             n_results=1,
-            where=where_clause if where_clause else None,
             include=["metadatas", "distances"]
         )
 
@@ -318,7 +312,6 @@ class SemanticCache:
         sql: str,
         execution_success: bool = True,
         row_count: Optional[int] = None,
-        target_db: str = None
     ) -> None:
         """
         Store a query→SQL pair in the cache with execution metadata.
@@ -328,7 +321,6 @@ class SemanticCache:
             sql:               Validated SQL to cache
             execution_success: Whether the query executed without error
             row_count:         Number of rows returned (None if unknown)
-            target_db:         The database schema this query targets
         """
         # Model not ready — skip silently (entry will be stored on next successful run)
         if not self.is_model_ready:
@@ -352,8 +344,6 @@ class SemanticCache:
             "cache_quoted":      json.dumps(entities["quoted"]),
             "cache_entities":    json.dumps(entities["entities"]),
         }
-        if target_db:
-            metadata["target_db"] = target_db
         if row_count is not None:
             metadata["row_count"] = row_count
 

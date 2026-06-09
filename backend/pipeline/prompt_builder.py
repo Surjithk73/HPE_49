@@ -5,7 +5,6 @@ Assembles the final LLM prompt from components.
 from typing import List, Dict
 import sys
 import os
-import yaml
 
 # Add parent directory to path for config import
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -30,7 +29,7 @@ class PromptBuilder:
         self.max_rows = max_rows
     
     def build_prompt(self, normalized_query: str, schema_context: str, 
-                     few_shots: List[Dict] = None, target_db: str = "macht413") -> str:
+                     few_shots: List[Dict] = None) -> str:
         """
         Build the complete LLM prompt.
         
@@ -38,7 +37,6 @@ class PromptBuilder:
             normalized_query: Normalized query text
             schema_context: Filtered schema DDL from schema linker
             few_shots: List of example queries (optional)
-            target_db: Target database schema prefix
             
         Returns:
             Complete prompt string ready for LLM
@@ -56,10 +54,6 @@ class PromptBuilder:
             for i, example in enumerate(few_shots, 1):
                 query = example.get('query', '').strip()
                 sql = example.get('sql', '').strip()
-                
-                # Dynamically inject the actual target database into the few shots
-                sql = sql.replace('macht413.', f"{target_db}.")
-                
                 blocks.append(
                     f"### Example {i}\n"
                     f"INPUT: {query}\n"
@@ -70,29 +64,17 @@ class PromptBuilder:
                 + "\n\n---\n\n".join(blocks)
                 + "\n"
             )
-            
-        # Load and format database bounds
-        bounds_section = ""
-        bounds_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'schema_store', 'database_bounds.yaml')
-        if os.path.exists(bounds_path):
-            with open(bounds_path, 'r', encoding='utf-8') as f:
-                bounds_data = yaml.safe_load(f)
-                
-            db_bounds = bounds_data.get('database_bounds', {}).get(target_db, {})
-            if db_bounds:
-                bounds_str = "\n".join([f"  - Table {t}: " + ", ".join([f"{k} bounds: {v[0]} to {v[1]}" for k, v in cols.items()]) for t, cols in db_bounds.items()])
-                bounds_section = f"\nARRAY COLUMN BOUNDS FOR {target_db.upper()}:\nWhen expanding columns with [n], use these index limits to generate the actual SQL columns (e.g. if bounds are 0 to 7, expand to col0, col1... col7):\n{bounds_str}\n"
         
         # Assemble the complete prompt using the refactored layout
         prompt = f"""You are a SQL expert for HPE NonStop performance monitoring systems.
-Generate a single valid PostgreSQL SELECT query for the schema '{target_db}'.
+Generate a single valid PostgreSQL SELECT query for the schema 'macht413'.
 
 OUTPUT CONTRACT:
 1. You MUST output a `<thought>` block explaining your reasoning and explicitly mapping requested metrics to the specific schema tables/columns.
 2. If a requested metric does not exist in the schema, explicitly state in your `<thought>` block which substitute column you chose or how you derived it, or state that the metric is being omitted.
 3. Immediately after the `<thought>` block, output ONLY the raw SQL query wrapped in standard markdown code fences (```sql\n...\n```). Do not output any other text.
 4. Only SELECT statements. No DDL/DML.
-5. Always qualify tables: {target_db}.table_name.
+5. Always qualify tables: macht413.table_name.
 6. Only use columns shown in the schema context; never invent column names.
 7. Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 
@@ -113,7 +95,7 @@ Apply these formulas based on the counter tags in the schema:
 AGGREGATION & MATH RULES:
 - If a specific formula is provided directly in the schema comment for a column, it strictly overrides the global FORMULA REFERENCE LEGEND.
 - When calculating Queue lengths or ratios that may result in very small decimals, explicitly CAST the final result to NUMERIC(10,4) so it does not truncate to 0.
-- When computing process-category breakdowns from {target_db}.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
+- When computing process-category breakdowns from macht413.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
 - Use from_timestamp / to_timestamp for time filtering.
 
 CROSS-TABLE & JOIN RULES:
@@ -122,7 +104,6 @@ CROSS-TABLE & JOIN RULES:
 
 SCHEMA CONTEXT:
 {schema_context}
-{bounds_section}
 {few_shot_section}
 USER REQUEST:
 {normalized_query}"""
@@ -184,7 +165,7 @@ CREATE TABLE macht413.cpu (
     
     # Verify prompt structure
     assert "You are a SQL expert" in prompt
-    assert "OUTPUT CONTRACT:" in prompt
+    assert "STRICT RULES:" in prompt
     assert "SCHEMA CONTEXT:" in prompt
     assert "USER REQUEST:" in prompt
     assert f"LIMIT {MAX_ROWS}" in prompt

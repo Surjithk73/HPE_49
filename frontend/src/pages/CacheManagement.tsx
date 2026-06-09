@@ -169,18 +169,32 @@ export default function CacheManagement() {
 
       {/* Header */}
       <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{
+          maxWidth: '1280px', margin: '0 auto', padding: '0 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
               <Cpu size={15} style={{ color: '#3b82f6' }} />
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em' }}>QueryCraft</div>
-              <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '-0.02em' }}>QueryCraft</div>
+              <div style={{ fontSize: '11px', color: '#444' }}>Cache Management</div>
             </div>
-          </Link>
-          <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: '#1a1a1a', border: '1px solid #333', color: '#fff', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
-            Back to Dashboard
+          </div>
+          <Link
+            to="/"
+            style={{
+              padding: '7px 14px', borderRadius: '8px', border: '1px solid #2a2a2a',
+              background: '#161616', color: '#f0f0f0', fontSize: '12px',
+              textDecoration: 'none', fontWeight: 500,
+            }}
+          >
+            ← Dashboard
           </Link>
         </div>
       </header>
