@@ -389,7 +389,7 @@ def run_query(req: QueryRequest):
         log_entry["domain_category"]  = domain
 
         # Step 2 — Cache lookup
-        cache_result = _cache.lookup(norm_text)
+        cache_result = _cache.lookup(norm_text, target_db=req.target_db)
         # Always record the confidence score so near-misses are visible in
         # the audit log — this lets you tune the threshold with real data.
         log_entry["cache_confidence"] = cache_result.confidence
@@ -851,6 +851,7 @@ async def accept_cache(req: CacheAcceptRequest):
         req.sql,
         execution_success=True,
         row_count=req.row_count,
+        target_db=req.target_db
     )
     return {"status": "ok", "message": "Added to cache"}
 

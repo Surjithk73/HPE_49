@@ -56,6 +56,10 @@ class PromptBuilder:
             for i, example in enumerate(few_shots, 1):
                 query = example.get('query', '').strip()
                 sql = example.get('sql', '').strip()
+                
+                # Dynamically inject the actual target database into the few shots
+                sql = sql.replace('macht413.', f"{target_db}.")
+                
                 blocks.append(
                     f"### Example {i}\n"
                     f"INPUT: {query}\n"

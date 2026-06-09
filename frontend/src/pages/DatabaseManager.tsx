@@ -65,7 +65,7 @@ export default function DatabaseManager() {
           const zip = await JSZip.loadAsync(file)
           for (const relativePath in zip.files) {
             const zipEntry = zip.files[relativePath]
-            if (!zipEntry.dir && relativePath.toLowerCase().endsWith('.csv')) {
+            if (!zipEntry.dir && !relativePath.includes('__MACOSX') && !relativePath.includes('.DS_Store')) {
               const blob = await zipEntry.async('blob')
               const filename = relativePath.split('/').pop() || relativePath
               extracted.push(new File([blob], filename, { type: 'text/csv' }))
@@ -302,7 +302,7 @@ export default function DatabaseManager() {
               <Upload size={24} color="#555" style={{ marginBottom: '12px' }} />
               <div style={{ fontSize: '14px', color: '#ccc' }}>Drag files or ZIP archives here</div>
               <input 
-                ref={fileInputRef} type="file" multiple accept=".csv,.zip"
+                ref={fileInputRef} type="file" multiple
                 onChange={handleCreateSelect} style={{ display: 'none' }} disabled={isCreating}
               />
             </div>
@@ -444,7 +444,7 @@ export default function DatabaseManager() {
                     <input 
                       id={`file-input-${db.database}`}
                       type="file" 
-                      multiple accept=".csv,.zip"
+                      multiple
                       onChange={e => handleAppendSelect(e, db.database)}
                       style={{ display: 'none' }}
                       disabled={isUploading}
