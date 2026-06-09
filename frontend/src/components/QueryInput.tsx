@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import { Send, Loader2, Sparkles, Code2, Image as ImageIcon, Upload } from 'lucide-react'
-import { getDatabases } from '../lib/api'
 
 export type InputMode = 'nl' | 'sql' | 'image'
 
 interface Props {
-  onSubmit: (payload: string | File, mode: InputMode, targetDb: string) => void
+  onSubmit: (payload: string | File, mode: InputMode) => void
   loading: boolean
   error: string | null
   initialValue?: string
@@ -47,15 +46,7 @@ export function highlightSQL(sql: string): string {
 export default function QueryInput({ onSubmit, loading, error, initialValue = '', initialMode = 'nl' }: Props) {
   const [mode, setMode]   = useState<InputMode>(initialMode)
   const [value, setValue] = useState(initialValue)
-  const [availableDbs, setAvailableDbs] = useState<string[]>([])
-  const [targetDb, setTargetDb] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
-
-  useEffect(() => {
-    getDatabases().then(dbs => {
-      setAvailableDbs(dbs)
-    }).catch(console.error)
-  }, [])
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
   const fileInputRef      = useRef<HTMLInputElement>(null)
@@ -88,19 +79,15 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
 
   const handleSubmit = () => {
     if (loading) return
-    if (!targetDb) {
-      alert("Please select a node/database before querying.")
-      return
-    }
     if (mode === 'image') {
       if (!imageFile) return
-      onSubmit(imageFile, mode, targetDb)
+      onSubmit(imageFile, mode)
       return
     }
     const q = value.trim()
     if (!q) return
     if (q.length > MAX_QUERY_LENGTH) return   // guard — button is also disabled
-    onSubmit(q, mode, targetDb)
+    onSubmit(q, mode)
   }
 
   const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -198,35 +185,12 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
           </button>
         </div>
 
-        {/* Mode hint and DB Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '11px', color: '#333' }}>
-            {isImage ? 'Chart image — Gemini infers an NL question, then SQL'
-              : isSql ? 'Direct SQL — bypasses LLM'
-              : 'AI-powered — generates SQL for you'}
-          </span>
-          <select 
-            value={targetDb}
-            onChange={(e) => setTargetDb(e.target.value)}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              background: '#0a0a0a',
-              border: targetDb ? '1px solid #333' : '1px solid #ef4444',
-              color: targetDb ? '#fff' : '#ef4444',
-              fontSize: '12px',
-              outline: 'none',
-              cursor: 'pointer',
-              minWidth: '140px',
-              boxShadow: targetDb ? 'none' : '0 0 0 1px rgba(239,68,68,0.2)'
-            }}
-          >
-            <option value="" disabled>-- Select Node --</option>
-            {availableDbs.map(db => (
-              <option key={db} value={db}>{db}</option>
-            ))}
-          </select>
-        </div>
+        {/* Mode hint */}
+        <span style={{ fontSize: '11px', color: '#333' }}>
+          {isImage ? 'Chart image — Gemini infers an NL question, then SQL'
+            : isSql ? 'Direct SQL — bypasses LLM'
+            : 'AI-powered — generates SQL for you'}
+        </span>
       </div>
 
       {/* ── Input box ── */}
@@ -322,7 +286,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             fontSize: '10px', color: '#2a2a2a', pointerEvents: 'none',
             fontFamily: 'JetBrains Mono, monospace',
           }}>
-            schema: {targetDb}
+            schema: macht413
           </div>
         )}
         </>
