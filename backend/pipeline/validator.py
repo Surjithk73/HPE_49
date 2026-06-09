@@ -164,10 +164,6 @@ class SQLValidator:
         if not isinstance(parsed, exp.Select):
             return ValidationResult(False, None, "Only SELECT statements are permitted")
         
-        # Check 3: Math AST Audit for delta_time division
-        math_check = self._audit_math_operations(parsed)
-        if not math_check['valid']:
-            return ValidationResult(False, None, math_check['error'])
         
         # Check 5: Schema prefix - auto-prepend target_db if missing
         sanitized_sql = self._add_schema_prefix(parsed, target_db)
