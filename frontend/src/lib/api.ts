@@ -66,23 +66,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export async function runQuery(query: string): Promise<QueryResponse> {
+export async function runQuery(query: string, target_db: string = "macht413"): Promise<QueryResponse> {
   return request<QueryResponse>('/api/query', {
     method: 'POST',
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, target_db }),
   })
 }
 
-export async function runSqlDirect(sql: string): Promise<QueryResponse> {
+export async function runSqlDirect(sql: string, target_db: string = "macht413"): Promise<QueryResponse> {
   return request<QueryResponse>('/api/sql', {
     method: 'POST',
-    body: JSON.stringify({ sql }),
+    body: JSON.stringify({ sql, target_db }),
   })
 }
 
-export async function runImageQuery(file: File): Promise<QueryResponse> {
+export async function runImageQuery(file: File, target_db: string = "macht413"): Promise<QueryResponse> {
   const form = new FormData()
   form.append('file', file)
+  form.append('target_db', target_db)
   const res = await fetch(`${API_BASE}/api/image-to-query`, {
     method: 'POST',
     body: form,
@@ -137,6 +138,43 @@ export async function getHealth(): Promise<HealthResponse> {
 
 export async function getSchema(): Promise<SchemaTable[]> {
   return request<SchemaTable[]>('/api/schema')
+}
+
+export async function getDatabases(): Promise<string[]> {
+  const res = await request<{databases: string[]}>('/api/databases')
+  return res.databases
+}
+
+export interface DatabaseDetails {
+  database: string
+  tables: string[]
+}
+
+export async function getDatabaseDetails(): Promise<DatabaseDetails[]> {
+  const res = await request<{details: DatabaseDetails[]}>('/api/databases/details')
+  return res.details
+}
+
+export async function deleteDatabase(targetDb: string): Promise<{status: string, message: string}> {
+  return request<{status: string, message: string}>(`/api/databases/${targetDb}`, { method: 'DELETE' })
+}
+
+export async function appendMeasureData(files: FileList | File[], targetDb: string): Promise<any> {
+  const formData = new FormData()
+  Array.from(files).forEach(file => {
+    formData.append('files', file)
+  })
+
+  const res = await fetch(`${API_BASE}/api/upload-measure/${targetDb}/append`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.detail || 'Failed to append files')
+  }
+  return data
 }
 
 export async function getCache(): Promise<CacheResponse> {
@@ -211,3 +249,21 @@ export async function explainResults(
     body: JSON.stringify({ sql, query_text: queryText, columns, rows }),
   })
 }
+
+export async function uploadMeasureData(files: File[], targetDb: string): Promise<{status: string, folder: string, results: any}> {
+  const form = new FormData()
+  files.forEach(f => form.append('files', f))
+  form.append('target_db', targetDb)
+  
+  const res = await fetch(`${API_BASE}/api/upload-measure`, {
+    method: 'POST',
+    body: form,
+  })
+  
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
