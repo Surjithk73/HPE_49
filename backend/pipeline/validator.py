@@ -164,7 +164,6 @@ class SQLValidator:
         if not isinstance(parsed, exp.Select):
             return ValidationResult(False, None, "Only SELECT statements are permitted")
         
-        
         # Check 5: Schema prefix - auto-prepend target_db if missing
         sanitized_sql = self._add_schema_prefix(parsed, target_db)
         

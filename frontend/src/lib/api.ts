@@ -140,6 +140,43 @@ export async function getSchema(): Promise<SchemaTable[]> {
   return request<SchemaTable[]>('/api/schema')
 }
 
+export async function getDatabases(): Promise<string[]> {
+  const res = await request<{databases: string[]}>('/api/databases')
+  return res.databases
+}
+
+export interface DatabaseDetails {
+  database: string
+  tables: string[]
+}
+
+export async function getDatabaseDetails(): Promise<DatabaseDetails[]> {
+  const res = await request<{details: DatabaseDetails[]}>('/api/databases/details')
+  return res.details
+}
+
+export async function deleteDatabase(targetDb: string): Promise<{status: string, message: string}> {
+  return request<{status: string, message: string}>(`/api/databases/${targetDb}`, { method: 'DELETE' })
+}
+
+export async function appendMeasureData(files: FileList | File[], targetDb: string): Promise<any> {
+  const formData = new FormData()
+  Array.from(files).forEach(file => {
+    formData.append('files', file)
+  })
+
+  const res = await fetch(`${API_BASE}/api/upload-measure/${targetDb}/append`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.detail || 'Failed to append files')
+  }
+  return data
+}
+
 export async function getCache(): Promise<CacheResponse> {
   return request<CacheResponse>('/api/cache')
 }
@@ -212,3 +249,21 @@ export async function explainResults(
     body: JSON.stringify({ sql, query_text: queryText, columns, rows }),
   })
 }
+
+export async function uploadMeasureData(files: File[], targetDb: string): Promise<{status: string, folder: string, results: any}> {
+  const form = new FormData()
+  files.forEach(f => form.append('files', f))
+  form.append('target_db', targetDb)
+  
+  const res = await fetch(`${API_BASE}/api/upload-measure`, {
+    method: 'POST',
+    body: form,
+  })
+  
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+

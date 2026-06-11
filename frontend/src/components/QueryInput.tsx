@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import { Send, Loader2, Sparkles, Code2, Image as ImageIcon, Upload } from 'lucide-react'
+import { getDatabases } from '../lib/api'
 
 export type InputMode = 'nl' | 'sql' | 'image'
 
@@ -46,8 +47,15 @@ export function highlightSQL(sql: string): string {
 export default function QueryInput({ onSubmit, loading, error, initialValue = '', initialMode = 'nl' }: Props) {
   const [mode, setMode]   = useState<InputMode>(initialMode)
   const [value, setValue] = useState(initialValue)
-  const [targetDb, setTargetDb] = useState('macht413')
+  const [availableDbs, setAvailableDbs] = useState<string[]>([])
+  const [targetDb, setTargetDb] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    getDatabases().then(dbs => {
+      setAvailableDbs(dbs)
+    }).catch(console.error)
+  }, [])
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
   const fileInputRef      = useRef<HTMLInputElement>(null)
@@ -80,6 +88,10 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
 
   const handleSubmit = () => {
     if (loading) return
+    if (!targetDb) {
+      alert("Please select a node/database before querying.")
+      return
+    }
     if (mode === 'image') {
       if (!imageFile) return
       onSubmit(imageFile, mode, targetDb)
@@ -193,23 +205,26 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
               : isSql ? 'Direct SQL — bypasses LLM'
               : 'AI-powered — generates SQL for you'}
           </span>
-          <select
+          <select 
             value={targetDb}
             onChange={(e) => setTargetDb(e.target.value)}
-            disabled={loading}
             style={{
-              background: '#0d0d0d',
-              color: '#f0f0f0',
-              border: '1px solid #2a2a2a',
+              padding: '6px 12px',
               borderRadius: '6px',
-              padding: '4px 8px',
-              fontSize: '11px',
+              background: '#0a0a0a',
+              border: targetDb ? '1px solid #333' : '1px solid #ef4444',
+              color: targetDb ? '#fff' : '#ef4444',
+              fontSize: '12px',
               outline: 'none',
               cursor: 'pointer',
+              minWidth: '140px',
+              boxShadow: targetDb ? 'none' : '0 0 0 1px rgba(239,68,68,0.2)'
             }}
           >
-            <option value="macht413">macht413</option>
-            <option value="machd500">machd500</option>
+            <option value="" disabled>-- Select Node --</option>
+            {availableDbs.map(db => (
+              <option key={db} value={db}>{db}</option>
+            ))}
           </select>
         </div>
       </div>

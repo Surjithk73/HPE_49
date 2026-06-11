@@ -155,7 +155,7 @@ export default function Dashboard() {
       {/* ── Header ── */}
       <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
             <div style={{
               width: '32px', height: '32px', borderRadius: '8px',
               background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
@@ -167,10 +167,29 @@ export default function Dashboard() {
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em' }}>QueryCraft</div>
               <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
             </div>
-          </div>
+          </Link>
 
           {/* Status + Links */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <Link 
+              to="/databases"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                background: '#222',
+                color: '#fff',
+                fontSize: '12px',
+                textDecoration: 'none',
+                transition: 'all 0.2s',
+                fontWeight: 600
+              }}
+            >
+              Databases
+            </Link>
+
             <Link 
               to="/cache"
               style={{
