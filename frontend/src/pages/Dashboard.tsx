@@ -100,16 +100,16 @@ export default function Dashboard() {
 
   useEffect(() => { refreshHistory() }, [refreshHistory])
 
-  const handleQuery = async (payload: string | File, mode: InputMode = 'nl') => {
+  const handleQuery = async (payload: string | File, mode: InputMode = 'nl', targetDb: string = 'macht413') => {
     setLoading(true)
     setError(null)
     if (typeof payload === 'string') setCurrentQuery(payload)
     else setCurrentQuery(`[Image] ${payload.name}`)
     try {
       const res =
-        mode === 'image' && payload instanceof File ? await runImageQuery(payload)
-        : mode === 'sql' ? await runSqlDirect(payload as string)
-        : await runQuery(payload as string)
+        mode === 'image' && payload instanceof File ? await runImageQuery(payload, targetDb)
+        : mode === 'sql' ? await runSqlDirect(payload as string, targetDb)
+        : await runQuery(payload as string, targetDb)
       if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
       setResult(res)
       setCacheDecision('pending')
@@ -155,7 +155,7 @@ export default function Dashboard() {
       {/* ── Header ── */}
       <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
             <div style={{
               width: '32px', height: '32px', borderRadius: '8px',
               background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
@@ -167,10 +167,29 @@ export default function Dashboard() {
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em' }}>QueryCraft</div>
               <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
             </div>
-          </div>
+          </Link>
 
           {/* Status + Links */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <Link 
+              to="/databases"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                background: '#222',
+                color: '#fff',
+                fontSize: '12px',
+                textDecoration: 'none',
+                transition: 'all 0.2s',
+                fontWeight: 600
+              }}
+            >
+              Databases
+            </Link>
+
             <Link 
               to="/cache"
               style={{
@@ -546,7 +565,7 @@ export default function Dashboard() {
 
           {/* Right column — History */}
           <aside>
-            <QueryHistory history={history} onSelect={q => { setCurrentQuery(q); handleQuery(q, 'nl') }} />
+            <QueryHistory history={history} onSelect={q => { setCurrentQuery(q); handleQuery(q, 'nl', 'macht413') }} />
           </aside>
         </div>
       </main>

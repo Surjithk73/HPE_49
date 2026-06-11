@@ -1,4 +1,4 @@
-import { Database, Cpu, Zap, CheckCircle2, Code2, FileText, BarChart3, Shield } from 'lucide-react'
+import { Database, Cpu, Search, Sparkles, Zap, Shield, ArrowRight, Server, FileText, CheckCircle2, Code2, BarChart3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ArchitectureDiagram from '../components/ArchitectureDiagram'
 
@@ -8,13 +8,9 @@ export default function HowItWorks() {
       
       {/* Header */}
       <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{
-              width: '32px', height: '32px', borderRadius: '8px',
-              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Cpu size={15} style={{ color: '#3b82f6' }} />
             </div>
             <div>
@@ -22,20 +18,7 @@ export default function HowItWorks() {
               <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
             </div>
           </Link>
-          
-          <Link 
-            to="/" 
-            style={{ 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              border: '1px solid #2a2a2a', 
-              background: '#161616',
-              color: '#f0f0f0',
-              fontSize: '12px',
-              textDecoration: 'none',
-              transition: 'all 0.2s'
-            }}
-          >
+          <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: '#1a1a1a', border: '1px solid #333', color: '#fff', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
             Back to Dashboard
           </Link>
         </div>

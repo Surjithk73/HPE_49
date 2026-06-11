@@ -21,7 +21,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -153,6 +153,7 @@ app.add_middleware(
 # ── Request / Response models ─────────────────────────────────────────────────
 class QueryRequest(BaseModel):
     query: str
+    target_db: str = "macht413"
 
 class CacheAcceptRequest(BaseModel):
     query: str
@@ -161,6 +162,7 @@ class CacheAcceptRequest(BaseModel):
 
 class SqlRequest(BaseModel):
     sql: str
+    target_db: str = "macht413"
 
 class ExportRequest(BaseModel):
     sql: str
@@ -231,6 +233,74 @@ def health():
         "schema_tables":     len(_schema) if _schema else 0,
     }
 
+
+# GET /api/databases
+@app.get("/api/databases")
+def list_databases():
+    try:
+        res = _executor.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'public', 'pg_toast')")
+        schemas = [row['schema_name'] for row in res.rows]
+        return {"databases": sorted(schemas)}
+    except Exception as e:
+        logger.error(f"Failed to list databases: {e}")
+        return {"databases": ["macht413", "machd500"]}
+
+# GET /api/databases/details
+@app.get("/api/databases/details")
+def list_database_details():
+    try:
+        schemas_res = _executor.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'public', 'pg_toast')")
+        schemas = [row['schema_name'] for row in schemas_res.rows]
+        
+        details = []
+        for schema in schemas:
+            tables_res = _executor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{schema}'")
+            tables = [row['table_name'] for row in tables_res.rows]
+            details.append({"database": schema, "tables": sorted(tables)})
+            
+        return {"details": details}
+    except Exception as e:
+        logger.error(f"Failed to fetch database details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# DELETE /api/databases/{target_db}
+@app.delete("/api/databases/{target_db}")
+def delete_database(target_db: str):
+    try:
+        # Validate that the schema exists and isn't a system schema
+        schemas_res = _executor.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'public', 'pg_toast')")
+        schemas = [row['schema_name'] for row in schemas_res.rows]
+        
+        if target_db not in schemas:
+            raise HTTPException(status_code=404, detail="Database not found")
+            
+        # Drop the schema and all its tables using a superuser connection
+        from config import DB_HOST, DB_PORT, DB_NAME
+        conn = psycopg2.connect(
+            host=DB_HOST, port=DB_PORT, database=DB_NAME,
+            user='postgres', password='371773'
+        )
+        try:
+            conn.autocommit = True
+            with conn.cursor() as cursor:
+                cursor.execute(f"DROP SCHEMA IF EXISTS {target_db} CASCADE;")
+        finally:
+            conn.close()
+            
+        # Clean up the staging directory
+        import shutil
+        import os
+        target_dir = os.path.join(os.path.dirname(__file__), "data", target_db)
+        if os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+            
+        logger.info(f"Successfully deleted database: {target_db} and its staging folder.")
+        return {"status": "success", "message": f"Database {target_db} deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete database {target_db}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # GET /api/schema
 @app.get("/api/schema")
@@ -319,7 +389,7 @@ def run_query(req: QueryRequest):
         log_entry["domain_category"]  = domain
 
         # Step 2 — Cache lookup
-        cache_result = _cache.lookup(norm_text)
+        cache_result = _cache.lookup(norm_text, target_db=req.target_db)
         # Always record the confidence score so near-misses are visible in
         # the audit log — this lets you tune the threshold with real data.
         log_entry["cache_confidence"] = cache_result.confidence
@@ -349,11 +419,12 @@ def run_query(req: QueryRequest):
 
         else:
             # Step 3 — Schema linking
-            schema_context = _linker.link_schema(norm_text, domain)
+            target_db = req.target_db
+            schema_context = _linker.link_schema(norm_text, domain, target_db)
 
             # Step 4 — Prompt building (RAG for few-shots)
             top_few_shots = _few_shot_retriever.get_top_k(norm_text, k=3) if _few_shot_retriever else []
-            prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots)
+            prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots, target_db)
 
             # Capture the exact prompt for debugging
             debug_prompt = prompt
@@ -401,7 +472,7 @@ def run_query(req: QueryRequest):
                 log_entry["llm_retries"] = log_entry.get("llm_retries", 0) + retry_count
 
                 # Step 6 — Final validation
-                val = _validator.validate(sql)
+                val = _validator.validate(sql, target_db)
                 if not val.valid:
                     log_entry["validation_error"] = val.error
                     _audit.log_query(log_entry)
@@ -464,7 +535,10 @@ def run_query(req: QueryRequest):
 
 # POST /api/image-to-query
 @app.post("/api/image-to-query")
-async def image_to_query(file: UploadFile = File(...)):
+async def image_to_query(
+    file: UploadFile = File(...),
+    target_db: str = Form("macht413")
+):
     """
     Image-based query entry point.
 
@@ -493,7 +567,7 @@ async def image_to_query(file: UploadFile = File(...)):
 
     instruction = (
         "You are looking at a chart screenshot from HPE NonStop Measure performance reports. "
-        "The underlying dataset is in PostgreSQL schema `macht413` with tables: "
+        f"The underlying dataset is in PostgreSQL schema `{target_db}` with tables: "
         "cpu, proc, disc, file, dfile, dopen, tmf, ossns, udef. "
         "Write ONE concise natural-language analytics question that this chart would answer, "
         "phrased so it can be translated into a SQL query against that schema. "
@@ -515,11 +589,112 @@ async def image_to_query(file: UploadFile = File(...)):
         raise HTTPException(status_code=502, detail="Gemini returned an empty question for the image")
 
     # Reuse the existing NL→SQL pipeline.
-    result = run_query(QueryRequest(query=nl_question))
+    result = run_query(QueryRequest(query=nl_question, target_db=target_db))
     if isinstance(result, dict):
         result["inferred_query"] = nl_question
     return result
 
+
+# POST /api/upload-measure
+@app.post("/api/upload-measure")
+async def upload_measure(
+    files: List[UploadFile] = File(...),
+    target_db: str = Form(...)
+):
+    """
+    Upload CSV files to a new backend/data/DN directory and auto-load into DB.
+    """
+    ALLOWED_MEASURE_FILES = {
+        'cpucsv', 'dfilecsv', 'disccsv', 'dopencsv', 'filecsv', 
+        'ossnscsv', 'proccsv', 'sqlpcsv', 'sqlscsv', 'tmfcsv', 'udefcsv'
+    }
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+        
+    target_db = target_db.strip().lower()
+    if not target_db:
+        raise HTTPException(status_code=400, detail="Target DB name is required")
+        
+    # Validate filenames before saving anything
+    invalid_files = []
+    for file in files:
+        base_name = file.filename.lower()
+        if base_name.endswith('.csv'):
+            base_name = base_name[:-4]
+            
+        if base_name not in ALLOWED_MEASURE_FILES:
+            invalid_files.append(file.filename)
+            
+    if invalid_files:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid Measure files detected: {', '.join(invalid_files)}. "
+                   f"Allowed files are: {', '.join(sorted(ALLOWED_MEASURE_FILES))}"
+        )
+
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Use target_db as the folder name. If it exists (e.g. recreating), clear it first.
+    import shutil
+    new_d_dir = os.path.join(data_dir, target_db)
+    if os.path.exists(new_d_dir):
+        shutil.rmtree(new_d_dir)
+    os.makedirs(new_d_dir, exist_ok=True)
+    
+    # Save files
+    for file in files:
+        file_path = os.path.join(new_d_dir, file.filename.lower())
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+            
+    # Trigger database load
+    try:
+        from setup_scripts.load_csv_data_auto import load_schema_from_csv
+        results = load_schema_from_csv(target_db, new_d_dir)
+        return {"status": "success", "results": results, "folder": target_db}
+    except Exception as e:
+        logger.error(f"Failed to load uploaded schema {target_db}: {e}")
+        raise HTTPException(status_code=500, detail=f"Database load failed: {str(e)}")
+
+# POST /api/upload-measure/{target_db}/append
+@app.post("/api/upload-measure/{target_db}/append")
+async def append_measure(
+    target_db: str,
+    files: List[UploadFile] = File(...)
+):
+    """
+    Append CSV files to an existing database, bypassing strict whitelists.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+        
+    target_db = target_db.strip().lower()
+    
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Use target_db as the folder name to append to the existing directory
+    new_d_dir = os.path.join(data_dir, target_db)
+    os.makedirs(new_d_dir, exist_ok=True)
+    
+    # Save files without strict measure whitelist validation
+    for file in files:
+        file_path = os.path.join(new_d_dir, file.filename.lower())
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+            
+    # Trigger database load with append=True
+    try:
+        from setup_scripts.load_csv_data_auto import load_schema_from_csv
+        results = load_schema_from_csv(target_db, new_d_dir, append=True)
+        return {"message": "Append successful", "results": results}
+    except Exception as e:
+        logger.error(f"Failed to append to schema {target_db}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # POST /api/sql
 @app.post("/api/sql")
@@ -548,7 +723,7 @@ def run_sql(req: SqlRequest):
         "llm_retries":       0,
     }
 
-    val = _validator.validate(raw_sql)
+    val = _validator.validate(raw_sql, req.target_db)
     if not val.valid:
         log_entry["validation_error"] = val.error
         _audit.log_query(log_entry)
@@ -676,6 +851,7 @@ async def accept_cache(req: CacheAcceptRequest):
         req.sql,
         execution_success=True,
         row_count=req.row_count,
+        target_db=req.target_db
     )
     return {"status": "ok", "message": "Added to cache"}
 
