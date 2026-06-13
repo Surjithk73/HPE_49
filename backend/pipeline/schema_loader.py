@@ -60,7 +60,10 @@ class SchemaLoader:
         
     def get_business_rules(self) -> str:
         """Get domain business rules defined in the schema."""
-        return self.schema.get('business_rules', '')
+        rules = self.schema.get('business_rules', '')
+        if isinstance(rules, list):
+            return '\n'.join(rules)
+        return rules
     
     def get_table(self, table_name: str) -> Dict[str, Any]:
         """

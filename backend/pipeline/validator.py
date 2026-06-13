@@ -102,17 +102,17 @@ class SQLValidator:
             new_columns = {}
             for col_name, col_def in columns.items():
                 col_normalized = col_name.replace('.', '_').lower()
-                if 'ipu{n}' in col_normalized:
+                if 'ipu{n}' in col_normalized or 'ipu[n]' in col_normalized:
                     for i in range(16):
-                        expanded_name = col_normalized.replace('ipu{n}', f'ipu{i}')
+                        expanded_name = col_normalized.replace('ipu{n}', f'ipu{i}').replace('ipu[n]', f'ipu{i}')
                         new_columns[expanded_name] = col_def
-                elif 'svnet{n}' in col_normalized:
+                elif 'svnet{n}' in col_normalized or 'svnet[n]' in col_normalized:
                     for i in range(16):
-                        expanded_name = col_normalized.replace('svnet{n}', f'svnet{i}')
+                        expanded_name = col_normalized.replace('svnet{n}', f'svnet{i}').replace('svnet[n]', f'svnet{i}')
                         new_columns[expanded_name] = col_def
-                elif 'c{n}' in col_normalized:
+                elif 'c{n}' in col_normalized or 'c[n]' in col_normalized:
                     for i in range(8):
-                        expanded_name = col_normalized.replace('c{n}', f'c{i}')
+                        expanded_name = col_normalized.replace('c{n}', f'c{i}').replace('c[n]', f'c{i}')
                         new_columns[expanded_name] = col_def
                 else:
                     new_columns[col_normalized] = col_def

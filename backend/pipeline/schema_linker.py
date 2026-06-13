@@ -546,7 +546,11 @@ class SchemaLinker:
 
         business_rules = self.schema.get('business_rules')
         if business_rules:
-            rules_comment = '\n-- '.join(business_rules.splitlines())
+            if isinstance(business_rules, list):
+                rules_str = '\n'.join(business_rules)
+            else:
+                rules_str = business_rules
+            rules_comment = '\n-- '.join(rules_str.splitlines())
             schema_str += f"\n-- DOMAIN BUSINESS RULES:\n-- {rules_comment}\n"
 
         return schema_str

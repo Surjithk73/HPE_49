@@ -14,6 +14,8 @@ frontend/.vite/
 # IDE
 .vscode/
 .idea/
+.agents/
+graphify-out/
 *.swp
 *.swo
 

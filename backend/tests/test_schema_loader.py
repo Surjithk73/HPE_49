@@ -23,10 +23,10 @@ def test_normal_operation():
         assert loader.get_schema() is not None, "Schema should not be None"
         print("✓ Schema loads successfully")
         
-        # Test 1.2: All 9 tables present
+        # Test 1.2: All 16 tables present
         tables = loader.get_table_names()
-        assert len(tables) == 9, f"Expected 9 tables, got {len(tables)}"
-        print(f"✓ All 9 tables present: {', '.join(tables)}")
+        assert len(tables) == 16, f"Expected 16 tables, got {len(tables)}"
+        print(f"✓ All 16 tables present: {', '.join(tables)}")
         
         # Test 1.3: Required tables exist
         required = ['cpu', 'disc', 'dfile', 'dopen', 'file', 'ossns', 'proc', 'tmf', 'udef']
