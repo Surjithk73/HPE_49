@@ -58,7 +58,7 @@ class PromptBuilder:
                 sql = example.get('sql', '').strip()
                 
                 # Dynamically inject the actual target database into the few shots
-                sql = sql.replace('macht413.', f"{target_db}.")
+                sql = sql.replace('%db%.', f"{target_db}.")
                 
                 blocks.append(
                     f"### Example {i}\n"
@@ -189,7 +189,7 @@ CREATE TABLE macht413.cpu (
     assert "USER REQUEST:" in prompt
     assert f"LIMIT {MAX_ROWS}" in prompt
     assert "EXAMPLES" not in prompt  # Should be omitted when empty
-    print("✓ Basic prompt structure correct")
+    print("[OK] Basic prompt structure correct")
     
     # Test 2: Prompt with few-shot examples
     print("\n[Test 2] Prompt with few-shot examples")
@@ -222,7 +222,7 @@ CREATE TABLE macht413.cpu (
     assert "OUTPUT:\n<thought>" in prompt_with_examples
     assert "```sql\nSELECT cpu_num" in prompt_with_examples
     assert "### Example 2" in prompt_with_examples
-    print("✓ Few-shot examples included correctly")
+    print("[OK] Few-shot examples included correctly")
     
     # Test 3: Retry prompt
     print("\n[Test 3] Retry prompt with error feedback")
@@ -245,7 +245,7 @@ CREATE TABLE macht413.cpu (
     assert error in retry_prompt
     assert failed_sql in retry_prompt
     assert "Please fix the SQL" in retry_prompt
-    print("✓ Retry prompt structure correct")
+    print("[OK] Retry prompt structure correct")
     
     # Test 4: Custom max_rows
     print("\n[Test 4] Custom max_rows value")
@@ -259,7 +259,7 @@ CREATE TABLE macht413.cpu (
     
     assert "LIMIT 5000" in custom_prompt
     assert "LIMIT 10000" not in custom_prompt
-    print("✓ Custom max_rows injected correctly")
+    print("[OK] Custom max_rows injected correctly")
     
     print("\n" + "=" * 80)
-    print("✓ All Prompt Builder tests passed!")
+    print("[OK] All Prompt Builder tests passed!")

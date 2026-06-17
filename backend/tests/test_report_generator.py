@@ -67,7 +67,7 @@ def test_csv():
     empty_bytes, _ = generate_report("csv", COLUMNS, [])
     empty_lines = empty_bytes.decode("utf-8").strip().split("\n")
     ok = len(empty_lines) == 1   # header only
-    print(f"  Empty rows → header only: {ok}")
+    print(f"  Empty rows -> header only: {ok}")
     checks.append(ok)
 
     # In-memory (no disk write)
@@ -207,7 +207,7 @@ def test_pdf():
     # Empty rows still produces valid PDF
     empty_data, _ = generate_report("pdf", COLUMNS, [], QUERY, SQL)
     ok = empty_data[:4] == b"%PDF"
-    print(f"  Empty rows → valid PDF: {ok}")
+    print(f"  Empty rows -> valid PDF: {ok}")
     checks.append(ok)
 
     passed = sum(checks)
@@ -225,35 +225,35 @@ def test_generate_report_routing():
     # csv
     _, mime = generate_report("csv", COLUMNS, ROWS)
     ok = mime == MIME_CSV
-    print(f"  csv  → {mime}: {ok}")
+    print(f"  csv  -> {mime}: {ok}")
     checks.append(ok)
 
     # excel
     _, mime = generate_report("excel", COLUMNS, ROWS)
     ok = mime == MIME_EXCEL
-    print(f"  excel → {mime}: {ok}")
+    print(f"  excel -> {mime}: {ok}")
     checks.append(ok)
 
     # xlsx alias
     _, mime = generate_report("xlsx", COLUMNS, ROWS)
     ok = mime == MIME_EXCEL
-    print(f"  xlsx  → {mime}: {ok}")
+    print(f"  xlsx  -> {mime}: {ok}")
     checks.append(ok)
 
     # pdf
     _, mime = generate_report("pdf", COLUMNS, ROWS)
     ok = mime == MIME_PDF
-    print(f"  pdf  → {mime}: {ok}")
+    print(f"  pdf  -> {mime}: {ok}")
     checks.append(ok)
 
     # unsupported format
     try:
         generate_report("docx", COLUMNS, ROWS)
         checks.append(False)
-        print("  docx → should have raised ValueError: ✗")
+        print("  docx -> should have raised ValueError: [FAIL]")
     except ValueError:
         checks.append(True)
-        print("  docx → ValueError raised: ✓")
+        print("  docx -> ValueError raised: [OK]")
 
     passed = sum(checks)
     print(f"\nRouting: {passed}/{len(checks)} checks passed")
@@ -274,10 +274,10 @@ def test_large_dataset():
         try:
             data, _ = generate_report(fmt, COLUMNS, big_rows)
             ok = len(data) > 0
-            print(f"  {fmt:6s}: {len(data):,} bytes  ✓")
+            print(f"  {fmt:6s}: {len(data):,} bytes  [OK]")
             checks.append(ok)
         except Exception as e:
-            print(f"  {fmt:6s}: ✗ {e}")
+            print(f"  {fmt:6s}: [FAIL] {e}")
             checks.append(False)
 
     passed = sum(checks)
@@ -302,11 +302,11 @@ def run_all_tests():
     print("TEST SUMMARY")
     print("=" * 80)
     for name, ok in results:
-        print(f"{name:30s}: {'✓ PASSED' if ok else '✗ FAILED'}")
+        print(f"{name:30s}: {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
 
     all_passed = all(r[1] for r in results)
     print("\n" + "=" * 80)
-    print("✓ ALL REPORT GENERATOR TESTS PASSED" if all_passed else "✗ SOME TESTS FAILED")
+    print("[OK] ALL REPORT GENERATOR TESTS PASSED" if all_passed else "[FAIL] SOME TESTS FAILED")
     print("=" * 80)
     return all_passed
 

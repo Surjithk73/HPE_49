@@ -32,10 +32,10 @@ def test_valid_queries():
     for i, sql in enumerate(test_cases, 1):
         result = validator.validate(sql)
         if result.valid:
-            print(f"✓ Test {i}: Valid")
+            print(f"[OK] Test {i}: Valid")
             passed += 1
         else:
-            print(f"✗ Test {i}: {result.error}")
+            print(f"[FAIL] Test {i}: {result.error}")
     
     print(f"\nValid Queries: {passed}/{len(test_cases)} passed")
     return passed == len(test_cases)
@@ -61,10 +61,10 @@ def test_schema_prefix():
     for i, (sql, expected_table) in enumerate(test_cases, 1):
         result = validator.validate(sql)
         if result.valid and expected_table in result.sanitized_sql:
-            print(f"✓ Test {i}: Schema prefix added correctly")
+            print(f"[OK] Test {i}: Schema prefix added correctly")
             passed += 1
         else:
-            print(f"✗ Test {i}: Failed to add schema prefix")
+            print(f"[FAIL] Test {i}: Failed to add schema prefix")
     
     print(f"\nSchema Prefix: {passed}/{len(test_cases)} passed")
     return passed == len(test_cases)
@@ -94,10 +94,10 @@ def test_forbidden_operations():
     for i, (sql, keyword) in enumerate(test_cases, 1):
         result = validator.validate(sql)
         if not result.valid and keyword.lower() in result.error.lower():
-            print(f"✓ Test {i}: {keyword} correctly rejected")
+            print(f"[OK] Test {i}: {keyword} correctly rejected")
             passed += 1
         else:
-            print(f"✗ Test {i}: {keyword} not properly rejected")
+            print(f"[FAIL] Test {i}: {keyword} not properly rejected")
     
     print(f"\nForbidden Operations: {passed}/{len(test_cases)} passed")
     return passed == len(test_cases)
@@ -122,10 +122,10 @@ def test_injection_patterns():
     for i, sql in enumerate(test_cases, 1):
         result = validator.validate(sql)
         if not result.valid:
-            print(f"✓ Test {i}: Injection pattern detected")
+            print(f"[OK] Test {i}: Injection pattern detected")
             passed += 1
         else:
-            print(f"✗ Test {i}: Injection pattern NOT detected")
+            print(f"[FAIL] Test {i}: Injection pattern NOT detected")
     
     print(f"\nInjection Patterns: {passed}/{len(test_cases)} passed")
     return passed == len(test_cases)
@@ -149,10 +149,10 @@ def test_table_validation():
         sql = f"SELECT * FROM macht413.{table} LIMIT 10"
         result = validator.validate(sql)
         if result.valid:
-            print(f"✓ Valid table '{table}' accepted")
+            print(f"[OK] Valid table '{table}' accepted")
             passed += 1
         else:
-            print(f"✗ Valid table '{table}' rejected: {result.error}")
+            print(f"[FAIL] Valid table '{table}' rejected: {result.error}")
     
     # Invalid tables
     invalid_tables = ["fake_table", "nonexistent", "test"]
@@ -161,10 +161,10 @@ def test_table_validation():
         sql = f"SELECT * FROM macht413.{table} LIMIT 10"
         result = validator.validate(sql)
         if not result.valid and "does not exist" in result.error:
-            print(f"✓ Invalid table '{table}' rejected")
+            print(f"[OK] Invalid table '{table}' rejected")
             passed += 1
         else:
-            print(f"✗ Invalid table '{table}' not properly rejected")
+            print(f"[FAIL] Invalid table '{table}' not properly rejected")
     
     total = len(valid_tables) + len(invalid_tables)
     print(f"\nTable Validation: {passed}/{total} passed")
@@ -192,10 +192,10 @@ def test_column_validation():
     for i, sql in enumerate(valid_cases, 1):
         result = validator.validate(sql)
         if result.valid:
-            print(f"✓ Test {i}: Valid column accepted")
+            print(f"[OK] Test {i}: Valid column accepted")
             passed += 1
         else:
-            print(f"✗ Test {i}: Valid column rejected: {result.error}")
+            print(f"[FAIL] Test {i}: Valid column rejected: {result.error}")
     
     # Invalid columns
     invalid_cases = [
@@ -206,10 +206,10 @@ def test_column_validation():
     for i, sql in enumerate(invalid_cases, len(valid_cases) + 1):
         result = validator.validate(sql)
         if not result.valid and "does not exist" in result.error:
-            print(f"✓ Test {i}: Invalid column rejected")
+            print(f"[OK] Test {i}: Invalid column rejected")
             passed += 1
         else:
-            print(f"✗ Test {i}: Invalid column not properly rejected")
+            print(f"[FAIL] Test {i}: Invalid column not properly rejected")
     
     total = len(valid_cases) + len(invalid_cases)
     print(f"\nColumn Validation: {passed}/{total} passed")
@@ -236,10 +236,10 @@ def test_edge_cases():
     for i, (sql, description) in enumerate(test_cases, 1):
         result = validator.validate(sql)
         if not result.valid:
-            print(f"✓ Test {i}: {description} rejected")
+            print(f"[OK] Test {i}: {description} rejected")
             passed += 1
         else:
-            print(f"✗ Test {i}: {description} not rejected")
+            print(f"[FAIL] Test {i}: {description} not rejected")
     
     print(f"\nEdge Cases: {passed}/{len(test_cases)} passed")
     return passed == len(test_cases)
@@ -267,10 +267,10 @@ def test_joins_and_aliases():
     for i, sql in enumerate(valid_cases, 1):
         result = validator.validate(sql)
         if result.valid:
-            print(f"✓ Valid case {i} passed")
+            print(f"[OK] Valid case {i} passed")
             passed += 1
         else:
-            print(f"✗ Valid case {i} failed: {result.error}")
+            print(f"[FAIL] Valid case {i} failed: {result.error}")
             
     # These should be invalid (ambiguous or nonexistent columns in joins/subqueries)
     invalid_cases = [
@@ -282,10 +282,10 @@ def test_joins_and_aliases():
     for i, (sql, expected_error) in enumerate(invalid_cases, len(valid_cases) + 1):
         result = validator.validate(sql)
         if not result.valid and expected_error in result.error:
-            print(f"✓ Invalid case {i} correctly rejected: {result.error}")
+            print(f"[OK] Invalid case {i} correctly rejected: {result.error}")
             passed += 1
         else:
-            print(f"✗ Invalid case {i} not correctly rejected: {result.error if not result.valid else 'passed'}")
+            print(f"[FAIL] Invalid case {i} not correctly rejected: {result.error if not result.valid else 'passed'}")
             
     total = len(valid_cases) + len(invalid_cases)
     print(f"\nJoins and Aliases: {passed}/{total} passed")
@@ -314,10 +314,10 @@ def test_repeating_columns():
     for i, sql in enumerate(valid_cases, 1):
         result = validator.validate(sql)
         if result.valid:
-            print(f"✓ Valid case {i} passed")
+            print(f"[OK] Valid case {i} passed")
             passed += 1
         else:
-            print(f"✗ Valid case {i} failed: {result.error}")
+            print(f"[FAIL] Valid case {i} failed: {result.error}")
             
     # Invalid columns (out of bounds or nonexistent)
     invalid_cases = [
@@ -328,10 +328,10 @@ def test_repeating_columns():
     for i, sql in enumerate(invalid_cases, len(valid_cases) + 1):
         result = validator.validate(sql)
         if not result.valid and "does not exist" in result.error:
-            print(f"✓ Invalid case {i} correctly rejected")
+            print(f"[OK] Invalid case {i} correctly rejected")
             passed += 1
         else:
-            print(f"✗ Invalid case {i} not correctly rejected: {result.error if not result.valid else 'passed'}")
+            print(f"[FAIL] Invalid case {i} not correctly rejected: {result.error if not result.valid else 'passed'}")
             
     total = len(valid_cases) + len(invalid_cases)
     print(f"\nRepeating Columns: {passed}/{total} passed")
@@ -381,10 +381,10 @@ def test_complexity_limits():
     for i, (sql, description) in enumerate(test_cases, 1):
         result = validator.validate(sql)
         if not result.valid and "limit exceeded" in result.error:
-            print(f"✓ Rejected {description} correctly: {result.error}")
+            print(f"[OK] Rejected {description} correctly: {result.error}")
             passed += 1
         else:
-            print(f"✗ Failed to reject {description}: {result.error if not result.valid else 'passed'}")
+            print(f"[FAIL] Failed to reject {description}: {result.error if not result.valid else 'passed'}")
             
     # Subquery nesting level 3 should pass
     sql_nested_3 = (
@@ -392,10 +392,10 @@ def test_complexity_limits():
     )
     result_nested_3 = validator.validate(sql_nested_3)
     if result_nested_3.valid:
-        print("✓ Nested subquery at level 3 allowed")
+        print("[OK] Nested subquery at level 3 allowed")
         passed += 1
     else:
-        print(f"✗ Level 3 subquery rejected: {result_nested_3.error}")
+        print(f"[FAIL] Level 3 subquery rejected: {result_nested_3.error}")
         
     total = len(test_cases) + 1
     print(f"\nComplexity Limits: {passed}/{total} passed")
@@ -426,16 +426,16 @@ def run_all_tests():
     print("=" * 80)
     
     for name, passed in results:
-        status = "✓ PASSED" if passed else "✗ FAILED"
+        status = "[OK] PASSED" if passed else "[FAIL] FAILED"
         print(f"{name:30s}: {status}")
     
     all_passed = all(result[1] for result in results)
     
     print("\n" + "=" * 80)
     if all_passed:
-        print("✓ ALL VALIDATOR TESTS PASSED")
+        print("[OK] ALL VALIDATOR TESTS PASSED")
     else:
-        print("✗ SOME TESTS FAILED")
+        print("[FAIL] SOME TESTS FAILED")
     print("=" * 80)
     
     return all_passed
@@ -446,7 +446,7 @@ if __name__ == "__main__":
         success = run_all_tests()
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f"\n✗ Test suite failed: {e}")
+        print(f"\n[FAIL] Test suite failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

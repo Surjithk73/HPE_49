@@ -737,6 +737,7 @@ disc:
       type: integer
       unit: microseconds
       counter_type: Queue
+      derived_formula: "request_qtime / NULLIF(requests, 0) / 1000.0 (returns ART in ms)"
       description: 'Time I/O requests spent on the disk process internal queue including
         active requests; RATE ON → AQL. NOTE: includes lock wait time'
     requests:
@@ -857,6 +858,7 @@ disc:
       type: integer
       unit: microseconds
       counter_type: Queue-Busy
+      derived_formula: "device_qbusy_time / NULLIF(reads + writes, 0) / 1000.0 (returns AST in ms)"
       description: 'Time any requests were queued to this disk; RATE ON → %. NOTE:
         does NOT equal read_qbusy_time + write_qbusy_time due to concurrency'
     dbio_reads:
@@ -919,6 +921,7 @@ disc:
       queryable: true
       type: integer
       counter_type: Incrementing
+      derived_formula: "c[n]_hits * 100.0 / NULLIF(c[n]_hits + c[n]_misses, 0) (returns Hit Ratio %)"
       description: Cache hits for level N on read or buffered write; hits/(hits+misses)
         = hit ratio
     c[n].misses:
@@ -3614,6 +3617,7 @@ tmf:
       type: integer
       unit: microseconds
       counter_type: Queue
+      derived_formula: home_net_trans_qtime / NULLIF(home_net_trans, 0) / 1000.0 (returns ART in ms)
       description: Time that transactions that began on the local system and were
         subsequently distributed to a remote system spent on the remote system; advanced
         only in the CPU containing the primary $TMP process; RATE ON → AQL
@@ -3629,6 +3633,7 @@ tmf:
       type: integer
       unit: microseconds
       counter_type: Queue
+      derived_formula: remote_trans_qtime / NULLIF(remote_trans, 0) / 1000.0 (returns ART in ms)
       description: Time that transactions that began in a remote system and were distributed
         to the local system spent on the local system; advanced only in the CPU containing
         the primary $TMP process; RATE ON → AQL
@@ -3636,6 +3641,7 @@ tmf:
       queryable: true
       type: integer
       counter_type: Incrementing
+      derived_formula: aborting_trans * 100.0 / NULLIF(home_trans, 0) (returns abort rate %)
       description: Number of aborted transactions; counted regardless of whether it
         began in the local system and remained there, began in the local system and
         was distributed to a remote system, or began in a remote system and was distributed

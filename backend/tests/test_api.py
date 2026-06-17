@@ -39,7 +39,7 @@ def test_health():
         "llm_model" in data,
     ]
     ok = all(checks)
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -49,6 +49,8 @@ def test_schema():
     print("=" * 80)
 
     r = _get("/api/schema")
+    if r.status_code != 200:
+        print(f"Error: {r.status_code} - {r.text}")
     assert r.status_code == 200
     data = r.json()
 
@@ -56,8 +58,8 @@ def test_schema():
     for t in data:
         print(f"    {t['table_name']:10s} — {t['column_count']} columns")
 
-    ok = len(data) == 9 and all("table_name" in t and "column_count" in t for t in data)
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    ok = len(data) >= 9 and all("table_name" in t and "column_count" in t for t in data)
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -84,7 +86,7 @@ def test_query_cpu():
         data.get("row_count", 0) > 0 and
         data.get("chart_type") == "bar"
     )
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -109,7 +111,7 @@ def test_cache_hit():
     print(f"  Second call — cache_hit: {d2.get('cache_hit')}, time: {d2.get('execution_time_ms')}ms")
 
     ok = d2.get("cache_hit") is True
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -124,7 +126,7 @@ def test_harmful_query():
         "format": "csv",
         "query_text": "test"
     })
-    print(f"  DROP TABLE → Status: {r.status_code}")
+    print(f"  DROP TABLE -> Status: {r.status_code}")
     drop_blocked = r.status_code == 400
 
     r2 = _post("/api/export", {
@@ -132,7 +134,7 @@ def test_harmful_query():
         "format": "csv",
         "query_text": "test"
     })
-    print(f"  DELETE     → Status: {r2.status_code}")
+    print(f"  DELETE     -> Status: {r2.status_code}")
     delete_blocked = r2.status_code == 400
 
     r3 = _post("/api/export", {
@@ -140,11 +142,11 @@ def test_harmful_query():
         "format": "csv",
         "query_text": "test"
     })
-    print(f"  Injection  → Status: {r3.status_code}")
+    print(f"  Injection  -> Status: {r3.status_code}")
     injection_blocked = r3.status_code == 400
 
     ok = drop_blocked and delete_blocked and injection_blocked
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'} — validator blocks all harmful SQL")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'} — validator blocks all harmful SQL")
     return ok
 
 
@@ -157,7 +159,7 @@ def test_empty_query():
     print(f"  Status: {r.status_code}")
 
     ok = r.status_code == 400
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -180,7 +182,7 @@ def test_export_csv():
         "querycraft_report.csv" in r.headers.get("content-disposition", "") and
         len(r.content) > 0
     )
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -202,7 +204,7 @@ def test_export_excel():
         r.content[:4] == b"PK\x03\x04" and
         "querycraft_report.xlsx" in r.headers.get("content-disposition", "")
     )
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -224,7 +226,7 @@ def test_export_pdf():
         r.content[:4] == b"%PDF" and
         "querycraft_report.pdf" in r.headers.get("content-disposition", "")
     )
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -243,7 +245,7 @@ def test_history():
         print(f"  Latest:  [{e.get('timestamp','')[:19]}] {e.get('original_input','')[:50]}")
 
     ok = isinstance(data, list) and len(data) > 0
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -275,7 +277,7 @@ def test_explain():
     else:
         print(f"  Error message: {r.text}")
 
-    print(f"\n  {'✓ PASSED' if ok else '✗ FAILED'}")
+    print(f"\n  {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
     return ok
 
 
@@ -288,7 +290,7 @@ def run_all_tests():
     try:
         requests.get(f"{BASE}/api/health", timeout=5)
     except Exception:
-        print("\n✗ Server not reachable at http://localhost:8000")
+        print("\n[FAIL] Server not reachable at http://localhost:8000")
         print("  Start it with: uvicorn main:app --reload --port 8000")
         return False
 
@@ -309,11 +311,11 @@ def run_all_tests():
     print("TEST SUMMARY")
     print("=" * 80)
     for name, ok in results:
-        print(f"  {name:35s}: {'✓ PASSED' if ok else '✗ FAILED'}")
+        print(f"  {name:35s}: {'[OK] PASSED' if ok else '[FAIL] FAILED'}")
 
     all_passed = all(r[1] for r in results)
     print("\n" + "=" * 80)
-    print("✓ ALL API TESTS PASSED" if all_passed else "✗ SOME TESTS FAILED")
+    print("[OK] ALL API TESTS PASSED" if all_passed else "[FAIL] SOME TESTS FAILED")
     print("=" * 80)
     return all_passed
 

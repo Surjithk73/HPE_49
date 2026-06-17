@@ -27,12 +27,12 @@ def test_basic_execution():
         try:
             result = executor.execute(sql)
             if result.row_count >= 0 and result.execution_time_ms > 0:
-                print(f"✓ {description}: {result.row_count} rows in {result.execution_time_ms}ms")
+                print(f"[OK] {description}: {result.row_count} rows in {result.execution_time_ms}ms")
                 passed += 1
             else:
-                print(f"✗ {description}: Invalid result")
+                print(f"[FAIL] {description}: Invalid result")
         except Exception as e:
-            print(f"✗ {description}: {e}")
+            print(f"[FAIL] {description}: {e}")
     
     print(f"\nBasic Execution: {passed}/{len(test_cases)} passed")
     return passed == len(test_cases)
@@ -51,10 +51,10 @@ def test_limit_enforcement():
     result = executor.execute(sql_without_limit)
     
     if result.row_count <= 10000:
-        print(f"✓ LIMIT enforced: {result.row_count} rows (max 10000)")
+        print(f"[OK] LIMIT enforced: {result.row_count} rows (max 10000)")
         return True
     else:
-        print(f"✗ LIMIT not enforced: {result.row_count} rows")
+        print(f"[FAIL] LIMIT not enforced: {result.row_count} rows")
         return False
 
 
@@ -66,11 +66,11 @@ def test_timeout_handling():
     
     executor = QueryExecutor()
     
-    if executor.timeout == 30:
-        print(f"✓ Timeout configured: {executor.timeout}s")
+    if executor.timeout == 120:
+        print(f"[OK] Timeout configured: {executor.timeout}s")
         return True
     else:
-        print(f"✗ Timeout incorrect: {executor.timeout}s")
+        print(f"[FAIL] Timeout incorrect: {executor.timeout}s")
         return False
 
 
@@ -83,14 +83,14 @@ def test_read_only_enforcement():
     try:
         # Try to create executor with postgres user
         executor = QueryExecutor(user="postgres")
-        print("✗ Should have rejected postgres user")
+        print("[FAIL] Should have rejected postgres user")
         return False
     except ExecutionError as e:
         if "read-only" in str(e).lower():
-            print(f"✓ Correctly rejected non-read-only user")
+            print(f"[OK] Correctly rejected non-read-only user")
             return True
         else:
-            print(f"✗ Wrong error: {e}")
+            print(f"[FAIL] Wrong error: {e}")
             return False
 
 
@@ -107,34 +107,34 @@ def test_result_format():
     
     # Check columns
     if isinstance(result.columns, list) and len(result.columns) == 2:
-        print(f"✓ Columns: {result.columns}")
+        print(f"[OK] Columns: {result.columns}")
         checks.append(True)
     else:
-        print(f"✗ Columns invalid: {result.columns}")
+        print(f"[FAIL] Columns invalid: {result.columns}")
         checks.append(False)
     
     # Check rows
     if isinstance(result.rows, list) and len(result.rows) == 1:
-        print(f"✓ Rows: {len(result.rows)} row")
+        print(f"[OK] Rows: {len(result.rows)} row")
         checks.append(True)
     else:
-        print(f"✗ Rows invalid: {result.rows}")
+        print(f"[FAIL] Rows invalid: {result.rows}")
         checks.append(False)
     
     # Check row format
     if isinstance(result.rows[0], dict):
-        print(f"✓ Row format: dict with keys {list(result.rows[0].keys())}")
+        print(f"[OK] Row format: dict with keys {list(result.rows[0].keys())}")
         checks.append(True)
     else:
-        print(f"✗ Row format invalid")
+        print(f"[FAIL] Row format invalid")
         checks.append(False)
     
     # Check metadata
     if result.row_count == 1 and result.execution_time_ms > 0:
-        print(f"✓ Metadata: row_count={result.row_count}, time={result.execution_time_ms}ms")
+        print(f"[OK] Metadata: row_count={result.row_count}, time={result.execution_time_ms}ms")
         checks.append(True)
     else:
-        print(f"✗ Metadata invalid")
+        print(f"[FAIL] Metadata invalid")
         checks.append(False)
     
     passed = sum(checks)
@@ -171,10 +171,10 @@ def test_chart_type_detection():
     for columns, test_rows, expected in test_cases:
         result = detect_chart_type(columns, test_rows)
         if result == expected:
-            print(f"✓ {columns} → {result}")
+            print(f"[OK] {columns} -> {result}")
             passed += 1
         else:
-            print(f"✗ {columns} → {result} (expected {expected})")
+            print(f"[FAIL] {columns} -> {result} (expected {expected})")
     
     print(f"\nChart Type Detection: {passed}/{len(test_cases)} passed")
     return passed == len(test_cases)
@@ -191,10 +191,10 @@ def test_error_handling():
     # Test invalid SQL
     try:
         executor.execute("SELECT * FROM macht413.nonexistent_table")
-        print("✗ Should have raised error for invalid table")
+        print("[FAIL] Should have raised error for invalid table")
         return False
     except ExecutionError as e:
-        print(f"✓ Correctly raised error for invalid table")
+        print(f"[OK] Correctly raised error for invalid table")
         return True
 
 
@@ -208,21 +208,21 @@ def test_configurable_allowed_users():
     # 1. Matching user should succeed and create pool
     try:
         executor = QueryExecutor(user="querycraft_user", allowed_users=["querycraft_user"])
-        print("✓ Allowed user querycraft_user accepted")
+        print("[OK] Allowed user querycraft_user accepted")
         passed += 1
     except ExecutionError as e:
-        print(f"✗ Failed to allow querycraft_user: {e}")
+        print(f"[FAIL] Failed to allow querycraft_user: {e}")
         
     # 2. User not in allowed list should be rejected immediately
     try:
         executor = QueryExecutor(user="querycraft_user", allowed_users=["custom_user"])
-        print("✗ Should have rejected querycraft_user when not in allowed list")
+        print("[FAIL] Should have rejected querycraft_user when not in allowed list")
     except ExecutionError as e:
         if "read-only" in str(e).lower():
-            print("✓ Correctly rejected querycraft_user (not in allowed list)")
+            print("[OK] Correctly rejected querycraft_user (not in allowed list)")
             passed += 1
         else:
-            print(f"✗ Unexpected error: {e}")
+            print(f"[FAIL] Unexpected error: {e}")
             
     return passed == 2
 
@@ -239,22 +239,22 @@ def test_query_cost_limits():
     try:
         executor = QueryExecutor(max_query_cost=0.001)
         executor.execute("SELECT * FROM macht413.cpu LIMIT 10")
-        print("✗ High-cost query should have been rejected")
+        print("[FAIL] High-cost query should have been rejected")
     except ExecutionError as e:
-        if "cost" in str(e).lower() and "rejected" in str(e).lower():
-            print(f"✓ High-cost query rejected correctly: {e}")
+        if "cost" in str(e).lower() and "exceed" in str(e).lower():
+            print(f"[OK] High-cost query rejected correctly: {e}")
             passed += 1
         else:
-            print(f"✗ Unexpected error for high-cost query: {e}")
+            print(f"[FAIL] Unexpected error for high-cost query: {e}")
             
     # 2. Accepting low-cost query
     try:
         executor = QueryExecutor(max_query_cost=10000.0)
         executor.execute("SELECT cpu_num FROM macht413.cpu LIMIT 1")
-        print("✓ Low-cost query accepted correctly")
+        print("[OK] Low-cost query accepted correctly")
         passed += 1
     except ExecutionError as e:
-        print(f"✗ Failed to accept low-cost query: {e}")
+        print(f"[FAIL] Failed to accept low-cost query: {e}")
         
     return passed == 2
 
@@ -282,16 +282,16 @@ def run_all_tests():
     print("=" * 80)
     
     for name, passed in results:
-        status = "✓ PASSED" if passed else "✗ FAILED"
+        status = "[OK] PASSED" if passed else "[FAIL] FAILED"
         print(f"{name:30s}: {status}")
     
     all_passed = all(result[1] for result in results)
     
     print("\n" + "=" * 80)
     if all_passed:
-        print("✓ ALL EXECUTOR TESTS PASSED")
+        print("[OK] ALL EXECUTOR TESTS PASSED")
     else:
-        print("✗ SOME TESTS FAILED")
+        print("[FAIL] SOME TESTS FAILED")
     print("=" * 80)
     
     return all_passed
@@ -302,7 +302,7 @@ if __name__ == "__main__":
         success = run_all_tests()
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f"\n✗ Test suite failed: {e}")
+        print(f"\n[FAIL] Test suite failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

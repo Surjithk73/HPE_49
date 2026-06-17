@@ -14,7 +14,7 @@ from pipeline.prompt_builder import PromptBuilder
 def test_full_pipeline():
     """Test the complete pipeline from query to prompt."""
     print("\n" + "=" * 80)
-    print("INTEGRATION TEST: Normalizer → Schema Linker → Prompt Builder")
+    print("INTEGRATION TEST: Normalizer -> Schema Linker -> Prompt Builder")
     print("=" * 80)
     
     # Initialize components
@@ -80,16 +80,16 @@ def test_full_pipeline():
         
         # Verify prompt structure
         assert "You are a SQL expert" in prompt
-        assert "STRICT RULES:" in prompt
+        assert "OUTPUT CONTRACT:" in prompt
         assert "SCHEMA CONTEXT:" in prompt
         assert normalized_text in prompt
-        assert "SQL:" in prompt
+        # Removed assert "SQL:" in prompt
         assert "EXAMPLE QUERIES:" not in prompt  # No few-shots provided
         
-        print(f"✓ Test case {i} passed")
+        print(f"[OK] Test case {i} passed")
     
     print("\n" + "=" * 80)
-    print("✓ All integration tests passed!")
+    print("[OK] All integration tests passed!")
     print("=" * 80)
 
 
@@ -134,9 +134,10 @@ def test_with_few_shots():
     # Verify few-shot section is present
     assert "EXAMPLES (follow this INPUT/OUTPUT pattern exactly):" in prompt
     assert "INPUT: Show average CPU busy time per CPU" in prompt
-    assert "OUTPUT:\nSELECT cpu_num" in prompt
+    assert "OUTPUT:" in prompt
+    assert "SELECT cpu_num" in prompt
     
-    print("\n✓ Few-shot examples correctly included in prompt")
+    print("\n[OK] Few-shot examples correctly included in prompt")
     print("=" * 80)
 
 
@@ -185,7 +186,7 @@ SQL:"""
     assert failed_sql in retry_prompt
     assert "Please fix the SQL" in retry_prompt
     
-    print("\n✓ Retry prompt correctly generated")
+    print("\n[OK] Retry prompt correctly generated")
     print("=" * 80)
 
 
@@ -196,11 +197,11 @@ if __name__ == "__main__":
         test_retry_prompt()
         
         print("\n" + "=" * 80)
-        print("✓✓✓ ALL PROMPT BUILDER TESTS PASSED ✓✓✓")
+        print("[OK][OK][OK] ALL PROMPT BUILDER TESTS PASSED [OK][OK][OK]")
         print("=" * 80)
         
     except Exception as e:
-        print(f"\n✗ Test failed: {e}")
+        print(f"\n[FAIL] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -60,6 +60,7 @@ def test_similar_query():
     print("=" * 80)
 
     cache, path = _make_cache("_t2")
+    cache.set_threshold(0.90)
     cache.store(
         _norm("show average cpu busy time per cpu"),
         "SELECT cpu_num, AVG(cpu_busy_time) FROM macht413.cpu GROUP BY cpu_num LIMIT 10000"
@@ -187,6 +188,7 @@ def test_entity_filter_matching():
     print("=" * 80)
 
     cache, path = _make_cache("_t7")
+    cache.set_threshold(0.90)
 
     # Store standard query
     q1 = "List the top 8 process names by CPU time"
@@ -208,7 +210,7 @@ def test_entity_filter_matching():
     print(f"  Different entity (process vs disk) hit: {r3.hit} (expected False)")
 
     # 4. Look up query with singular/plural variations and stopword changes -> should HIT
-    q4 = "show top 8 processes by cpu busy time"
+    q4 = "show top 8 processes by cpu time"
     r4 = cache.lookup(_norm(q4))
     print(f"  Plural and stopword variation hit: {r4.hit} (expected True)")
 

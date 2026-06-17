@@ -32,7 +32,7 @@ def test_prompt_builder():
         
         return True
     except Exception as e:
-        print(f"✗ Prompt Builder tests failed: {e}")
+        print(f"[FAIL] Prompt Builder tests failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -91,17 +91,17 @@ def main():
     print("=" * 80)
 
     for component, passed in results:
-        status = "✓ PASSED" if passed else "✗ FAILED"
+        status = "[OK] PASSED" if passed else "[FAIL] FAILED"
         print(f"{component:30s}: {status}")
 
     all_passed = all(result[1] for result in results)
 
     print("\n" + "=" * 80)
     if all_passed:
-        print(" " * 8 + "✓ ALL PHASES 2–7 TESTS PASSED")
+        print(" " * 8 + "[OK] ALL PHASES 2–7 TESTS PASSED")
         print(" " * 20 + "Ready to proceed to Phase 8!")
     else:
-        print(" " * 25 + "✗ SOME TESTS FAILED")
+        print(" " * 25 + "[FAIL] SOME TESTS FAILED")
         print(" " * 20 + "Please fix issues before proceeding")
     print("=" * 80 + "\n")
     

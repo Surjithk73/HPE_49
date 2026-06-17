@@ -64,11 +64,11 @@ header("Test 1: BM25 Lexical Search")
 
 bm25_ok = linker._ensure_bm25_index()
 if not bm25_ok:
-    print(f"\n  {YELLOW}✗ BM25 index failed to build!{RESET}")
+    print(f"\n  {YELLOW}[FAIL] BM25 index failed to build!{RESET}")
     print("    Make sure `rank-bm25` is installed: pip install rank-bm25")
     sys.exit(1)
 
-print(f"  {GREEN}✓ BM25 index ready — {len(linker._bm25_table_names)} tables indexed{RESET}")
+print(f"  {GREEN}[OK] BM25 index ready — {len(linker._bm25_table_names)} tables indexed{RESET}")
 print(f"  Model: BM25Okapi (rank-bm25)")
 
 # Show tokenization example
@@ -113,12 +113,12 @@ ready = embeddings.wait(timeout=180)
 elapsed = time.time() - t0
 
 if not ready:
-    print(f"\n  {YELLOW}✗ Embedding model failed to load within 180s!{RESET}")
+    print(f"\n  {YELLOW}[FAIL] Embedding model failed to load within 180s!{RESET}")
     print("    Check your internet connection — the model downloads on first run (~1.3GB).")
     sys.exit(1)
 
 model = embeddings.get()
-print(f"  {GREEN}✓ BGE-large model ready{RESET} (loaded in {elapsed:.1f}s)")
+print(f"  {GREEN}[OK] BGE-large model ready{RESET} (loaded in {elapsed:.1f}s)")
 print(f"  Model: {embeddings.MODEL_NAME}")
 print(f"  Embedding dim: {model.get_sentence_embedding_dimension()}")
 
@@ -194,7 +194,7 @@ integration_queries = [
     ("file io statistics", None),
 ]
 
-print(f"\n  {BOLD}End-to-end: NL query → normalized → domain → selected tables → DDL{RESET}")
+print(f"\n  {BOLD}End-to-end: NL query -> normalized -> domain -> selected tables -> DDL{RESET}")
 for raw_query, _ in integration_queries:
     norm = normalizer.normalize(raw_query)
     norm_text = norm["normalized_text"]
@@ -229,18 +229,18 @@ all_passed = True
 # 5a: BM25 should rank "cpu" table first for CPU queries
 bm25_cpu = linker._bm25_rank("cpu busy time utilization")
 if bm25_cpu[0] == "cpu":
-    print(f"  {GREEN}✓{RESET} BM25 ranks 'cpu' first for CPU queries")
+    print(f"  {GREEN}[OK]{RESET} BM25 ranks 'cpu' first for CPU queries")
 else:
-    print(f"  {YELLOW}✗{RESET} BM25 ranked '{bm25_cpu[0]}' first for CPU query (expected 'cpu')")
+    print(f"  {YELLOW}[FAIL]{RESET} BM25 ranked '{bm25_cpu[0]}' first for CPU query (expected 'cpu')")
     all_passed = False
 
 # 5b: BGE should rank a disk-related table first for disk queries
 vec_disk = linker._vector_rank("disk read write io operations")
 disk_tables = {"disc", "dfile", "dopen"}
 if vec_disk[0] in disk_tables:
-    print(f"  {GREEN}✓{RESET} BGE ranks '{vec_disk[0]}' first for disk queries (disk-related ✓)")
+    print(f"  {GREEN}[OK]{RESET} BGE ranks '{vec_disk[0]}' first for disk queries (disk-related [OK])")
 else:
-    print(f"  {YELLOW}✗{RESET} BGE ranked '{vec_disk[0]}' first for disk query (expected one of {disk_tables})")
+    print(f"  {YELLOW}[FAIL]{RESET} BGE ranked '{vec_disk[0]}' first for disk query (expected one of {disk_tables})")
     all_passed = False
 
 # 5c: RRF should rank 'proc' in top 3 for process queries
@@ -250,32 +250,32 @@ fused_r = reciprocal_rank_fusion([bm25_r, vec_r], k=60)
 top3_rrf = [name for name, _ in fused_r[:3]]
 if "proc" in top3_rrf:
     pos = top3_rrf.index("proc") + 1
-    print(f"  {GREEN}✓{RESET} RRF ranks 'proc' #{pos} for process queries (top 3 ✓)")
+    print(f"  {GREEN}[OK]{RESET} RRF ranks 'proc' #{pos} for process queries (top 3 [OK])")
 else:
-    print(f"  {YELLOW}✗{RESET} RRF top-3 is {top3_rrf} for process query ('proc' missing)")
+    print(f"  {YELLOW}[FAIL]{RESET} RRF top-3 is {top3_rrf} for process query ('proc' missing)")
     all_passed = False
 
 # 5d: Embedding dimension check
 dim = model.get_sentence_embedding_dimension()
 if dim == 1024:
-    print(f"  {GREEN}✓{RESET} Embedding dimension is 1024 (BGE-large confirmed)")
+    print(f"  {GREEN}[OK]{RESET} Embedding dimension is 1024 (BGE-large confirmed)")
 else:
-    print(f"  {YELLOW}✗{RESET} Embedding dimension is {dim} (expected 1024 for BGE-large)")
+    print(f"  {YELLOW}[FAIL]{RESET} Embedding dimension is {dim} (expected 1024 for BGE-large)")
     all_passed = False
 
 # 5e: Model name check
 if "bge-large" in embeddings.MODEL_NAME.lower():
-    print(f"  {GREEN}✓{RESET} Model name contains 'bge-large': {embeddings.MODEL_NAME}")
+    print(f"  {GREEN}[OK]{RESET} Model name contains 'bge-large': {embeddings.MODEL_NAME}")
 else:
-    print(f"  {YELLOW}✗{RESET} Unexpected model name: {embeddings.MODEL_NAME}")
+    print(f"  {YELLOW}[FAIL]{RESET} Unexpected model name: {embeddings.MODEL_NAME}")
     all_passed = False
 
 # 5f: BM25 produces non-zero scores
 scores = linker._bm25.get_scores(_tokenize("cpu busy time"))
 if np.any(scores > 0):
-    print(f"  {GREEN}✓{RESET} BM25 produces non-zero scores (max={scores.max():.4f})")
+    print(f"  {GREEN}[OK]{RESET} BM25 produces non-zero scores (max={scores.max():.4f})")
 else:
-    print(f"  {YELLOW}✗{RESET} BM25 scores are all zero!")
+    print(f"  {YELLOW}[FAIL]{RESET} BM25 scores are all zero!")
     all_passed = False
 
 
@@ -291,7 +291,7 @@ print(f"""
 """)
 
 if all_passed:
-    print(f"  {GREEN}{BOLD}✓ All sanity checks passed!{RESET}")
+    print(f"  {GREEN}{BOLD}[OK] All sanity checks passed!{RESET}")
     print(f"  {GREEN}  BM25 lexical search — working{RESET}")
     print(f"  {GREEN}  BGE-large vector search — working{RESET}")
     print(f"  {GREEN}  Reciprocal Rank Fusion — working{RESET}")

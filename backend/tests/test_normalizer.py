@@ -33,10 +33,10 @@ def test_normal_operation():
     for query, expected_domain, description in test_cases:
         result = normalizer.normalize(query)
         if result['domain_category'] == expected_domain:
-            print(f"✓ {description:25s}: '{query}' → {expected_domain}")
+            print(f"[OK] {description:25s}: '{query}' -> {expected_domain}")
             passed += 1
         else:
-            print(f"✗ {description:25s}: Expected {expected_domain}, got {result['domain_category']}")
+            print(f"[FAIL] {description:25s}: Expected {expected_domain}, got {result['domain_category']}")
             failed += 1
     
     print(f"\nNormal Operation: {passed} passed, {failed} failed")
@@ -54,20 +54,20 @@ def test_abbreviation_expansion():
     failed = 0
     
     test_cases = [
-        ("show proc data", "process", "proc → process"),
-        ("cpu util", "utilization", "util → utilization"),
-        ("disk reads", "disc", "disk → disc"),
-        ("transaction count", "tmf", "transaction → tmf"),
+        ("show proc data", "process", "proc -> process"),
+        ("cpu util", "utilization", "util -> utilization"),
+        ("disk reads", "disc", "disk -> disc"),
+        ("transaction count", "tmf", "transaction -> tmf"),
     ]
     
     for query, expected_word, description in test_cases:
         result = normalizer.normalize(query)
         normalized = result['normalized_text']
         if expected_word in normalized:
-            print(f"✓ {description:25s}: '{query}' contains '{expected_word}'")
+            print(f"[OK] {description:25s}: '{query}' contains '{expected_word}'")
             passed += 1
         else:
-            print(f"✗ {description:25s}: '{normalized}' missing '{expected_word}'")
+            print(f"[FAIL] {description:25s}: '{normalized}' missing '{expected_word}'")
             failed += 1
     
     print(f"\nAbbreviation Expansion: {passed} passed, {failed} failed")
@@ -87,74 +87,74 @@ def test_edge_cases():
     # Test 3.1: Empty string
     result = normalizer.normalize("")
     if result['normalized_text'] == '' and result['domain_category'] == 'multi':
-        print("✓ Empty string handled correctly")
+        print("[OK] Empty string handled correctly")
         passed += 1
     else:
-        print(f"✗ Empty string: got {result}")
+        print(f"[FAIL] Empty string: got {result}")
         failed += 1
     
     # Test 3.2: Whitespace only
     result = normalizer.normalize("   \t\n  ")
     if result['normalized_text'] == '' and result['domain_category'] == 'multi':
-        print("✓ Whitespace-only string handled correctly")
+        print("[OK] Whitespace-only string handled correctly")
         passed += 1
     else:
-        print(f"✗ Whitespace-only: got {result}")
+        print(f"[FAIL] Whitespace-only: got {result}")
         failed += 1
     
     # Test 3.3: Very long query
     long_query = "show cpu " * 100
     result = normalizer.normalize(long_query)
     if result['domain_category'] == 'cpu':
-        print("✓ Very long query handled correctly")
+        print("[OK] Very long query handled correctly")
         passed += 1
     else:
-        print(f"✗ Long query: got {result['domain_category']}")
+        print(f"[FAIL] Long query: got {result['domain_category']}")
         failed += 1
     
     # Test 3.4: Special characters
     result = normalizer.normalize("show cpu@#$%^&*()data")
     if 'cpu' in result['normalized_text']:
-        print("✓ Special characters handled")
+        print("[OK] Special characters handled")
         passed += 1
     else:
-        print(f"✗ Special chars: got {result['normalized_text']}")
+        print(f"[FAIL] Special chars: got {result['normalized_text']}")
         failed += 1
     
     # Test 3.5: Mixed case
     result = normalizer.normalize("ShOw CPU BuSy TiMe")
     if result['normalized_text'] == result['normalized_text'].lower():
-        print("✓ Mixed case normalized to lowercase")
+        print("[OK] Mixed case normalized to lowercase")
         passed += 1
     else:
-        print(f"✗ Mixed case: got {result['normalized_text']}")
+        print(f"[FAIL] Mixed case: got {result['normalized_text']}")
         failed += 1
     
     # Test 3.6: Numbers in query
     result = normalizer.normalize("show cpu 0 and cpu 1 data")
     if result['domain_category'] == 'cpu':
-        print("✓ Numbers in query handled")
+        print("[OK] Numbers in query handled")
         passed += 1
     else:
-        print(f"✗ Numbers: got {result['domain_category']}")
+        print(f"[FAIL] Numbers: got {result['domain_category']}")
         failed += 1
     
     # Test 3.7: Query with no domain keywords
     result = normalizer.normalize("show me some data")
     if result['domain_category'] == 'multi':
-        print("✓ No domain keywords → multi")
+        print("[OK] No domain keywords -> multi")
         passed += 1
     else:
-        print(f"✗ No keywords: got {result['domain_category']}")
+        print(f"[FAIL] No keywords: got {result['domain_category']}")
         failed += 1
     
     # Test 3.8: Unicode characters
     result = normalizer.normalize("show cpu données")
     if 'cpu' in result['normalized_text']:
-        print("✓ Unicode characters handled")
+        print("[OK] Unicode characters handled")
         passed += 1
     else:
-        print(f"✗ Unicode: got {result['normalized_text']}")
+        print(f"[FAIL] Unicode: got {result['normalized_text']}")
         failed += 1
     
     print(f"\nEdge Cases: {passed} passed, {failed} failed")
@@ -181,10 +181,10 @@ def test_multi_domain_detection():
     for query, expected_domain, description in test_cases:
         result = normalizer.normalize(query)
         if result['domain_category'] == expected_domain:
-            print(f"✓ {description:25s}: '{query}' → {expected_domain}")
+            print(f"[OK] {description:25s}: '{query}' -> {expected_domain}")
             passed += 1
         else:
-            print(f"✗ {description:25s}: Expected {expected_domain}, got {result['domain_category']}")
+            print(f"[FAIL] {description:25s}: Expected {expected_domain}, got {result['domain_category']}")
             failed += 1
     
     print(f"\nMulti-Domain Detection: {passed} passed, {failed} failed")
@@ -214,19 +214,19 @@ def test_case_insensitivity():
     # All should produce same normalized text
     normalized_texts = [r['normalized_text'] for r in results]
     if len(set(normalized_texts)) == 1:
-        print(f"✓ All case variations produce same normalized text: '{normalized_texts[0]}'")
+        print(f"[OK] All case variations produce same normalized text: '{normalized_texts[0]}'")
         passed += 1
     else:
-        print(f"✗ Different normalized texts: {set(normalized_texts)}")
+        print(f"[FAIL] Different normalized texts: {set(normalized_texts)}")
         failed += 1
     
     # All should produce same domain
     domains = [r['domain_category'] for r in results]
     if len(set(domains)) == 1:
-        print(f"✓ All case variations produce same domain: '{domains[0]}'")
+        print(f"[OK] All case variations produce same domain: '{domains[0]}'")
         passed += 1
     else:
-        print(f"✗ Different domains: {set(domains)}")
+        print(f"[FAIL] Different domains: {set(domains)}")
         failed += 1
     
     print(f"\nCase Insensitivity: {passed} passed, {failed} failed")
@@ -259,11 +259,11 @@ def test_whitespace_handling():
         if text == text.strip():
             passed += 1
         else:
-            print(f"✗ Query {i+1} not stripped: '{text}'")
+            print(f"[FAIL] Query {i+1} not stripped: '{text}'")
             failed += 1
     
     if failed == 0:
-        print(f"✓ All {len(queries)} queries properly stripped")
+        print(f"[OK] All {len(queries)} queries properly stripped")
     
     print(f"\nWhitespace Handling: {passed} passed, {failed} failed")
     return failed == 0
@@ -284,7 +284,7 @@ def test_performance():
     start = time.time()
     result = normalizer.normalize(query)
     single_time = time.time() - start
-    print(f"✓ Single normalization: {single_time*1000:.4f}ms")
+    print(f"[OK] Single normalization: {single_time*1000:.4f}ms")
     
     # Test 7.2: Batch normalization time
     queries = [
@@ -301,8 +301,8 @@ def test_performance():
     batch_time = time.time() - start
     avg_time = batch_time / len(queries)
     
-    print(f"✓ Batch normalization: {len(queries)} queries in {batch_time*1000:.2f}ms")
-    print(f"✓ Average per query: {avg_time*1000:.4f}ms")
+    print(f"[OK] Batch normalization: {len(queries)} queries in {batch_time*1000:.2f}ms")
+    print(f"[OK] Average per query: {avg_time*1000:.4f}ms")
     
     if avg_time > 0.01:  # 10ms threshold
         print(f"  ⚠ Average time exceeds 10ms threshold")
@@ -328,10 +328,10 @@ def test_consistency():
     domains = [r['domain_category'] for r in results]
     
     if len(set(normalized_texts)) == 1 and len(set(domains)) == 1:
-        print("✓ Same query produces consistent results (10 iterations)")
+        print("[OK] Same query produces consistent results (10 iterations)")
         passed += 1
     else:
-        print("✗ Inconsistent results for same query")
+        print("[FAIL] Inconsistent results for same query")
         failed += 1
     
     # Test 8.2: Normalizer is stateless
@@ -342,10 +342,10 @@ def test_consistency():
     result2 = normalizer2.normalize("show cpu data")
     
     if result1 == result2:
-        print("✓ Different normalizer instances produce same results")
+        print("[OK] Different normalizer instances produce same results")
         passed += 1
     else:
-        print("✗ Different instances produce different results")
+        print("[FAIL] Different instances produce different results")
         failed += 1
     
     print(f"\nConsistency: {passed} passed, {failed} failed")
@@ -374,16 +374,16 @@ def run_all_tests():
     print("=" * 70)
     
     for name, passed in results:
-        status = "✓ PASSED" if passed else "✗ FAILED"
+        status = "[OK] PASSED" if passed else "[FAIL] FAILED"
         print(f"{name:30s}: {status}")
     
     all_passed = all(result[1] for result in results)
     
     print("\n" + "=" * 70)
     if all_passed:
-        print("✓ ALL TESTS PASSED")
+        print("[OK] ALL TESTS PASSED")
     else:
-        print("✗ SOME TESTS FAILED")
+        print("[FAIL] SOME TESTS FAILED")
     print("=" * 70)
     
     return all_passed

@@ -84,6 +84,7 @@ class QueryNormalizer:
             ('read count', 1), ('write count', 1),
         ],
         'proc': [
+            ('nsjsp', 3), ('pm', 3), ('rout', 3), ('pathmaker', 3),
             ('process', 3), ('processes', 3), ('proc', 3), ('procs', 3),
             ('zmsproc', 3), ('pin', 3), ('process name', 3),
             ('program', 2), ('program file', 2),
@@ -289,8 +290,9 @@ def run_tests():
         ("show opener statistics", "dopen", "DOPEN via 'opener' alone"),
         ("show file activity", "file", "FILE via 'file activity'"),
         ("who opened this file", "dopen", "DOPEN via 'who opened'"),
-        ("logical i/o per process", "multi", "Ambiguous file+proc → multi"),
+        ("logical i/o per process", "multi", "Ambiguous file+proc -> multi"),
         ("audit trail backouts", "tmf", "TMF via audit/backout phrase"),
+        ("list all nsjsp activity", "proc", "Process domain via NSJSP keyword"),
         ("show cpu and process data", "multi", "Multi-domain"),
         ("", "multi", "Empty query"),
     ]
@@ -303,10 +305,10 @@ def run_tests():
         actual_domain = result['domain_category']
         
         if actual_domain == expected_domain:
-            print(f"✓ {description:30s}: '{query[:40]}...' → {actual_domain}")
+            print(f"[OK] {description:30s}: '{query[:40]}...' -> {actual_domain}")
             passed += 1
         else:
-            print(f"✗ {description:30s}: Expected '{expected_domain}', got '{actual_domain}'")
+            print(f"[FAIL] {description:30s}: Expected '{expected_domain}', got '{actual_domain}'")
             print(f"  Query: {query}")
             print(f"  Normalized: {result['normalized_text']}")
             failed += 1
@@ -315,7 +317,7 @@ def run_tests():
     print(f"Tests: {passed} passed, {failed} failed")
     
     if failed == 0:
-        print("✓ All tests passed!")
+        print("[OK] All tests passed!")
     
     return failed == 0
 

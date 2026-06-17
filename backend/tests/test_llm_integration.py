@@ -16,7 +16,7 @@ from pipeline.llm_engine import LLMEngine, LLMError
 def test_full_pipeline_with_llm():
     """Test the complete pipeline from query to validated SQL."""
     print("\n" + "=" * 80)
-    print("FULL PIPELINE TEST: Query → Normalized → Schema → Prompt → LLM → Validated SQL")
+    print("FULL PIPELINE TEST: Query -> Normalized -> Schema -> Prompt -> LLM -> Validated SQL")
     print("=" * 80)
     
     try:
@@ -24,7 +24,7 @@ def test_full_pipeline_with_llm():
         print("\n[1/6] Loading schema...")
         loader = load_schema('../schema_store/enriched_schema.yaml')
         schema = loader.get_schema()
-        print("✓ Schema loaded")
+        print("[OK] Schema loaded")
         
         print("\n[2/6] Initializing pipeline components...")
         normalizer = QueryNormalizer()
@@ -32,7 +32,7 @@ def test_full_pipeline_with_llm():
         builder = PromptBuilder()
         validator = SQLValidator(schema)
         llm_engine = LLMEngine()
-        print("✓ All components initialized")
+        print("[OK] All components initialized")
         
         # Test query
         user_query = "Show average CPU busy time per CPU"
@@ -42,12 +42,12 @@ def test_full_pipeline_with_llm():
         norm_result = normalizer.normalize(user_query)
         normalized_text = norm_result['normalized_text']
         domain = norm_result['domain_category']
-        print(f"✓ Normalized: '{normalized_text}' (domain: {domain})")
+        print(f"[OK] Normalized: '{normalized_text}' (domain: {domain})")
         
         # Step 2: Link schema
         print("\n[4/6] Linking schema...")
         schema_context = linker.link_schema(normalized_text, domain)
-        print(f"✓ Schema context generated ({len(schema_context)} chars)")
+        print(f"[OK] Schema context generated ({len(schema_context)} chars)")
         
         # Step 3: Build prompt
         print("\n[5/6] Building prompt...")
@@ -56,7 +56,7 @@ def test_full_pipeline_with_llm():
             schema_context=schema_context,
             few_shots=[]
         )
-        print(f"✓ Prompt built ({len(prompt)} chars)")
+        print(f"[OK] Prompt built ({len(prompt)} chars)")
         
         # Step 4: Generate SQL with retry
         print("\n[6/6] Generating SQL with LLM (with retry logic)...")
@@ -68,7 +68,7 @@ def test_full_pipeline_with_llm():
         )
         
         print("\n" + "=" * 80)
-        print("✓ PIPELINE COMPLETE!")
+        print("[OK] PIPELINE COMPLETE!")
         print("=" * 80)
         print(f"\nFinal SQL:\n{sql}")
         print("\n" + "=" * 80)
@@ -76,10 +76,10 @@ def test_full_pipeline_with_llm():
         return True
         
     except LLMError as e:
-        print(f"\n✗ LLM Error: {e}")
+        print(f"\n[FAIL] LLM Error: {e}")
         return False
     except Exception as e:
-        print(f"\n✗ Unexpected error: {e}")
+        print(f"\n[FAIL] Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -95,10 +95,10 @@ def test_retry_logic():
     print("which is difficult to force. The retry logic is implemented and")
     print("will trigger automatically if the LLM generates invalid SQL.")
     print("\nRetry logic features:")
-    print("  ✓ Max 2 retries (3 total attempts)")
-    print("  ✓ Error feedback sent to LLM")
-    print("  ✓ Attempt logging")
-    print("  ✓ LLMError raised after max retries")
+    print("  [OK] Max 2 retries (3 total attempts)")
+    print("  [OK] Error feedback sent to LLM")
+    print("  [OK] Attempt logging")
+    print("  [OK] LLMError raised after max retries")
     
     return True
 
@@ -153,11 +153,11 @@ def test_multiple_queries():
                 max_retries=2
             )
             
-            print(f"✓ Generated SQL: {sql[:100]}...")
+            print(f"[OK] Generated SQL: {sql[:100]}...")
             passed += 1
             
         except Exception as e:
-            print(f"✗ Failed: {e}")
+            print(f"[FAIL] Failed: {e}")
     
     print(f"\n{passed}/{len(test_queries)} queries successful")
     return passed == len(test_queries)
@@ -186,16 +186,16 @@ if __name__ == "__main__":
     print("=" * 80)
     
     for name, passed in results:
-        status = "✓ PASSED" if passed else "✗ FAILED"
+        status = "[OK] PASSED" if passed else "[FAIL] FAILED"
         print(f"{name:30s}: {status}")
     
     all_passed = all(result[1] for result in results)
     
     print("\n" + "=" * 80)
     if all_passed:
-        print("✓ ALL LLM INTEGRATION TESTS PASSED")
+        print("[OK] ALL LLM INTEGRATION TESTS PASSED")
     else:
-        print("✗ SOME TESTS FAILED")
+        print("[FAIL] SOME TESTS FAILED")
     print("=" * 80)
     
     sys.exit(0 if all_passed else 1)
