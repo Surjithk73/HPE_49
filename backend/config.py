@@ -14,6 +14,7 @@ DB_PORT = os.getenv("DB_PORT")
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_ADMIN_PASSWORD = os.getenv("DB_ADMIN_PASSWORD")
 
 # LLM Provider Configuration
 # 'gemini' (default) or 'ollama'. Ollama enables fully-offline SQL generation
@@ -24,6 +25,7 @@ LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "gemini").lower()
 # Gemini API Configuration (required when LLM_PROVIDER='gemini')
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL")
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 
 # Ollama Configuration (required when LLM_PROVIDER='ollama')
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")

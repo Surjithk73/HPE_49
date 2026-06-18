@@ -275,10 +275,10 @@ def delete_database(target_db: str):
             raise HTTPException(status_code=404, detail="Database not found")
             
         # Drop the schema and all its tables using a superuser connection
-        from config import DB_HOST, DB_PORT, DB_NAME
+        from config import DB_HOST, DB_PORT, DB_NAME, DB_ADMIN_PASSWORD
         conn = psycopg2.connect(
             host=DB_HOST, port=DB_PORT, database=DB_NAME,
-            user='postgres', password='371773'
+            user='postgres', password=DB_ADMIN_PASSWORD
         )
         try:
             conn.autocommit = True

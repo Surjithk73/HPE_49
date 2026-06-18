@@ -173,6 +173,7 @@ DB_PORT=5432
 DB_NAME=querycraft_db
 DB_USER=querycraft_user
 DB_PASSWORD=your_readonly_password
+DB_ADMIN_PASSWORD=your_admin_password
 
 # Gemini API
 GEMINI_API_KEY=your_gemini_api_key

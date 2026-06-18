@@ -6,7 +6,6 @@ import json
 import re
 import concurrent.futures
 from openai import OpenAI
-from groq import Groq
 import google.generativeai as genai
 import psycopg2
 import sqlglot
@@ -20,11 +19,7 @@ from pipeline.schema_linker import SchemaLinker
 from pipeline.prompt_builder import PromptBuilder
 from pipeline.few_shot_retriever import FewShotRetriever
 from pipeline.validator import SQLValidator
-from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, SCHEMA_YAML_PATH, FEW_SHOTS_PATH
-
-# Temporary hardcoded API keys
-NVIDIA_API_KEY = "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"
-GROQ_API_KEY = "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"
+from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, SCHEMA_YAML_PATH, FEW_SHOTS_PATH, NVIDIA_API_KEY
 
 # Test set path
 TEST_SET_PATH = os.path.join(
@@ -91,24 +86,7 @@ def query_nvidia_model(model_name, prompt, temperature, top_p):
     except Exception as e:
         return {"content": "", "reasoning": None, "error": str(e)}
 
-def query_groq_model(model_name, prompt, temperature, top_p):
-    """Query Groq API."""
-    client = Groq(api_key=GROQ_API_KEY)
-    try:
-        completion = client.chat.completions.create(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=4096,
-            stream=False
-        )
-        content = completion.choices[0].message.content or ""
-        # Groq's qwen models might support reasoning_content or reasoning in delta/choice
-        reasoning = getattr(completion.choices[0].message, "reasoning", None)
-        return {"content": content, "reasoning": reasoning, "error": None}
-    except Exception as e:
-        return {"content": "", "reasoning": None, "error": str(e)}
+
 
 def query_gemini_model(model_name, prompt, temperature, top_p):
     """Query Gemini API."""
@@ -140,8 +118,6 @@ def evaluate_single_query(test_case, model_info, prompt, schema_validator):
     t0 = time.time()
     if provider == "nvidia":
         res = query_nvidia_model(model_name, prompt, temperature, top_p)
-    elif provider == "groq":
-        res = query_groq_model(model_name, prompt, temperature, top_p)
     elif provider == "google":
         res = query_gemini_model(model_name, prompt, temperature, top_p)
     else:

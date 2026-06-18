@@ -4,7 +4,10 @@ Complete database setup - recreate tables and load CSV data
 import psycopg2
 import os
 
-POSTGRES_PASSWORD = "admin"  # Replace with your postgres superuser password
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import DB_ADMIN_PASSWORD
+POSTGRES_PASSWORD = DB_ADMIN_PASSWORD
 
 def main():
     print("=" * 60)

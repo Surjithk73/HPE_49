@@ -22,11 +22,11 @@ def get_col_type(col_name):
 
 def load_schema_from_csv(schema_name: str, d_dir: str, append: bool = False):
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-    from config import DB_HOST, DB_PORT, DB_NAME
+    from config import DB_HOST, DB_PORT, DB_NAME, DB_ADMIN_PASSWORD
     
     conn = psycopg2.connect(
         host=DB_HOST, port=DB_PORT,
-        user='postgres', password='371773',
+        user='postgres', password=DB_ADMIN_PASSWORD,
         dbname=DB_NAME
     )
     conn.autocommit = True
