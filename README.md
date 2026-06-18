@@ -4,8 +4,15 @@
 
 QueryCraft lets analysts query HPE NonStop server performance data using plain English. Type a question, get back a SQL query, results table or chart, and a downloadable report — no SQL knowledge required.
 
-**Stack:** FastAPI · React · PostgreSQL · Google Gemini API · ChromaDB  
-**Database:** `macht413` schema · 11 tables · 212,689+ rows of real HPE NonStop measurement data
+**Stack:** FastAPI · React · PostgreSQL · Google Gemini API / Groq / OpenAI-compatible · ChromaDB  
+**Database:** `macht413`, `D1`, `D2` schemas · 11 tables · Real HPE NonStop measurement data
+
+---
+
+## What's New
+- **Multi-Database Manager**: Switch between target databases (`machd500`, `D1`, `D2`) dynamically from the frontend. The `SchemaLinker` automatically filters out columns not present in the chosen target database to eliminate hallucinations.
+- **Enhanced LLM Support**: Generate SQL using **Gemini 3.1 Flash Lite**, **Gemini 3.5 Flash**, **Qwen 80B**, or **GPT OSS** depending on your performance/accuracy needs.
+- **HPE Direct-Join Syntax**: Evaluated and validated against HPE's preferred time-series correlation logic (direct `LEFT JOIN`s over CTE aggregations).
 
 ---
 
@@ -113,10 +120,12 @@ UNION ALL SELECT 'file',  COUNT(*) FROM macht413.file
 UNION ALL SELECT 'ossns', COUNT(*) FROM macht413.ossns
 UNION ALL SELECT 'proc',  COUNT(*) FROM macht413.proc
 UNION ALL SELECT 'tmf',   COUNT(*) FROM macht413.tmf
-UNION ALL SELECT 'udef',  COUNT(*) FROM macht413.udef;
+UNION ALL SELECT 'udef',  COUNT(*) FROM macht413.udef
+UNION ALL SELECT 'sqlp',  COUNT(*) FROM macht413.sqlp
+UNION ALL SELECT 'sqls',  COUNT(*) FROM macht413.sqls;
 ```
 
-Expected total: **212,689 rows** across all 9 tables.
+Expected total: **212,689+ rows** across all 11 tables.
 
 ---
 
@@ -138,7 +147,7 @@ DB_PASSWORD=your_readonly_password
 
 # Gemini API — get key from https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.1-flash-lite
 
 # App settings (defaults are fine)
 MAX_ROWS=10000
@@ -204,9 +213,9 @@ Expected response:
   "db_connected": true,
   "cache_ready": true,
   "cache_model_ready": true,
-  "llm_model": "gemini-2.0-flash",
+  "llm_model": "gemini-3.1-flash-lite",
   "cache_entries": 0,
-  "schema_tables": 9
+  "schema_tables": 11
 }
 ```
 
@@ -278,6 +287,7 @@ HPE_49/
 └── docs/
     ├── Project_Overview.md            # Full architecture + design decisions
     ├── NOTES.md                       # Known issues, gotchas, benchmarks
+    ├── frequently_used_queries.md     # Reference examples
     └── plan.md                        # Original build plan (all phases complete)
 ```
 
@@ -340,6 +350,14 @@ Interactive docs: http://localhost:8000/docs
 - All generated SQL passes through a 7-layer validator (SQLGlot AST parsing) before execution. No raw user input ever reaches the database.
 - `statement_timeout = 30s` is enforced at both the DB role level and the connection level.
 - This is a **single-user local deployment** — there is no authentication, rate limiting, or encryption. Do not expose it on a public network.
+
+---
+
+## Strict Data Integrity Rules
+
+As a core requirement for this project, the following guidelines **must never be violated**:
+1. **Schema Integrity:** The backend database schema must strictly mirror the exact tables and columns provided by HPE. Do not modify, add, or alter any of these database structures.
+2. **Examples Integrity:** The `examples.yaml` file acts as the official repository of frequently used queries provided by HPE. These are considered "gold standard" references and must not be altered, modified, or messed with under any circumstances.
 
 ---
 

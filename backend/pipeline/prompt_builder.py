@@ -96,11 +96,11 @@ OUTPUT CONTRACT:
 6. Only use columns shown in the schema context; never invent column names.
 7. Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 
-FORMULA REFERENCE LEGEND:
+FORMULA REFERENCE LEGEND (Use as fallback if not demonstrated in EXAMPLES):
 The `delta_time` column represents the measurement interval and is measured in MICROSECONDS. 
 When computing metrics, you must account for multiple intervals/CPUs in your denominator.
 Define `base_time_us` = (MAX(delta_time) * COUNT(DISTINCT from_timestamp))
-Apply these formulas based on the counter tags in the schema:
+Apply these formulas based on the counter tags in the schema ONLY when the calculation isn't obvious from the examples:
 - [Busy counter]       percentage  = col * 100.0 / NULLIF(base_time_us, 0)
 - [Queue counter]      avg queue   = col * 1.0   / NULLIF(base_time_us, 0)
 - [Queue-Busy counter] percentage  = col * 100.0 / NULLIF(base_time_us, 0)
@@ -112,13 +112,16 @@ Apply these formulas based on the counter tags in the schema:
 
 AGGREGATION & MATH RULES:
 - If a specific formula is provided directly in the schema comment for a column, it strictly overrides the global FORMULA REFERENCE LEGEND.
-- When calculating Queue lengths or ratios that may result in very small decimals, explicitly CAST the final result to NUMERIC(10,4) so it does not truncate to 0.
-- When computing process-category breakdowns from {target_db}.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
+- When calculating Queue lengths or ratios that may result in very small decimals, consider explicitly CASTing the final result to NUMERIC(10,4) if necessary.
+- When computing process-category breakdowns from {target_db}.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator.
 - Use from_timestamp / to_timestamp for time filtering.
 
 CROSS-TABLE & JOIN RULES:
-- CRITICAL: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
-- CRITICAL: When joining 3 or more tables that each have many rows, ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results.
+- The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You generally MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions unless instructed otherwise by an example.
+- When joining 3 or more tables that each have many rows, consider using CTEs to pre-aggregate if it avoids multiplying rows.
+
+CRITICAL INSTRUCTION ON EXAMPLES: 
+The EXAMPLES section contains the highest priority instructions. The behavior, formulas, and structural patterns (like whether or not to use CTEs, what columns to include, and whether to cast) demonstrated in the EXAMPLES completely SUPERSEDE the rules above. Only apply the fallback rules if the examples do not cover the requested behavior.
 
 SCHEMA CONTEXT:
 {schema_context}

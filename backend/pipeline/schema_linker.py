@@ -500,7 +500,7 @@ class SchemaLinker:
             table_def = self.schema[table_name]
 
             # Get relevant columns
-            columns = self._select_relevant_columns(table_name, table_def, query_text)
+            columns = self._select_relevant_columns(table_name, table_def, query_text, target_db=target_db)
 
             if not columns:
                 continue
@@ -555,8 +555,40 @@ class SchemaLinker:
 
         return schema_str
     
+    def _get_valid_db_columns(self, target_db: str, table_name: str) -> Optional[set]:
+        cache_key = f"{target_db}.{table_name}"
+        if hasattr(self, '_db_column_cache') and cache_key in self._db_column_cache:
+            return self._db_column_cache[cache_key]
+            
+        if not hasattr(self, '_db_column_cache'):
+            self._db_column_cache = {}
+            
+        if not hasattr(self, '_executor'):
+            from pipeline.executor import QueryExecutor
+            try:
+                self._executor = QueryExecutor()
+            except Exception as e:
+                print(f"[SchemaLinker] Could not init executor for column check: {e}")
+                self._executor = None
+                
+        if self._executor is None:
+            return None
+            
+        sql = f"SELECT column_name FROM information_schema.columns WHERE table_schema = '{target_db}' AND table_name = '{table_name}';"
+        try:
+            res = self._executor.execute(sql)
+            if res.row_count > 0:
+                cols = {r['column_name'] for r in res.rows}
+                self._db_column_cache[cache_key] = cols
+                return cols
+            else:
+                return None
+        except Exception as e:
+            print(f"[SchemaLinker] Failed to fetch valid columns for {cache_key}: {e}")
+            return None
+
     def _select_relevant_columns(self, table_name: str, table_def: Dict,
-                                  query_text: str, max_cols: int = 40) -> List[Tuple[str, Dict]]:
+                                  query_text: str, max_cols: int = 40, target_db: str = "macht413") -> List[Tuple[str, Dict]]:
         """
         Select the most relevant columns for the query.
 
@@ -574,6 +606,9 @@ class SchemaLinker:
         matches are never displaced by lower-priority columns.
         """
         columns = table_def.get('columns', {})
+
+        # Fetch actual DB columns if possible
+        valid_db_columns = self._get_valid_db_columns(target_db, table_name)
 
         # Tier 1: structural key columns — always include
         key_columns = {'system_name', 'cpu_num', 'from_timestamp', 'to_timestamp',
@@ -598,6 +633,16 @@ class SchemaLinker:
                 continue
             if not col_def.get('queryable', True):
                 continue
+
+            # Check if column actually exists in DB
+            if valid_db_columns is not None:
+                # remove {N} and check if it's in valid_db_columns
+                check_name = col_name.replace('{N}', '0')
+                # For basic columns this works. Arrays in postgres are usually single columns like 'ipus' 
+                # but if the DB has expanded them like ipu0, ipu1... then checking '0' works.
+                # If neither the exact name nor the replaced name is in DB, we skip it.
+                if col_name not in valid_db_columns and check_name not in valid_db_columns:
+                    continue
 
             col_lower = col_name.lower()
 

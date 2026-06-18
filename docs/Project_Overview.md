@@ -8,7 +8,7 @@
 
 **Name:** QueryCraft  
 **Purpose:** Allow analysts to query HPE NonStop server performance data using plain English. System interprets query, generates SQL, executes against PostgreSQL, and returns structured reports.  
-**Database Schema:** `macht413` — 9 tables (cpu, disc, dfile, dopen, file, ossns, proc, tmf, udef), static historical data.  
+**Database Schema:** `macht413` — 11 tables (cpu, disc, dfile, dopen, file, ossns, proc, sqlp, sqls, tmf, udef), static historical data.  
 **Data Source:** Real HPE NonStop measurement data.
 
 ---
@@ -32,7 +32,7 @@ querycraft/
 │   │   ├── executor.py
 │   │   └── report_generator.py
 │   ├── schema_store/
-│   │   └── enriched_schema.yaml        # Combined YAML, all 9 tables, 883 lines
+│   │   └── enriched_schema.yaml        # Combined YAML, all 11 tables
 │   ├── few_shots/
 │   │   └── examples.yaml               # To be added later
 │   ├── audit/
@@ -76,9 +76,16 @@ querycraft/
 ### 3.1 PostgreSQL Version
 Use latest stable PostgreSQL. Install locally on Windows.
 
+
+
+### 3.1b Multi-Database Target Management
+QueryCraft supports dynamic runtime switching between target databases (e.g., `machd500`, `D1`, `D2`) via the `DatabaseManager`.
+- Tables are defined globally in `enriched_schema.yaml`.
+- Available columns dynamically adapt to the selected target database to prevent LLM hallucinations.
+
 ### 3.2 Restore Schema
 
-The `macht413` schema and all 9 tables are created by loading the CSV files from the `measurefiles/` folder. Each CSV file corresponds to one table. Run the steps below to set up the database before loading data.
+The `macht413` schema and all 11 tables are created by loading the CSV files from the `measurefiles/` folder. Each CSV file corresponds to one table. Run the steps below to set up the database before loading data.
 
 ```bash
 # Step 1: Create database
@@ -117,16 +124,17 @@ psql -U postgres -d querycraft_db
 Then inside psql, run for each table:
 
 ```sql
-\copy macht413.cpu FROM 'C:/path/to/querycraft/backend/data/cpu.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.disc FROM 'C:/path/to/querycraft/backend/data/disc.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.disc_cache FROM 'C:/path/to/querycraft/backend/data/disc_cache.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.endpoint FROM 'C:/path/to/querycraft/backend/data/endpoint.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.file FROM 'C:/path/to/querycraft/backend/data/file.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.ipu FROM 'C:/path/to/querycraft/backend/data/ipu.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.osscpu FROM 'C:/path/to/querycraft/backend/data/osscpu.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.ossns FROM 'C:/path/to/querycraft/backend/data/ossns.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.process FROM 'C:/path/to/querycraft/backend/data/process.csv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.tmf FROM 'C:/path/to/querycraft/backend/data/tmf.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.cpu FROM 'C:/path/to/querycraft/measurefiles/cpucsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.disc FROM 'C:/path/to/querycraft/measurefiles/disccsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.dfile FROM 'C:/path/to/querycraft/measurefiles/dfilecsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.dopen FROM 'C:/path/to/querycraft/measurefiles/dopencsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.file FROM 'C:/path/to/querycraft/measurefiles/filecsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.ossns FROM 'C:/path/to/querycraft/measurefiles/ossnscsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.proc FROM 'C:/path/to/querycraft/measurefiles/proccsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.tmf FROM 'C:/path/to/querycraft/measurefiles/tmfcsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.udef FROM 'C:/path/to/querycraft/measurefiles/udefcsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.sqlp FROM 'C:/path/to/querycraft/backend/data/machd500/sqlpcsv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy macht413.sqls FROM 'C:/path/to/querycraft/backend/data/machd500/sqlscsv' WITH (FORMAT csv, HEADER true, NULL '');
 ```
 
 ### 3.5 Verify
@@ -141,14 +149,15 @@ GROUP BY table_name;
 -- Quick row count check per table:
 SELECT 'cpu' AS tbl, COUNT(*) FROM macht413.cpu
 UNION ALL SELECT 'disc', COUNT(*) FROM macht413.disc
-UNION ALL SELECT 'disc_cache', COUNT(*) FROM macht413.disc_cache
-UNION ALL SELECT 'endpoint', COUNT(*) FROM macht413.endpoint
+UNION ALL SELECT 'dfile', COUNT(*) FROM macht413.dfile
+UNION ALL SELECT 'dopen', COUNT(*) FROM macht413.dopen
 UNION ALL SELECT 'file', COUNT(*) FROM macht413.file
-UNION ALL SELECT 'ipu', COUNT(*) FROM macht413.ipu
-UNION ALL SELECT 'osscpu', COUNT(*) FROM macht413.osscpu
 UNION ALL SELECT 'ossns', COUNT(*) FROM macht413.ossns
-UNION ALL SELECT 'process', COUNT(*) FROM macht413.process
-UNION ALL SELECT 'tmf', COUNT(*) FROM macht413.tmf;
+UNION ALL SELECT 'proc', COUNT(*) FROM macht413.proc
+UNION ALL SELECT 'tmf', COUNT(*) FROM macht413.tmf
+UNION ALL SELECT 'udef', COUNT(*) FROM macht413.udef
+UNION ALL SELECT 'sqlp', COUNT(*) FROM macht413.sqlp
+UNION ALL SELECT 'sqls', COUNT(*) FROM macht413.sqls;
 ```
 
 ---
@@ -245,6 +254,7 @@ pandas
 
 - Runs only on cache miss
 - Loads `enriched_schema.yaml`
+- Determines target database (e.g. `machd500`, `D1`, `D2`) and filters out any schema columns not physically present in that specific database.
 - Uses domain category from normalizer to pre-filter candidate tables
 - Scores each table's column descriptions against the query using TF-IDF + keyword overlap
 - Selects top 1–3 tables and top relevant columns per table
@@ -505,7 +515,7 @@ export async function getHistory() {
 ## 7. Enriched Schema Store
 
 **File:** `backend/schema_store/enriched_schema.yaml`  
-**Format:** Combined YAML, all 9 tables. Already written (883 lines).
+**Format:** Combined YAML, all 11 tables. Already written (883 lines).
 
 Schema linker reads this file to:
 1. Match user query domain to relevant tables
@@ -616,7 +626,7 @@ Build components strictly in this order. Do not proceed to next step until curre
 
 1. **Project scaffold** — monorepo folder structure, `requirements.txt`, `package.json`, `.env.example`
 2. **Database setup** — restore schema, create roles, load CSVs (follow Section 3 exactly)
-3. **Enriched schema loader** — load and parse `enriched_schema.yaml` in Python, verify all 9 tables accessible
+3. **Enriched schema loader** — load and parse `enriched_schema.yaml` in Python, verify all 11 tables accessible
 4. **Query normalizer** — standalone, unit-testable, no external dependencies
 5. **Schema linker** — reads YAML, scores tables/columns against query, returns filtered context
 6. **Prompt builder** — assembles prompt from parts, verify output looks correct manually
@@ -636,7 +646,7 @@ Build components strictly in this order. Do not proceed to next step until curre
 
 | Decision | Choice | Reason |
 |---|---|---|
-| LLM | Gemini API (swappable) | Available now; Ollama later |
+| LLM | Gemini API, Groq, NVIDIA NIM | Available now; Ollama later |
 | SQL validation | sqlglot AST parsing | Reliable, not regex-based |
 | Cache | ChromaDB + sentence-transformers | Zero-config, local |
 | DB connection | Read-only role only | Security requirement |
@@ -649,7 +659,27 @@ Build components strictly in this order. Do not proceed to next step until curre
 
 ---
 
-## 13. Security Rules (Non-Negotiable)
+
+---
+
+## 14. Evaluation Pipeline
+
+QueryCraft includes a sophisticated automated evaluation script (`evaluate_models.py`) to benchmark LLMs against HPE NonStop queries.
+- Matches generated SQL using SQL AST (`sqlglot`).
+- If AST differs, executes both expected and generated SQL against the PostgreSQL database.
+- Evaluates output rows and subsets of columns directly to score correct/near-correct/incorrect.
+- Focuses heavily on the **HPE Direct-Join** syntaxes (`LEFT JOIN` across time-series metrics).
+
+
+## 15. Strict Data Integrity Rules (Non-Negotiable)
+
+As a core requirement for this project, the following guidelines **must never be violated**:
+1. **Schema Integrity:** The backend database schema must strictly mirror the exact tables and columns provided by HPE. Do not modify, add, or alter any of these database structures.
+2. **Examples Integrity:** The `examples.yaml` file acts as the official repository of frequently used queries provided by HPE. These are considered "gold standard" references and must not be altered, modified, or messed with under any circumstances.
+
+---
+
+## 16. Security Rules (Non-Negotiable)
 
 - App **never** connects as `nonstop_measure` or `postgres` owner roles
 - Only `querycraft_user` (SELECT-only) used at runtime
@@ -662,4 +692,4 @@ Build components strictly in this order. Do not proceed to next step until curre
 ---
 
 *QueryCraft — HPE NonStop Performance Report Generator*  
-*Schema: macht413 | Tables: 10 | LLM: Gemini API | Stack: FastAPI + React*
+*Schema: macht413 | Tables: 11 | LLM: Gemini API, Qwen, GPT-OSS | Stack: FastAPI + React*

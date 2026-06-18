@@ -1,0 +1,94 @@
+test_set:
+  # --- Category A: Directly from Examples ---
+  - id: 1
+    category: "Direct Example"
+    domain: "cpu"
+    prompt: "Show average CPU busy time per CPU"
+    sql: "SELECT cpu_num, AVG(cpu_busy_time) AS avg_busy_time FROM %db%.cpu GROUP BY cpu_num ORDER BY cpu_num LIMIT 10000;"
+
+  - id: 2
+    category: "Direct Example"
+    domain: "disc"
+    prompt: "Show disk read and write counts per device"
+    sql: "SELECT system_name, device_name, SUM(reads) AS total_reads, SUM(writes) AS total_writes FROM %db%.disc GROUP BY system_name, device_name ORDER BY total_reads DESC LIMIT 10000;"
+
+  - id: 3
+    category: "Direct Example"
+    domain: "proc"
+    prompt: "List all process names with their CPU usage"
+    sql: "SELECT process_name, cpu_busy_time FROM %db%.proc ORDER BY cpu_busy_time DESC LIMIT 10000;"
+
+  - id: 4
+    category: "Direct Example"
+    domain: "tmf"
+    prompt: "Show transaction backout counts"
+    sql: "SELECT SUM(aborting_trans) AS total_aborts FROM %db%.tmf LIMIT 10000;"
+
+  # --- Category B: Slight Modifications of Examples ---
+  - id: 5
+    category: "Slight Modification"
+    domain: "file"
+    prompt: "Show top 10 files with the highest number of logical writes, including their opener process names"
+    sql: "SELECT df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS file_path, f.opener_processname, SUM(f.writes) AS total_writes FROM %db%.file f LEFT JOIN %db%.dfile df ON f.system_name = df.system_name AND f.file_name_volume = df.file_name_volume AND f.file_name_subvol = df.file_name_subvol AND f.file_name_filename = df.file_name_filename AND DATE_TRUNC('second', f.from_timestamp) = DATE_TRUNC('second', df.from_timestamp) GROUP BY file_path, f.opener_processname ORDER BY total_writes DESC LIMIT 10;"
+
+  - id: 6
+    category: "Slight Modification"
+    domain: "dfile"
+    prompt: "Show top 10 disk files with the highest number of driver write operations"
+    sql: "SELECT device_name, fcb_number, SUM(driver_output_calls) AS total_driver_write_operations FROM %db%.dfile GROUP BY device_name, fcb_number ORDER BY total_driver_write_operations DESC LIMIT 10;"
+
+  - id: 7
+    category: "Slight Modification"
+    domain: "dopen"
+    prompt: "Identify files with more than 5 active opens and list them by total lockwait time descending"
+    sql: "SELECT df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS file_path, COUNT(*) AS active_opens, SUM(dop.lockwait_time) AS total_lockwait_time_us FROM %db%.dopen dop LEFT JOIN %db%.dfile df ON dop.system_name = df.system_name AND dop.file_name_volume = df.file_name_volume AND dop.file_name_subvol = df.file_name_subvol AND dop.file_name_filename = df.file_name_filename AND DATE_TRUNC('second', dop.from_timestamp) = DATE_TRUNC('second', df.from_timestamp) GROUP BY file_path HAVING COUNT(*) > 5 ORDER BY total_lockwait_time_us DESC LIMIT 10000;"
+
+  - id: 8
+    category: "Slight Modification"
+    domain: "udef"
+    prompt: "Show the total sum of user defined values for counter named 'TEST-ACCUM' grouped by process name"
+    sql: "SELECT process_name, SUM(CAST(value AS INTEGER)) AS total_value FROM %db%.udef WHERE UPPER(name) = 'TEST-ACCUM' GROUP BY process_name ORDER BY total_value DESC LIMIT 10000;"
+
+  # --- Category C: Multi-table Joins ---
+  - id: 9
+    category: "Multi-table Join"
+    domain: "multi"
+    prompt: "Analyze process CPU usage alongside system CPU ready queue lengths to correlate process activity with CPU bottlenecks"
+    sql: "SELECT p.process_name, p.cpu_num, p.from_timestamp, (p.cpu_busy_time * 100.0 / NULLIF(p.delta_time, 0)) AS proc_cpu_util_pct, (c.cpu_qtime * 1.0 / NULLIF(c.delta_time, 0)) AS cpu_ready_q_len FROM %db%.proc p JOIN %db%.cpu c ON p.system_name = c.system_name AND p.cpu_num = c.cpu_num AND DATE_TRUNC('second', p.from_timestamp) = DATE_TRUNC('second', c.from_timestamp) WHERE p.cpu_busy_time > 0 ORDER BY cpu_ready_q_len DESC, proc_cpu_util_pct DESC LIMIT 10000;"
+
+  - id: 10
+    category: "Multi-table Join"
+    domain: "multi"
+    prompt: "Correlate active file opens with physical driver input/output calls to find files with high opening concurrency and high physical I/O"
+    sql: "SELECT df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS file_path, COUNT(dop.opener_pin) AS active_openers, SUM(df.driver_input_calls + df.driver_output_calls) AS physical_io_calls FROM %db%.dfile df LEFT JOIN %db%.dopen dop ON df.system_name = dop.system_name AND df.file_name_volume = dop.file_name_volume AND df.file_name_subvol = dop.file_name_subvol AND df.file_name_filename = dop.file_name_filename AND DATE_TRUNC('second', df.from_timestamp) = DATE_TRUNC('second', dop.from_timestamp) GROUP BY df.file_name_volume, df.file_name_subvol, df.file_name_filename ORDER BY physical_io_calls DESC LIMIT 10000;"
+
+  - id: 11
+    category: "Multi-table Join"
+    domain: "multi"
+    prompt: "Identify disk device activity alongside specific file driver input calls to understand which files are driving read activities on busy disk devices"
+    sql: "SELECT d.device_name, df.file_name_volume || '.' || df.file_name_subvol || '.' || df.file_name_filename AS file_path, d.reads AS total_disk_reads, df.driver_input_calls AS file_driver_reads FROM %db%.disc d LEFT JOIN %db%.dfile df ON d.system_name = df.system_name AND d.device_name = df.device_name AND DATE_TRUNC('second', d.from_timestamp) = DATE_TRUNC('second', df.from_timestamp) WHERE d.reads > 0 ORDER BY d.reads DESC, df.driver_input_calls DESC LIMIT 10000;"
+
+  - id: 12
+    category: "Multi-table Join"
+    domain: "multi"
+    prompt: "Analyze statement level SQL performance including recompiles and busy time for processes managed by the SQL executor"
+    sql: "SELECT process_name, run_unit, SUM(calls) AS total_calls, SUM(elapsed_busy_time) AS total_busy_time_us, SUM(recompiles) AS total_recompiles FROM %db%.sqls WHERE process_name LIKE '%SQL%' GROUP BY process_name, run_unit LIMIT 10000;"
+
+  # --- Category D: Modern / New Presented Examples ---
+  - id: 13
+    category: "Modern/New Example"
+    domain: "sqlp"
+    prompt: "Identify SQL processes experiencing statement compilation overhead by showing statements compiled, statement compilation time, and average compile time"
+    sql: "SELECT process_name, SUM(sql_stmt_compiles) AS total_statements_compiled, SUM(sql_stmt_compile_time) AS total_stmt_compile_time_us, CAST(SUM(sql_stmt_compile_time) AS NUMERIC(10,4)) / NULLIF(SUM(sql_stmt_compiles), 0) AS avg_compile_time_us FROM %db%.sqlp GROUP BY process_name ORDER BY total_stmt_compile_time_us DESC LIMIT 10000;"
+
+  - id: 14
+    category: "Modern/New Example"
+    domain: "sqls"
+    prompt: "Show SQL statements with the highest number of lock waits and their average response time"
+    sql: "SELECT process_name, statement_index, SUM(lock_waits) AS total_lock_waits, CAST(SUM(elapsed_busy_time) * 1.0 / NULLIF(SUM(calls), 0) AS NUMERIC(10,4)) AS avg_response_time_us FROM %db%.sqls GROUP BY process_name, statement_index ORDER BY total_lock_waits DESC LIMIT 10000;"
+
+  - id: 15
+    category: "Modern/New Example"
+    domain: "ossns"
+    prompt: "List OSS namespace servers with their inode and link cache hit percentages and semaphore wait queue times"
+    sql: "SELECT process_name, cpu_num, from_timestamp, CASE WHEN ic_lookups > 0 THEN (ic_hits * 100.0 / ic_lookups) ELSE 0 END AS inode_cache_hit_pct, CASE WHEN lc_lookups > 0 THEN (lc_hits * 100.0 / lc_lookups) ELSE 0 END AS link_cache_hit_pct, sem_wait_qtime FROM %db%.ossns ORDER BY from_timestamp DESC, process_name LIMIT 10000;"
