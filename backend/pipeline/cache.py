@@ -335,8 +335,11 @@ class SemanticCache:
             print("[Cache] Model not ready — skipping store.")
             return
 
-        # Use hash of normalized text as unique ID
-        doc_id = hashlib.sha256(normalized_text.encode()).hexdigest()
+        # Use hash of normalized text + target_db as unique ID so the same
+        # query run against different databases (macht413 vs machd500) never
+        # shares or overwrites the other's cached SQL.
+        cache_key = f"{normalized_text}|{target_db or 'default'}"
+        doc_id = hashlib.sha256(cache_key.encode()).hexdigest()
 
         # Embed the query
         embedding = self.model.encode([normalized_text]).tolist()
@@ -365,7 +368,7 @@ class SemanticCache:
             documents=[normalized_text]
         )
 
-    def flag_failed(self, normalized_text: str) -> bool:
+    def flag_failed(self, normalized_text: str, target_db: str = None) -> bool:
         """
         Mark an existing cache entry as execution_success=false.
 
@@ -381,7 +384,8 @@ class SemanticCache:
         if not self.is_model_ready:
             return False
 
-        doc_id = hashlib.sha256(normalized_text.encode()).hexdigest()
+        cache_key = f"{normalized_text}|{target_db or 'default'}"
+        doc_id = hashlib.sha256(cache_key.encode()).hexdigest()
 
         try:
             existing = self.collection.get(ids=[doc_id], include=["metadatas", "embeddings", "documents"])

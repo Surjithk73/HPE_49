@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown, Check } from 'lucide-react'
+import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown, Check, MessageCircle, ChevronUp, Send, History, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import QueryInput, { type InputMode } from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
@@ -9,7 +9,7 @@ import ReportDownload from '../components/ReportDownload'
 import AIExplanation from '../components/AIExplanation'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
-import { runQuery, runSqlDirect, runImageQuery, getHistory, getHealth, runRetryAnalysis, setModel, acceptQueryCache, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
+import { runQuery, runSqlDirect, runImageQuery, getHistory, getHealth, runRetryAnalysis, setModel, acceptQueryCache, refineQuery, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -29,11 +29,20 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('table')
   const [chartKind, setChartKind] = useState<ChartKind>('bar')
   const [currentQuery, setCurrentQuery] = useState('')
+  const [targetDb, setTargetDb] = useState('macht413')
   const [retryReport, setRetryReport] = useState<RetryAnalysisReport | null>(null)
   const [retryLoading, setRetryLoading] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
   const [retryOpen, setRetryOpen] = useState(false)
   const [cacheDecision, setCacheDecision] = useState<'pending' | 'accepted' | 'rejected'>('pending')
+  // Clarification panel state
+  const [clarificationOpen, setClarificationOpen] = useState(false)
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<number, string>>({})
+  // Refinement trail state
+  const [refinementTrail, setRefinementTrail] = useState<{instruction: string; result: QueryResponse}[]>([])
+  const [refinementInput, setRefinementInput] = useState('')
+  const [refining, setRefining] = useState(false)
+  const [refinementError, setRefinementError] = useState<string | null>(null)
   // Model switcher state
   const AVAILABLE_MODELS = [
     { id: 'gemini-3.1-flash-lite',  label: 'Gemini 3.1 Flash Lite',  badge: 'fast'    },
@@ -42,7 +51,7 @@ export default function Dashboard() {
     { id: 'openai/gpt-oss-20b',     label: 'GPT OSS',                 badge: 'balanced' }
   ]
   const [activeModel, setActiveModel] = useState<string>(
-    health?.llm_model ?? 'gemini-3.1-flash-lite'
+    localStorage.getItem('preferred_model') ?? health?.llm_model ?? 'gemini-3.1-flash-lite'
   )
   const [modelSwitching, setModelSwitching] = useState(false)
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
@@ -54,8 +63,9 @@ export default function Dashboard() {
     try {
       const res = await setModel(modelId)
       setActiveModel(res.model)
-    } catch {
-      // silently ignore — model stays unchanged
+      localStorage.setItem('preferred_model', res.model)
+    } catch (e: any) {
+      alert(e.message || "Failed to switch model. Check API keys.")
     } finally {
       setModelSwitching(false)
     }
@@ -89,7 +99,13 @@ export default function Dashboard() {
   useEffect(() => {
     getHealth().then(h => {
       setHealth(h)
-      if (h.llm_model) setActiveModel(h.llm_model)
+      const savedModel = localStorage.getItem('preferred_model')
+      if (savedModel && h.llm_model !== savedModel) {
+        // Sync backend to persisted frontend preference
+        setModel(savedModel).then(res => setActiveModel(res.model)).catch(() => setActiveModel(h.llm_model || 'gemini-3.1-flash-lite'))
+      } else if (h.llm_model) {
+        setActiveModel(h.llm_model)
+      }
     }).catch(() => setHealthFailed(true))
   }, [])
 
@@ -99,28 +115,34 @@ export default function Dashboard() {
 
   useEffect(() => { refreshHistory() }, [refreshHistory])
 
-  const handleQuery = async (payload: string | File, mode: InputMode = 'nl', targetDb: string = 'macht413') => {
+  const handleQuery = async (payload: string | File, mode: InputMode = 'nl', _targetDb: string = 'macht413') => {
     setLoading(true)
     setError(null)
+    setRefinementTrail([])
+    setRefinementInput('')
+    setRefinementError(null)
+    setClarificationOpen(false)
+    setClarificationAnswers({})
+    setTargetDb(_targetDb)
     if (typeof payload === 'string') setCurrentQuery(payload)
     else setCurrentQuery(`[Image] ${payload.name}`)
     try {
       const res =
-        mode === 'image' && payload instanceof File ? await runImageQuery(payload, targetDb)
-        : mode === 'sql' ? await runSqlDirect(payload as string, targetDb)
-        : await runQuery(payload as string, targetDb)
+        mode === 'image' && payload instanceof File ? await runImageQuery(payload, _targetDb)
+        : mode === 'sql' ? await runSqlDirect(payload as string, _targetDb)
+        : await runQuery(payload as string, _targetDb)
       if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
       setResult(res)
       setCacheDecision('pending')
+      // Show clarification panel if questions returned
+      if (res.clarification_questions && res.clarification_questions.length > 0) {
+        setClarificationOpen(true)
+      }
       // Auto-select chart kind based on data shape
       if (res.chart_type === 'line') {
         setChartKind('line')
         setViewMode('chart')
       } else if (res.chart_type === 'bar') {
-        // Only use stacked-bar when the numeric columns are clearly parts of a
-        // whole (their names contain 'pct', 'percent', 'ratio', or 'share').
-        // For independent metrics (cpu_busy_time, intr_busy_time, etc.) a
-        // grouped bar is more honest — stacked bars imply the values sum to 100%.
         const numericCols = res.columns.filter(c => {
           const s = res.rows[0]?.[c]
           return typeof s === 'number' || (!isNaN(Number(s)) && s !== '')
@@ -144,6 +166,29 @@ export default function Dashboard() {
       setLoading(false)
     }
   }
+
+  const handleRefine = async () => {
+    if (!result || !refinementInput.trim() || refining) return
+    setRefining(true)
+    setRefinementError(null)
+    try {
+      const refined = await refineQuery(
+        currentQuery,
+        result.sql,
+        refinementInput.trim(),
+        targetDb
+      )
+      setRefinementTrail(prev => [...prev, { instruction: refinementInput.trim(), result: refined }])
+      setResult(refined)
+      setRefinementInput('')
+    } catch (e: any) {
+      setRefinementError(e.message)
+    } finally {
+      setRefining(false)
+    }
+  }
+
+
 
   // Always allow chart view when there's result data
   const canChart = result && result.columns.length >= 2
@@ -532,7 +577,155 @@ export default function Dashboard() {
 
                 <AIExplanation sql={result.sql} queryText={currentQuery} columns={result.columns} rows={result.rows} />
 
+                {/* ── Clarification Panel ── */}
+                {result.clarification_questions && result.clarification_questions.length > 0 && (
+                  <div style={{ borderRadius: '12px', border: '1px solid rgba(251,191,36,0.25)', background: 'rgba(251,191,36,0.04)', overflow: 'hidden' }}>
+                    <button
+                      onClick={() => setClarificationOpen(o => !o)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '14px 16px', background: 'transparent', border: 'none',
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <MessageCircle size={14} style={{ color: '#fbbf24' }} />
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#fbbf24' }}>
+                          💡 Need more info?
+                        </span>
+                        <span style={{
+                          background: 'rgba(251,191,36,0.2)', color: '#fbbf24',
+                          fontSize: '10px', fontWeight: 700,
+                          padding: '1px 6px', borderRadius: '999px',
+                        }}>
+                          {result.clarification_questions.length}
+                        </span>
+                      </div>
+                      {clarificationOpen
+                        ? <ChevronUp size={13} style={{ color: '#fbbf24' }} />
+                        : <ChevronDown size={13} style={{ color: '#fbbf24' }} />
+                      }
+                    </button>
+                    {clarificationOpen && (
+                      <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <p style={{ margin: '0 0 4px', fontSize: '11px', color: '#888' }}>
+                          The system answered your query with a best-guess SQL. Providing these details will help you refine it below.
+                        </p>
+                        {result.clarification_questions.map((q, i) => (
+                          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '11px', color: '#aaa', fontWeight: 500 }}>
+                              {i + 1}. {q}
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Your answer…"
+                              value={clarificationAnswers[i] ?? ''}
+                              onChange={e => setClarificationAnswers(prev => ({ ...prev, [i]: e.target.value }))}
+                              style={{
+                                background: '#111', border: '1px solid #2a2a2a',
+                                borderRadius: '6px', padding: '7px 10px',
+                                color: '#f0f0f0', fontSize: '12px', fontFamily: 'inherit',
+                                outline: 'none',
+                              }}
+                            />
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => {
+                            const answers = result.clarification_questions!
+                              .map((q, i) => clarificationAnswers[i] ? `${q}: ${clarificationAnswers[i]}` : '')
+                              .filter(Boolean).join('; ')
+                            if (answers) setRefinementInput(answers)
+                            setClarificationOpen(false)
+                          }}
+                          style={{
+                            padding: '8px 14px', background: '#fbbf24', border: 'none',
+                            borderRadius: '6px', color: '#000', fontSize: '12px',
+                            fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                            alignSelf: 'flex-start',
+                          }}
+                        >
+                          Apply Answers as Refinement
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Refinement Trail ── */}
+                {refinementTrail.length > 0 && (
+                  <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+                      <History size={13} style={{ color: '#555' }} />
+                      <span style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>Refinement Trail</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {refinementTrail.map((step, i) => (
+                        <div key={i} style={{
+                          display: 'flex', alignItems: 'flex-start', gap: '10px',
+                          padding: '8px 10px', background: '#0d0d0d',
+                          borderRadius: '8px', border: '1px solid #1c1c1c',
+                        }}>
+                          <span style={{
+                            background: '#2a2a2a', color: '#888', fontSize: '10px',
+                            fontWeight: 700, padding: '1px 6px', borderRadius: '4px', flexShrink: 0, marginTop: '1px'
+                          }}>v{i + 2}</span>
+                          <span style={{ fontSize: '11px', color: '#aaa', flex: 1 }}>"{step.instruction}"</span>
+                          <span style={{ fontSize: '10px', color: '#444', flexShrink: 0 }}>{step.result.row_count.toLocaleString()} rows</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Refinement Input Box ── */}
+                <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+                    <Sparkles size={13} style={{ color: '#3b82f6' }} />
+                    <span style={{ fontSize: '12px', color: '#888', fontWeight: 600 }}>Refine this query</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder='e.g. "filter to CPU 0 only" or "add system_name column"'
+                      value={refinementInput}
+                      onChange={e => setRefinementInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRefine() }}
+                      disabled={refining}
+                      style={{
+                        flex: 1, background: '#0d0d0d', border: '1px solid #2a2a2a',
+                        borderRadius: '8px', padding: '9px 12px',
+                        color: '#f0f0f0', fontSize: '12px', fontFamily: 'inherit',
+                        outline: 'none', opacity: refining ? 0.6 : 1,
+                      }}
+                    />
+                    <button
+                      onClick={handleRefine}
+                      disabled={refining || !refinementInput.trim()}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '9px 14px', background: refining ? '#1a2a3a' : '#3b82f6',
+                        border: 'none', borderRadius: '8px',
+                        color: '#fff', fontSize: '12px', fontWeight: 600,
+                        cursor: refining || !refinementInput.trim() ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit', transition: 'all 0.15s',
+                        opacity: !refinementInput.trim() ? 0.5 : 1,
+                      }}
+                    >
+                      <Send size={12} />
+                      {refining ? 'Refining…' : 'Refine'}
+                    </button>
+                  </div>
+                  {refinementError && (
+                    <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#ef4444' }}>
+                      <AlertTriangle size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                      {refinementError}
+                    </p>
+                  )}
+                </div>
+
                 {/* Download */}
+
                 <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '16px' }}>
                   <ReportDownload sql={result.sql} queryText={currentQuery} />
                 </div>

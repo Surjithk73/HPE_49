@@ -18,8 +18,12 @@ RESULTS = []
 
 def psql(sql):
     """Run a query via psql and return row count."""
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    from config import DB_PASSWORD
+    
     env = os.environ.copy()
-    env["PGPASSWORD"] = "ro_pwd_123"
+    env["PGPASSWORD"] = DB_PASSWORD
     proc = subprocess.run(
         ["psql", "-U", "querycraft_user", "-d", "querycraft_db",
          "-t", "-A", "-F", "|", "-c", sql],

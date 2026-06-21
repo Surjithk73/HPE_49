@@ -154,6 +154,59 @@ SQL:"""
         
         return retry_prompt
 
+    def build_refinement_prompt(
+        self,
+        original_query: str,
+        current_sql: str,
+        refinement_instruction: str,
+        schema_context: str,
+        few_shots: List[Dict] = None,
+        target_db: str = "macht413",
+    ) -> str:
+        """
+        Build a prompt that rewrites an existing SQL query based on a plain-English
+        refinement instruction from the user.
+
+        The full pipeline (normalize → schema link → few-shots) is run again so
+        the model always has fresh context. The original question and current SQL
+        are injected as additional context so the model understands what already
+        works and only applies the targeted change.
+
+        Args:
+            original_query:         The original natural language query.
+            current_sql:            The SQL that was already generated.
+            refinement_instruction: Plain-English change the user wants (e.g. 'filter to CPU 0').
+            schema_context:         Filtered schema DDL from schema linker.
+            few_shots:              Retrieved few-shot examples.
+            target_db:              Target database schema prefix.
+
+        Returns:
+            Complete prompt string for the refinement LLM call.
+        """
+        base_prompt = self.build_prompt(
+            normalized_query=original_query,
+            schema_context=schema_context,
+            few_shots=few_shots or [],
+            target_db=target_db,
+        )
+
+        refinement_context = f"""
+REFINEMENT CONTEXT:
+The user previously asked: "{original_query}"
+You generated this SQL, which executed successfully:
+```sql
+{current_sql}
+```
+
+The user now wants you to refine it with the following instruction:
+"{refinement_instruction}"
+
+Apply ONLY the requested change. Keep all other aspects of the SQL identical to the current SQL above unless the refinement instruction explicitly changes them.
+Output your reasoning in a `<thought>` block, then output the refined SQL in a ```sql block.
+"""
+        return base_prompt + refinement_context
+
+
 
 # Test the prompt builder
 if __name__ == "__main__":

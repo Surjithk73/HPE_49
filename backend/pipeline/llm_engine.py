@@ -10,8 +10,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 try:
-    from config import GEMINI_API_KEY, GEMINI_MODEL
+    from config import GEMINI_API_KEY, GEMINI_MODEL, NVIDIA_API_KEY
     import google.generativeai as genai
+    from openai import OpenAI
     GEMINI_AVAILABLE = True
 except (ValueError, ImportError) as e:
     GEMINI_AVAILABLE = False
@@ -180,6 +181,53 @@ class LLMEngine(BaseLLMEngine):
 
         except Exception as e:
             raise LLMError(f"Failed to generate text: {str(e)}")
+
+
+class NvidiaEngine(BaseLLMEngine):
+    """Handles SQL generation using NVIDIA NIM API."""
+
+    def __init__(self, api_key: str = None, model: str = None):
+        self.api_key = api_key or NVIDIA_API_KEY
+        self.model_name = model
+
+        if not self.api_key:
+            raise LLMError("NVIDIA_API_KEY not configured. Please set it in your .env file to use Qwen or GPT models.")
+
+        self.client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=self.api_key
+        )
+
+    def generate_sql(self, prompt: str) -> tuple[str, str]:
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                top_p=0.8,
+                max_tokens=4096,
+                stream=False
+            )
+            content = completion.choices[0].message.content or ""
+            return self._extract_sql(content), content
+        except Exception as e:
+            raise LLMError(f"Failed to generate SQL via NVIDIA NIM: {str(e)}")
+
+    def generate_text(self, prompt: str) -> str:
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=2048,
+                stream=False
+            )
+            content = completion.choices[0].message.content or ""
+            return content.strip()
+        except Exception as e:
+            raise LLMError(f"Failed to generate text via NVIDIA NIM: {str(e)}")
+
 
 
 def make_llm_engine() -> "BaseLLMEngine":

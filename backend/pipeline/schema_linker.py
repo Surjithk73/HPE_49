@@ -360,14 +360,20 @@ class SchemaLinker:
     
     # ── Counter-type formula hints ────────────────────────────────────────────
 
-    # Maps counter_type → the correct SQL formula fragment to append as a
-    # comment in the DDL.  These are universal across ALL tables because
-    # delta_time is a shared header column with identical semantics everywhere.
-    #
-    # The hint is intentionally terse so it fits on one comment line without
-    # blowing up the context window.  The prompt rules reinforce the same
-    # formulas at a higher level.
-    _COUNTER_FORMULA: Dict[str, str] = {}
+    # Maps counter_type (from enriched_schema.yaml) → the correct SQL formula
+    # fragment injected as a comment on every column in the DDL.
+    # These match the FORMULA REFERENCE LEGEND in prompt_builder.py exactly so
+    # the LLM sees per-column grounded instructions rather than a generic legend.
+    _COUNTER_FORMULA: Dict[str, str] = {
+        "Busy":           "→ per row: col*100.0/delta_time. Aggregated: SUM(col)*100.0/NULLIF(MAX(delta_time)*COUNT(DISTINCT from_timestamp),0)",
+        "Queue":          "→ per row: col*1.0/delta_time. Aggregated: SUM(col)*1.0/NULLIF(MAX(delta_time)*COUNT(DISTINCT from_timestamp),0)",
+        "Queue-Busy":     "→ per row: col*100.0/delta_time. Aggregated: SUM(col)*100.0/NULLIF(MAX(delta_time)*COUNT(DISTINCT from_timestamp),0)",
+        "Incrementing":   "→ per row: col*1000000.0/delta_time. Aggregated: SUM(col)*1000000.0/NULLIF(MAX(delta_time)*COUNT(DISTINCT from_timestamp),0)",
+        "Accumulating":   "→ per row: col*1000000.0/delta_time. Aggregated: SUM(col)*1000000.0/NULLIF(MAX(delta_time)*COUNT(DISTINCT from_timestamp),0)",
+        "Response-time":  "→ col / NULLIF(transaction_count_col, 0) gives avg response µs",
+        "Lockwait":       "→ col / NULLIF(requests_blocked, 0) gives avg wait µs",
+        "Snapshot":       "→ use directly, no rate conversion needed",
+    }
 
     @staticmethod
     def _build_col_comment(col_def: Dict) -> str:

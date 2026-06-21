@@ -9,6 +9,8 @@ export interface QueryResponse {
   cache_hit: boolean
   chart_type: 'line' | 'bar' | 'table'
   domain: string
+  query_intent?: string
+  clarification_questions?: string[]
   error?: string
   debug_prompt?: string
   raw_llm_output?: string
@@ -266,4 +268,22 @@ export async function uploadMeasureData(files: File[], targetDb: string): Promis
   }
   return res.json()
 }
+
+export async function refineQuery(
+  originalQuery: string,
+  currentSql: string,
+  refinementInstruction: string,
+  targetDb: string = 'macht413'
+): Promise<QueryResponse> {
+  return request<QueryResponse>('/api/refine', {
+    method: 'POST',
+    body: JSON.stringify({
+      original_query: originalQuery,
+      current_sql: currentSql,
+      refinement_instruction: refinementInstruction,
+      target_db: targetDb,
+    }),
+  })
+}
+
 

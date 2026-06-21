@@ -45,6 +45,7 @@ from pipeline.schema_loader import load_schema
 from pipeline.normalizer import QueryNormalizer
 from pipeline.schema_linker import SchemaLinker
 from pipeline.prompt_builder import PromptBuilder
+from pipeline.intent_classifier import classify_intent
 from pipeline.llm_engine import LLMError, make_llm_engine
 from pipeline.validator import SQLValidator
 from pipeline.executor import QueryExecutor, ExecutionError, detect_chart_type
@@ -189,6 +190,12 @@ class ExplainRequest(BaseModel):
     query_text: str
     columns: List[str]
     rows: List[dict]
+
+class RefineRequest(BaseModel):
+    original_query: str
+    current_sql: str
+    refinement_instruction: str
+    target_db: str = "macht413"
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -397,6 +404,9 @@ def run_query(req: QueryRequest):
         # Track the prompt sent to the LLM for debugging
         debug_prompt = None
         raw_llm_output = None
+        # Intent classification defaults (populated later for non-cache-hit path)
+        query_intent = None
+        clarification_questions = []
 
         if cache_result.hit:
             sql = cache_result.sql
@@ -413,7 +423,7 @@ def run_query(req: QueryRequest):
             except ExecutionError as e:
                 log_entry["validation_error"] = str(e)
                 _audit.log_query(log_entry)
-                _cache.flag_failed(norm_text)
+                _cache.flag_failed(norm_text, target_db=req.target_db)
                 logger.error(f"[/api/query] Execution error from cache — SQL: {sql}\nError: {e}")
                 raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
@@ -423,8 +433,13 @@ def run_query(req: QueryRequest):
             schema_context = _linker.link_schema(norm_text, domain, target_db)
 
             # Step 4 — Prompt building (RAG for few-shots)
-            top_few_shots = _few_shot_retriever.get_top_k(norm_text, k=3) if _few_shot_retriever else []
+            top_few_shots = _few_shot_retriever.get_top_k(norm_text, k=3, domain=domain) if _few_shot_retriever else []
             prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots, target_db)
+
+            # Step 4b — Intent classification (runs alongside SQL generation, never blocks it)
+            intent_result = classify_intent(norm_text, _llm_engine)
+            query_intent = intent_result.get("intent", "single_metric")
+            clarification_questions = intent_result.get("clarification_questions", [])
 
             # Capture the exact prompt for debugging
             debug_prompt = prompt
@@ -511,16 +526,18 @@ def run_query(req: QueryRequest):
         _audit.log_query(log_entry)
 
         return {
-            "sql":               sql,
-            "columns":           result.columns,
-            "rows":              result.rows,
-            "row_count":         result.row_count,
-            "execution_time_ms": result.execution_time_ms,
-            "cache_hit":         cache_result.hit,
-            "chart_type":        chart_type,
-            "domain":            domain,
-            "debug_prompt":      debug_prompt,
-            "raw_llm_output":    raw_llm_output,
+            "sql":                      sql,
+            "columns":                  result.columns,
+            "rows":                     result.rows,
+            "row_count":                result.row_count,
+            "execution_time_ms":        result.execution_time_ms,
+            "cache_hit":                cache_result.hit,
+            "chart_type":               chart_type,
+            "domain":                   domain,
+            "query_intent":             query_intent if not cache_result.hit else None,
+            "clarification_questions":  clarification_questions if not cache_result.hit else [],
+            "debug_prompt":             debug_prompt,
+            "raw_llm_output":           raw_llm_output,
         }
 
     except HTTPException:
@@ -531,6 +548,98 @@ def run_query(req: QueryRequest):
         tb = traceback.format_exc()
         logger.error(f"[/api/query] Unexpected error: {e}\n{tb}")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+# POST /api/refine
+@app.post("/api/refine")
+def refine_query(req: RefineRequest):
+    """
+    Refine an existing SQL query using a plain-English instruction.
+
+    Runs the full pipeline (normalize → schema link → few-shots → LLM)
+    with the original query as context, the current SQL as a reference,
+    and the user's refinement instruction as a targeted change directive.
+
+    Body:
+        original_query:         The original natural language question.
+        current_sql:            The SQL that was already generated.
+        refinement_instruction: Plain-English change (e.g. 'filter to CPU 0 only').
+        target_db:              Target database schema (default: macht413).
+    """
+    original_query = req.original_query.strip()
+    refinement_instruction = req.refinement_instruction.strip()
+    target_db = req.target_db
+
+    if not original_query or not refinement_instruction:
+        raise HTTPException(status_code=400, detail="original_query and refinement_instruction are required")
+
+    try:
+        # Re-run normalize + schema link + few-shots for fresh context
+        norm = _normalizer.normalize(original_query)
+        norm_text = norm["normalized_text"]
+        domain = norm["domain_category"]
+
+        schema_context = _linker.link_schema(norm_text, domain, target_db)
+        top_few_shots = _few_shot_retriever.get_top_k(norm_text, k=3, domain=domain) if _few_shot_retriever else []
+
+        # Build the refinement prompt
+        prompt = _builder.build_refinement_prompt(
+            original_query=norm_text,
+            current_sql=req.current_sql,
+            refinement_instruction=refinement_instruction,
+            schema_context=schema_context,
+            few_shots=top_few_shots,
+            target_db=target_db,
+        )
+
+        # LLM generation with retry
+        try:
+            sql, raw_llm_output = _llm_engine.generate_sql_with_retry(
+                prompt=prompt,
+                validator=_validator,
+                prompt_builder=_builder,
+                max_retries=2
+            )
+        except LLMError as e:
+            raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+
+        # Validate
+        val = _validator.validate(sql, target_db)
+        if not val.valid:
+            raise HTTPException(status_code=400, detail=f"SQL validation failed: {val.error}")
+
+        sql = val.sanitized_sql
+
+        # Execute
+        try:
+            result = _executor.execute(sql)
+        except ExecutionError as e:
+            raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+        chart_type = detect_chart_type(result.columns, result.rows)
+
+        return {
+            "sql":               sql,
+            "columns":           result.columns,
+            "rows":              result.rows,
+            "row_count":         result.row_count,
+            "execution_time_ms": result.execution_time_ms,
+            "cache_hit":         False,
+            "chart_type":        chart_type,
+            "domain":            domain,
+            "query_intent":      None,
+            "clarification_questions": [],
+            "debug_prompt":      prompt,
+            "raw_llm_output":    raw_llm_output,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"[/api/refine] Unexpected error: {e}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
 
 
 # POST /api/image-to-query
@@ -894,14 +1003,13 @@ def set_threshold(req: ThresholdRequest):
 
 # ── Model switcher ────────────────────────────────────────────────────────────
 
-# Models the UI is allowed to switch to.  Only Gemini models are listed here;
+# Models the UI is allowed to switch to.  
 # Ollama switching is handled by restarting with a different .env.
-ALLOWED_GEMINI_MODELS = [
+ALLOWED_MODELS = [
     "gemini-3.1-flash-lite",    # default — fast, low cost
-    "gemini-2.0-flash",         # stronger reasoning
-    "gemini-2.5-flash",         # latest generation
     "gemini-3.5-flash",         # latest 3.x series
-    "gemini-3-flash-preview",   # gemini-3-flash (preview name on API)
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "openai/gpt-oss-20b"
 ]
 
 
@@ -911,7 +1019,7 @@ def get_model():
     """Return the currently active LLM model name and the list of available models."""
     return {
         "current_model":   _llm_engine.model_name if _llm_engine else None,
-        "available_models": ALLOWED_GEMINI_MODELS,
+        "available_models": ALLOWED_MODELS,
         "provider":        LLM_PROVIDER,
     }
 
@@ -920,33 +1028,16 @@ def get_model():
 @app.post("/api/model")
 def switch_model(req: ModelRequest):
     """
-    Hot-swap the active Gemini model at runtime.
-
-    No server restart required.  The new model takes effect immediately
-    for all subsequent queries.  Cache entries are not invalidated — cached
-    SQL is model-agnostic.
-
-    Body:
-        { "model": "gemini-2.5-flash" }
-
-    Only Gemini models are supported via this endpoint.  To switch to Ollama,
-    update LLM_PROVIDER in .env and restart the server.
+    Hot-swap the active LLM engine at runtime.
     """
     global _llm_engine
 
-    if LLM_PROVIDER != "gemini":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model switching is only supported for LLM_PROVIDER=gemini. "
-                   f"Current provider: {LLM_PROVIDER}"
-        )
-
     requested = req.model.strip()
-    if requested not in ALLOWED_GEMINI_MODELS:
+    if requested not in ALLOWED_MODELS:
         raise HTTPException(
             status_code=400,
             detail=f"Model '{requested}' is not in the allowed list. "
-                   f"Allowed: {ALLOWED_GEMINI_MODELS}"
+                   f"Allowed: {ALLOWED_MODELS}"
         )
 
     previous = _llm_engine.model_name if _llm_engine else None
@@ -960,8 +1051,11 @@ def switch_model(req: ModelRequest):
         }
 
     try:
-        from pipeline.llm_engine import LLMEngine
-        _llm_engine = LLMEngine(model=requested)
+        from pipeline.llm_engine import LLMEngine, NvidiaEngine
+        if "gemini" in requested:
+            _llm_engine = LLMEngine(model=requested)
+        else:
+            _llm_engine = NvidiaEngine(model=requested)
         logger.info(f"[/api/model] Switched from {previous} → {requested}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialise model '{requested}': {e}")

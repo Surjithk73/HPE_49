@@ -55,7 +55,7 @@ class SQLValidator:
                 "Math error: SUM(delta_time) used as denominator. "
                 "delta_time is the same value for every row in an interval — "
                 "SUM(delta_time) inflates by row count and produces near-zero results. "
-                "Use MAX(delta_time) instead: col * 100.0 / NULLIF(MAX(delta_time), 0)"
+                "Use this exact pattern instead: SUM(col) * 100.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)"
             ),
         ),
         (
@@ -66,7 +66,7 @@ class SQLValidator:
             ),
             (
                 "Math error: SUM(delta_time) used as denominator. "
-                "Use MAX(delta_time) instead: col * 100.0 / NULLIF(MAX(delta_time), 0)"
+                "Use this exact pattern instead: SUM(col) * 100.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)"
             ),
         ),
         (
@@ -78,7 +78,7 @@ class SQLValidator:
             (
                 "Math error: AVG(delta_time) used as denominator. "
                 "delta_time is constant per interval — AVG equals the raw value. "
-                "Use MAX(delta_time) for clarity: col * 100.0 / NULLIF(MAX(delta_time), 0)"
+                "Use this exact pattern instead: SUM(col) * 100.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)"
             ),
         ),
     ]

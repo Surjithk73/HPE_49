@@ -90,7 +90,7 @@ class FewShotRetriever:
 
             doc_id = f"fs_{i}_{hashlib.md5(query.encode()).hexdigest()[:8]}"
             queries.append(query)
-            metadatas.append({"sql": sql})
+            metadatas.append({"sql": sql, "domain": ex.get('domain', 'multi')})
             ids.append(doc_id)
 
         if queries:
@@ -104,41 +104,79 @@ class FewShotRetriever:
             )
             print(f"[FewShotRetriever] Loaded {len(queries)} examples into ChromaDB.")
 
-    def get_top_k(self, query: str, k: int = 3) -> List[Dict]:
+    def get_top_k(self, query: str, k: int = 3, domain: str = None) -> List[Dict]:
         """
         Retrieve the top K most relevant few-shot examples for the query.
 
+        Uses two-stage retrieval when domain is provided:
+          1. Filter ChromaDB to examples whose domain matches.
+          2. Rank the filtered subset by cosine similarity and take top k.
+        For 'multi' domain or if domain is None, searches across all examples.
+        If a domain filter returns fewer than k results, fills remaining
+        slots from a full similarity search (no domain filter).
+
         Args:
-            query: The normalized user query.
-            k: Number of examples to retrieve.
+            query:  The normalized user query.
+            k:      Number of examples to retrieve.
+            domain: Domain label from the normalizer (e.g. 'cpu', 'disc').
 
         Returns:
-            List of dictionaries, each containing 'query' and 'sql'.
+            List of dicts with 'query' and 'sql'.
         """
         if not self.is_model_ready or self.collection.count() == 0:
             return []
 
         try:
             query_embedding = self.model.encode([query], normalize_embeddings=True).tolist()
+
+            # Stage 1: try domain-filtered retrieval
+            domain_results = []
+            if domain and domain != 'multi':
+                try:
+                    filtered = self.collection.query(
+                        query_embeddings=query_embedding,
+                        n_results=k,
+                        where={"domain": domain},
+                        include=["metadatas", "documents"]
+                    )
+                    if filtered["ids"] and filtered["ids"][0]:
+                        for i in range(len(filtered["ids"][0])):
+                            domain_results.append({
+                                "query": filtered["documents"][0][i],
+                                "sql": filtered["metadatas"][0][i].get("sql", "")
+                            })
+                except Exception:
+                    pass  # domain filter failed (e.g. no entries for this domain), fall through
+
+            if len(domain_results) >= k:
+                return domain_results[:k]
+
+            # Stage 2: fill remaining slots from full search
+            already_seen = {ex["query"] for ex in domain_results}
+            need = k - len(domain_results)
+            fetch = k + len(already_seen) + 2  # over-fetch to account for duplicates
+
             results = self.collection.query(
                 query_embeddings=query_embedding,
-                n_results=k,
+                n_results=min(fetch, self.collection.count()),
                 include=["metadatas", "documents"]
             )
 
-            if not results["ids"] or not results["ids"][0]:
-                return []
+            if results["ids"] and results["ids"][0]:
+                for i in range(len(results["ids"][0])):
+                    doc = results["documents"][0][i]
+                    if doc in already_seen:
+                        continue
+                    domain_results.append({
+                        "query": doc,
+                        "sql": results["metadatas"][0][i].get("sql", "")
+                    })
+                    already_seen.add(doc)
+                    if len(domain_results) >= k:
+                        break
 
-            top_examples = []
-            for i in range(len(results["ids"][0])):
-                doc = results["documents"][0][i]
-                meta = results["metadatas"][0][i]
-                top_examples.append({
-                    "query": doc,
-                    "sql": meta.get("sql", "")
-                })
+            return domain_results[:k]
 
-            return top_examples
         except Exception as e:
             print(f"[FewShotRetriever] Error retrieving examples: {e}")
             return []

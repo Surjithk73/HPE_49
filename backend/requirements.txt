@@ -12,3 +12,4 @@ pyyaml
 rank-bm25
 matplotlib
 python-multipart
+openai

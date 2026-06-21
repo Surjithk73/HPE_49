@@ -120,6 +120,18 @@ class QueryNormalizer:
             ('user metric', 2), ('user counter', 2), ('custom counter', 2),
             ('application counter', 2),
         ],
+        'sqls': [
+            ('sqls', 3), ('zmssqls', 3), ('sql statement', 3),
+            ('sql execution', 3), ('statement stats', 3), ('sql monitoring', 3),
+            ('elapsed busy time', 3), ('elapsed_busy_time', 3),
+            ('recompile', 2), ('sql disc reads', 2), ('sql calls', 2),
+            ('records accessed', 2), ('records used', 2),
+            ('sql messages', 2), ('message bytes', 2),
+        ],
+        'sqlp': [
+            ('sqlp', 3), ('zmssqlp', 3), ('sql plan', 3), ('sql plan data', 3),
+            ('query plan', 3), ('execution plan', 3),
+        ],
     }
 
     # Threshold by which the top domain's score must exceed the runner-up for
