@@ -5,7 +5,10 @@ Logs all query executions to SQLite database.
 Improvements:
 - get_stats() returns full analytics: total queries, cache hit rate,
   avg execution time, top 10 domains, validation failure rate, retry rate.
+- pipeline_stages JSON column captures per-stage data for the clarification
+  pipeline: questions asked, final spec, assumptions surfaced, SQL attempts.
 """
+import json
 import sqlite3
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -73,6 +76,13 @@ class AuditLog:
             except sqlite3.OperationalError:
                 pass  # Column already exists — safe to ignore
 
+            # pipeline_stages: JSON blob capturing per-stage data from the
+            # clarification pipeline (questions asked, spec, assumptions, SQL attempts).
+            try:
+                cursor.execute("ALTER TABLE query_log ADD COLUMN pipeline_stages TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists — safe to ignore
+
             conn.commit()
             conn.close()
 
@@ -103,12 +113,17 @@ class AuditLog:
 
             timestamp = datetime.now().isoformat()
 
+            # pipeline_stages is optional; serialise dict/list to JSON if provided.
+            stages_raw = entry.get('pipeline_stages')
+            stages_json = json.dumps(stages_raw) if stages_raw is not None else None
+
             cursor.execute("""
                 INSERT INTO query_log (
                     timestamp, original_input, normalized_input, domain_category,
                     generated_sql, validation_passed, validation_error, cache_hit,
-                    cache_confidence, row_count, execution_time_ms, export_format, llm_retries
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    cache_confidence, row_count, execution_time_ms, export_format,
+                    llm_retries, pipeline_stages
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 timestamp,
                 entry.get('original_input', ''),
@@ -123,6 +138,7 @@ class AuditLog:
                 entry.get('execution_time_ms', None),
                 entry.get('export_format', None),
                 entry.get('llm_retries', 0),
+                stages_json,
             ))
 
             conn.commit()

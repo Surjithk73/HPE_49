@@ -12,7 +12,10 @@ export interface QueryResponse {
   error?: string
   debug_prompt?: string
   raw_llm_output?: string
+  debug_planner_prompt?: string
   inferred_query?: string
+  assumptions?: string[]
+  spec?: Record<string, unknown>
 }
 
 export interface HistoryEntry {
@@ -70,6 +73,38 @@ export async function runQuery(query: string, target_db: string = "macht413"): P
   return request<QueryResponse>('/api/query', {
     method: 'POST',
     body: JSON.stringify({ query, target_db }),
+  })
+}
+
+// ── Planner (clarification) pipeline ────────────────────────────────────────
+// Multi-turn: start → (answer)* → ready. `force` skips remaining questions.
+// A "clarifying" response carries a `question`; a "ready" response carries the
+// full QueryResponse fields plus both debug prompts (planner + SQL generator).
+export interface PlannerResponse extends QueryResponse {
+  status: 'clarifying' | 'ready'
+  question?: string
+  session_id: string
+  spec_preview?: Record<string, unknown>
+}
+
+export async function startPlannerQuery(query: string, target_db: string = "macht413"): Promise<PlannerResponse> {
+  return request<PlannerResponse>('/api/query/start', {
+    method: 'POST',
+    body: JSON.stringify({ query, target_db }),
+  })
+}
+
+export async function answerPlannerQuery(session_id: string, answer: string): Promise<PlannerResponse> {
+  return request<PlannerResponse>('/api/query/answer', {
+    method: 'POST',
+    body: JSON.stringify({ session_id, answer }),
+  })
+}
+
+export async function forcePlannerQuery(session_id: string, target_db: string = "macht413"): Promise<PlannerResponse> {
+  return request<PlannerResponse>('/api/query/force', {
+    method: 'POST',
+    body: JSON.stringify({ session_id, target_db }),
   })
 }
 

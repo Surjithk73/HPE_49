@@ -129,6 +129,49 @@ USER REQUEST:
         
         return prompt
     
+    def build_spec_prompt(
+        self,
+        spec,
+        schema_context: str,
+        few_shots: List[Dict] = None,
+        target_db: str = "macht413",
+        dialect: str = "postgres",
+    ) -> str:
+        """
+        Build a SQL_GENERATOR prompt from a completed IntentSpec.
+
+        Uses the same structure as build_prompt() but replaces the raw user
+        query with a structured intent block. The dialect is injected into
+        the system instruction so the model targets the right SQL variant.
+        """
+        from pipeline.intent_spec import IntentSpec
+        spec_block = spec.to_prompt_block() if hasattr(spec, "to_prompt_block") else str(spec)
+
+        _DIALECT_NOTES = {
+            "postgres": "Use standard PostgreSQL syntax. LIMIT n is correct.",
+            "sqlmx":    "Use HPE NonStop SQL/MX syntax. Use [FIRST n] instead of LIMIT n.",
+            "sqlmp":    "Use HPE NonStop SQL/MP syntax. Use [FIRST n] instead of LIMIT n.",
+        }
+        dialect_note = _DIALECT_NOTES.get(dialect.lower(), f"Dialect: {dialect}.")
+
+        # Reuse build_prompt() with the spec block as the "query" — the spec
+        # block already contains structured intent; the system instruction adds
+        # the dialect note at the top.
+        base_prompt = self.build_prompt(
+            normalized_query=spec_block,
+            schema_context=schema_context,
+            few_shots=few_shots,
+            target_db=target_db,
+        )
+
+        # Inject dialect note right after the opening system instruction line
+        dialect_line = f"\nSQL DIALECT: {dialect_note}\n"
+        base_prompt = base_prompt.replace(
+            f"Generate a single valid PostgreSQL SELECT query for the schema '{target_db}'.",
+            f"Generate a single valid SQL SELECT query for the schema '{target_db}'.\n{dialect_note}",
+        )
+        return base_prompt
+
     def build_retry_prompt(self, original_prompt: str, failed_sql: str, error: str) -> str:
         """
         Build a retry prompt after validation failure.

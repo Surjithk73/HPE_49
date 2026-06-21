@@ -45,7 +45,7 @@ from pipeline.schema_loader import load_schema
 from pipeline.normalizer import QueryNormalizer
 from pipeline.schema_linker import SchemaLinker
 from pipeline.prompt_builder import PromptBuilder
-from pipeline.llm_engine import LLMError, make_llm_engine
+from pipeline.llm_engine import LLMError, make_llm_engine, make_planner_engine
 from pipeline.validator import SQLValidator
 from pipeline.executor import QueryExecutor, ExecutionError, detect_chart_type
 from pipeline.cache import SemanticCache
@@ -70,6 +70,13 @@ _few_shot_retriever = None
 _audit         = None
 _few_shots     = []
 
+# Planner (clarification loop) — initialised alongside _llm_engine
+_planner          = None
+_planner_defaults: dict = {}
+# In-memory session store: {session_id: PlannerSession}
+# Sessions are ephemeral; no persistence needed for local single-user deployment.
+_sessions: dict = {}
+
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
@@ -77,6 +84,7 @@ async def lifespan(app: FastAPI):
     """Initialise all pipeline components at startup."""
     global _schema_loader, _schema, _normalizer, _linker, _builder
     global _llm_engine, _validator, _executor, _cache, _audit, _few_shots, _few_shot_retriever
+    global _planner, _planner_defaults
 
     print("\n[QueryCraft] Starting up...")
 
@@ -95,6 +103,19 @@ async def lifespan(app: FastAPI):
     # LLM engine — provider chosen by LLM_PROVIDER (gemini|ollama)
     _llm_engine = make_llm_engine()
     print(f"[QueryCraft] LLM engine ready — provider: {LLM_PROVIDER}, model: {_llm_engine.model_name}")
+
+    # Planner — uses a separate engine instance (PLANNER_MODEL role)
+    try:
+        import yaml as _yaml
+        _planner_defaults_path = os.path.join(os.path.dirname(__file__), "config", "planner_defaults.yaml")
+        with open(_planner_defaults_path) as _f:
+            _planner_defaults = _yaml.safe_load(_f) or {}
+    except Exception:
+        _planner_defaults = {"max_questions": 2, "max_retries": 2, "defaults": {}}
+    from pipeline.planner import Planner  # noqa: F811 — local import after global set
+    _planner_engine = make_planner_engine()
+    _planner = Planner(provider=_planner_engine._provider, defaults=_planner_defaults)
+    print(f"[QueryCraft] Planner ready — model: {_planner_engine.model_name}")
 
     # Executor — creates the connection pool
     _executor = QueryExecutor()
@@ -353,6 +374,203 @@ def retry_analysis():
     return run_analysis()
 
 
+# ── Planner clarification endpoints ──────────────────────────────────────────
+# Multi-turn flow: start → (answer)* → force OR natural ready state → execute
+# Existing POST /api/query is unchanged (single-shot, backward-compat).
+
+class PlannerStartRequest(BaseModel):
+    query: str
+    target_db: str = "macht413"
+
+class PlannerAnswerRequest(BaseModel):
+    session_id: str
+    answer: str
+
+class PlannerForceRequest(BaseModel):
+    session_id: str
+    target_db: str = "macht413"
+
+
+def _spec_to_signal(spec) -> str:
+    """Extract a short natural-language signal from an IntentSpec for RAG retrieval."""
+    parts = []
+    if spec.metric.resolved:
+        parts.append(str(spec.metric.value))
+    if spec.entity_scope.resolved:
+        parts.append(str(spec.entity_scope.value))
+    if spec.aggregation.resolved:
+        parts.append(str(spec.aggregation.value))
+    return " ".join(parts) if parts else spec.to_prompt_block()
+
+
+def _execute_from_spec(spec, target_db: str, session=None) -> dict:
+    """
+    Compile a completed IntentSpec → SQL → execute, with planner-based retry.
+
+    When a session is supplied and SQL generation or execution fails, the error
+    is routed back to the Planner which revises the IntentSpec before the next
+    attempt. This is the "full loop" retry: spec → SQL → validate → execute →
+    on failure → planner revises spec → repeat.
+
+    Returns a dict that always contains at least `debug_prompt` and
+    `raw_llm_output`; on failure it also contains an `error` key instead of
+    the normal result columns. Callers should NOT raise HTTPException — return
+    the dict as-is so the frontend can display the error banner and debug panel.
+    """
+    max_retries: int = _planner_defaults.get("max_retries", 2)
+    current_spec = spec
+    current_session = session
+    last_error: str | None = None
+    last_sql: str | None = None
+    last_prompt: str | None = None
+    last_raw: str | None = None
+
+    for attempt in range(max_retries + 1):
+        print(f"[Pipeline] Attempt {attempt + 1}/{max_retries + 1} — building prompt from spec...")
+
+        # Build prompt fresh from the current (possibly revised) spec
+        signal = _spec_to_signal(current_spec)
+        norm = _normalizer.normalize(signal)
+        domain = norm["domain_category"]
+        schema_ctx = _linker.link_schema(norm["normalized_text"], domain, target_db)
+        top_k = _few_shot_retriever.get_top_k(norm["normalized_text"], k=3)
+        last_prompt = _builder.build_spec_prompt(current_spec, schema_ctx, top_k, target_db)
+
+        # Single-shot SQL generation — retry is owned by this outer loop
+        try:
+            last_sql, last_raw = _llm_engine.generate_sql(last_prompt)
+        except LLMError as exc:
+            last_error = str(exc)
+            print(f"[Pipeline] Attempt {attempt + 1} generation error: {last_error}")
+            if attempt >= max_retries:
+                break
+            if _planner and current_session:
+                print(f"[Pipeline] Routing generation error to planner for revision...")
+                revised = _planner.revise_on_error(current_session, last_error, last_sql or "")
+                current_spec, current_session = revised.spec, revised.session
+            continue
+
+        val_result = _validator.validate(last_sql)
+        if not val_result.valid:
+            last_error = val_result.error
+            print(f"[Pipeline] Attempt {attempt + 1} validation failed: {last_error}")
+        else:
+            last_sql = val_result.sanitized_sql
+            try:
+                exec_result = _executor.execute(last_sql)
+                chart_type = detect_chart_type(exec_result.columns, exec_result.rows)
+                return {
+                    "sql": last_sql,
+                    "columns": exec_result.columns,
+                    "rows": exec_result.rows,
+                    "row_count": exec_result.row_count,
+                    "execution_time_ms": exec_result.execution_time_ms,
+                    "chart_type": chart_type,
+                    "domain": domain,
+                    "assumptions": current_spec.assumptions,
+                    "spec": current_spec.to_dict(),
+                    "cache_hit": False,
+                    "debug_prompt": last_prompt,
+                    "raw_llm_output": last_raw,
+                }
+            except Exception as exc:
+                last_error = str(exc)
+                print(f"[Pipeline] Attempt {attempt + 1} execution error: {last_error}")
+
+        if attempt >= max_retries:
+            break
+
+        if _planner and current_session:
+            print(f"[Pipeline] Routing error to planner for spec revision (attempt {attempt + 1}/{max_retries})...")
+            revised = _planner.revise_on_error(current_session, last_error, last_sql or "")
+            current_spec, current_session = revised.spec, revised.session
+
+    # All attempts exhausted — return structured error so frontend can show debug panel
+    return {
+        "error": f"Query failed after {max_retries + 1} attempt(s). Last error: {last_error}",
+        "debug_prompt": last_prompt,
+        "raw_llm_output": last_raw,
+        "sql": last_sql,
+        "assumptions": current_spec.assumptions,
+        "spec": current_spec.to_dict(),
+    }
+
+
+@app.post("/api/query/start")
+def planner_start(req: PlannerStartRequest):
+    """
+    Begin the clarification loop. Returns either a question (status=clarifying)
+    or proceeds directly to results if the query is unambiguous (status=ready).
+    """
+    if not _planner:
+        raise HTTPException(status_code=503, detail="Planner not initialised")
+
+    turn = _planner.start(req.query.strip())
+    turn.session.target_db = req.target_db  # remember the chosen node for later turns
+    _sessions[turn.session_id] = turn.session
+
+    if turn.status == "ready":
+        result = _execute_from_spec(turn.spec, turn.session.target_db, session=turn.session)
+        _sessions.pop(turn.session_id, None)
+        return {**result, "status": "ready", "session_id": turn.session_id,
+                "debug_planner_prompt": turn.debug_prompt}
+
+    return {
+        "status": "clarifying",
+        "question": turn.question,
+        "session_id": turn.session_id,
+        "spec_preview": turn.spec.to_dict(),
+        "debug_planner_prompt": turn.debug_prompt,
+    }
+
+
+@app.post("/api/query/answer")
+def planner_answer(req: PlannerAnswerRequest):
+    """Continue the clarification loop with the user's answer."""
+    if not _planner:
+        raise HTTPException(status_code=503, detail="Planner not initialised")
+
+    session = _sessions.get(req.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+
+    turn = _planner.answer(session, req.answer.strip())
+    _sessions[req.session_id] = turn.session  # update with latest state
+
+    if turn.status == "ready":
+        result = _execute_from_spec(turn.spec, session.target_db, session=turn.session)
+        _sessions.pop(req.session_id, None)
+        return {**result, "status": "ready", "session_id": req.session_id,
+                "debug_planner_prompt": turn.debug_prompt}
+
+    return {
+        "status": "clarifying",
+        "question": turn.question,
+        "session_id": req.session_id,
+        "spec_preview": turn.spec.to_dict(),
+        "debug_planner_prompt": turn.debug_prompt,
+    }
+
+
+@app.post("/api/query/force")
+def planner_force(req: PlannerForceRequest):
+    """
+    Escape hatch — proceed immediately with defaults for unfilled slots.
+    The response always includes the list of assumptions made.
+    """
+    if not _planner:
+        raise HTTPException(status_code=503, detail="Planner not initialised")
+
+    session = _sessions.get(req.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+
+    spec = _planner.force_proceed(session)
+    result = _execute_from_spec(spec, session.target_db, session=session)
+    _sessions.pop(req.session_id, None)
+    return {**result, "status": "ready", "session_id": req.session_id}
+
+
 # POST /api/query
 @app.post("/api/query")
 def run_query(req: QueryRequest):
@@ -380,6 +598,27 @@ def run_query(req: QueryRequest):
         "llm_retries":       0,
     }
 
+    # Shared locals — readable across the try block so error returns can include them.
+    debug_prompt: str | None = None
+    raw_llm_output: str | None = None
+    domain = ""
+
+    def _error_return(msg: str) -> dict:
+        """Return a structured 200 error so the frontend can show the debug panel."""
+        return {
+            "error":           msg,
+            "debug_prompt":    debug_prompt,
+            "raw_llm_output":  raw_llm_output or "",
+            "sql":             None,
+            "columns":         [],
+            "rows":            [],
+            "row_count":       0,
+            "execution_time_ms": 0,
+            "cache_hit":       False,
+            "chart_type":      "table",
+            "domain":          domain,
+        }
+
     try:
         # Step 1 — Normalize
         norm      = _normalizer.normalize(original_query)
@@ -390,13 +629,7 @@ def run_query(req: QueryRequest):
 
         # Step 2 — Cache lookup
         cache_result = _cache.lookup(norm_text, target_db=req.target_db)
-        # Always record the confidence score so near-misses are visible in
-        # the audit log — this lets you tune the threshold with real data.
         log_entry["cache_confidence"] = cache_result.confidence
-
-        # Track the prompt sent to the LLM for debugging
-        debug_prompt = None
-        raw_llm_output = None
 
         if cache_result.hit:
             sql = cache_result.sql
@@ -405,17 +638,15 @@ def run_query(req: QueryRequest):
             log_entry["validation_passed"] = True
             debug_prompt = "[Cache Hit] No prompt was sent to the LLM — SQL was served from the semantic cache."
             raw_llm_output = ""
-            
-            # Step 7 — Execute (No Retry for Cache Hit)
+
             try:
                 result = _executor.execute(sql)
-                execution_success = True
             except ExecutionError as e:
                 log_entry["validation_error"] = str(e)
                 _audit.log_query(log_entry)
                 _cache.flag_failed(norm_text)
                 logger.error(f"[/api/query] Execution error from cache — SQL: {sql}\nError: {e}")
-                raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+                return _error_return(f"Execution error: {str(e)}")
 
         else:
             # Step 3 — Schema linking
@@ -425,24 +656,20 @@ def run_query(req: QueryRequest):
             # Step 4 — Prompt building (RAG for few-shots)
             top_few_shots = _few_shot_retriever.get_top_k(norm_text, k=3) if _few_shot_retriever else []
             prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots, target_db)
-
-            # Capture the exact prompt for debugging
             debug_prompt = prompt
-            # Only print the full prompt to terminal when DEBUG_PROMPTS=true
-            if os.getenv("DEBUG_PROMPTS", "").lower() == "true":
-                print("\n" + "=" * 80)
-                print("[DEBUG] Exact prompt sent to Gemini API:")
-                print("=" * 80)
-                print(prompt)
-                print("=" * 80 + "\n")
+
+            # Always print the SQL generator prompt to the terminal for debugging.
+            print("\n" + "=" * 70)
+            print("[SQL Generator] Prompt sent to LLM:")
+            print("=" * 70)
+            print(prompt)
+            print("=" * 70 + "\n")
 
             # Autonomous Self-Correction Loop (Auto-Healing)
             max_exec_retries = 2
             exec_retry_count = 0
-            
+
             while exec_retry_count <= max_exec_retries:
-                # Step 5 — LLM generation with retry
-                # We monkey-patch the builder temporarily to count retries
                 retry_count = 0
                 original_build_retry = _builder.build_retry_prompt
 
@@ -465,7 +692,7 @@ def run_query(req: QueryRequest):
                     log_entry["llm_retries"]      = log_entry.get("llm_retries", 0) + retry_count
                     _audit.log_query(log_entry)
                     logger.error(f"[/api/query] LLM error: {e}")
-                    raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+                    return _error_return(f"LLM error: {str(e)}")
                 finally:
                     _builder.build_retry_prompt = original_build_retry
 
@@ -476,22 +703,19 @@ def run_query(req: QueryRequest):
                 if not val.valid:
                     log_entry["validation_error"] = val.error
                     _audit.log_query(log_entry)
-                    raise HTTPException(status_code=400, detail=f"SQL validation failed: {val.error}")
+                    return _error_return(f"SQL validation failed: {val.error}")
 
                 sql = val.sanitized_sql
                 log_entry["generated_sql"]     = sql
                 log_entry["validation_passed"] = True
-                
+
                 # Step 7 — Execute generated SQL
-                execution_success = False
                 try:
                     result = _executor.execute(sql)
-                    execution_success = True
-                    break  # Success! Break out of the execution loop
+                    break  # Success — exit the auto-heal loop
                 except ExecutionError as e:
                     if exec_retry_count < max_exec_retries:
                         logger.warning(f"[/api/query] Execution error on attempt {exec_retry_count + 1}, triggering Auto-Heal... Error: {e}")
-                        # Append the Postgres error to the prompt for the next LLM attempt
                         prompt = _builder.build_retry_prompt(prompt, sql, f"PostgreSQL Execution Error: {str(e)}")
                         exec_retry_count += 1
                         continue
@@ -499,13 +723,10 @@ def run_query(req: QueryRequest):
                         log_entry["validation_error"] = str(e)
                         _audit.log_query(log_entry)
                         logger.error(f"[/api/query] Execution error after retries — SQL: {sql}\nError: {e}")
-                        raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+                        return _error_return(f"Execution error: {str(e)}")
 
-        # Step 8 — Chart type
+        # Step 8 — Chart type + audit
         chart_type = detect_chart_type(result.columns, result.rows)
-
-        # Step 9 — (Removed auto-caching)
-        # Step 10 — Audit log
         log_entry["row_count"]         = result.row_count
         log_entry["execution_time_ms"] = result.execution_time_ms
         _audit.log_query(log_entry)
@@ -530,7 +751,7 @@ def run_query(req: QueryRequest):
         _audit.log_query(log_entry)
         tb = traceback.format_exc()
         logger.error(f"[/api/query] Unexpected error: {e}\n{tb}")
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        return _error_return(f"Internal error: {str(e)}")
 
 
 # POST /api/image-to-query

@@ -2,7 +2,7 @@
 SQL Validator for QueryCraft
 Validates and sanitizes SQL queries for security and correctness.
 """
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 import sqlglot
 from sqlglot import exp
 import re
@@ -10,18 +10,30 @@ import re
 
 class ValidationResult:
     """Result of SQL validation."""
-    
-    def __init__(self, valid: bool, sanitized_sql: Optional[str] = None, error: Optional[str] = None):
+
+    def __init__(
+        self,
+        valid: bool,
+        sanitized_sql: Optional[str] = None,
+        error: Optional[str] = None,
+        unknown_references: Optional[List[str]] = None,
+        dialect_violations: Optional[List[str]] = None,
+    ):
         self.valid = valid
         self.sanitized_sql = sanitized_sql
         self.error = error
-    
+        # Populated by schema-link and dialect checks (Milestone 4)
+        self.unknown_references: List[str] = unknown_references or []
+        self.dialect_violations: List[str] = dialect_violations or []
+
     def to_dict(self):
         """Convert to dictionary."""
         return {
             'valid': self.valid,
             'sanitized_sql': self.sanitized_sql,
-            'error': self.error
+            'error': self.error,
+            'unknown_references': self.unknown_references,
+            'dialect_violations': self.dialect_violations,
         }
 
 
@@ -83,14 +95,23 @@ class SQLValidator:
         ),
     ]
     
-    def __init__(self, schema: Dict):
+    def __init__(self, schema: Dict, dialect: str = None):
         """
         Initialize the validator.
-        
+
         Args:
             schema: Schema dictionary from SchemaLoader
+            dialect: SQL dialect for lint pass (postgres|sqlmx|sqlmp).
+                     Defaults to SQL_DIALECT from config.
         """
         self.schema = schema
+        if dialect is None:
+            try:
+                from config import SQL_DIALECT
+                dialect = SQL_DIALECT
+            except (ValueError, ImportError):
+                dialect = "postgres"
+        self.dialect = (dialect or "postgres").lower()
         
         # Precompute the full expanded column set at startup rather than regex matching
         import copy
@@ -188,8 +209,18 @@ class SQLValidator:
         if not complexity_check['valid']:
             return ValidationResult(False, None, complexity_check['error'])
         
+        # Dialect lint — non-blocking warning; surfaced in result but does not fail validation
+        # for the current postgres deployment. Will fail for sqlmx/sqlmp targets.
+        dialect_violations = self._lint_dialect(sanitized_sql)
+        if dialect_violations and self.dialect != "postgres":
+            return ValidationResult(
+                False, None,
+                f"Dialect violation ({self.dialect}): {'; '.join(dialect_violations)}",
+                dialect_violations=dialect_violations,
+            )
+
         # All checks passed
-        return ValidationResult(True, sanitized_sql, None)
+        return ValidationResult(True, sanitized_sql, None, dialect_violations=dialect_violations)
     
     def _add_schema_prefix(self, parsed: exp.Expression, target_db: str) -> str:
         """
@@ -494,6 +525,28 @@ class SQLValidator:
             pass  # non-critical check — skip on error
 
         return {'valid': True}
+
+
+    def _lint_dialect(self, sql: str) -> List[str]:
+        """
+        Return a list of dialect violations found in the SQL.
+        Empty list means clean.
+
+        - postgres: LIMIT n is correct; no violations expected.
+        - sqlmx / sqlmp: LIMIT n is wrong; must use [FIRST n].
+        """
+        violations: List[str] = []
+        if self.dialect in ("sqlmx", "sqlmp"):
+            if re.search(r'\bLIMIT\s+\d+', sql, re.IGNORECASE):
+                violations.append(
+                    f"LIMIT clause is not valid in {self.dialect}. "
+                    "Use [FIRST n] / [ANY n] instead."
+                )
+            if re.search(r'\bRETURNING\b', sql, re.IGNORECASE):
+                violations.append("RETURNING clause is not valid in NonStop SQL.")
+            if re.search(r'\bON CONFLICT\b', sql, re.IGNORECASE):
+                violations.append("ON CONFLICT is not valid in NonStop SQL.")
+        return violations
 
 
 # Test the validator

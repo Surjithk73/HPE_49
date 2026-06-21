@@ -1,15 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown, Check } from 'lucide-react'
+import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown, Check, Sparkles, Send, Loader2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import QueryInput, { type InputMode } from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
 import ResultsTable from '../components/ResultsTable'
 import ChartView, { type ChartKind } from '../components/ChartView'
+import ChartConfigPanel from '../components/ChartConfigPanel'
+import { buildDefaultConfig, applyGlobalKind, type ChartConfig } from '../lib/chartConfig'
 import ReportDownload from '../components/ReportDownload'
 import AIExplanation from '../components/AIExplanation'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
-import { runQuery, runSqlDirect, runImageQuery, getHistory, getHealth, runRetryAnalysis, setModel, acceptQueryCache, type QueryResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
+import { runSqlDirect, runImageQuery, getHistory, getHealth, runRetryAnalysis, setModel, acceptQueryCache, startPlannerQuery, answerPlannerQuery, forcePlannerQuery, type QueryResponse, type PlannerResponse, type HistoryEntry, type HealthResponse, type RetryAnalysisReport } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -28,12 +30,17 @@ export default function Dashboard() {
   const [healthFailed, setHealthFailed] = useState(false)
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('table')
   const [chartKind, setChartKind] = useState<ChartKind>('bar')
+  const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [currentQuery, setCurrentQuery] = useState('')
   const [retryReport, setRetryReport] = useState<RetryAnalysisReport | null>(null)
   const [retryLoading, setRetryLoading] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
   const [retryOpen, setRetryOpen] = useState(false)
   const [cacheDecision, setCacheDecision] = useState<'pending' | 'accepted' | 'rejected'>('pending')
+  // Planner clarification flow
+  const [clarifying, setClarifying] = useState<{ question: string; sessionId: string; plannerPrompt?: string } | null>(null)
+  const [clarifyAnswer, setClarifyAnswer] = useState('')
+  const [activeTargetDb, setActiveTargetDb] = useState('macht413')
   // Model switcher state
   const AVAILABLE_MODELS = [
     { id: 'gemini-3.1-flash-lite',  label: 'Gemini 3.1 Flash Lite',  badge: 'fast'    },
@@ -100,54 +107,128 @@ export default function Dashboard() {
 
   useEffect(() => { refreshHistory() }, [refreshHistory])
 
+  // Apply a finished (status=ready or single-shot) result to the UI.
+  // The backend returns a 200 with an `error` field on query-logic failure, so
+  // we always store the result to keep the debug panels visible.
+  const applyResult = (res: QueryResponse) => {
+    setResult(res)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+    setCacheDecision('pending')
+    // Auto-select chart kind based on data shape
+    let kind: ChartKind | null = null
+    if (res.chart_type === 'line') {
+      kind = 'line'
+    } else if (res.chart_type === 'bar') {
+      // Only use stacked-bar when the numeric columns are clearly parts of a
+      // whole (their names contain 'pct', 'percent', 'ratio', or 'share').
+      const numericCols = (res.columns ?? []).filter(c => {
+        const s = res.rows?.[0]?.[c]
+        return typeof s === 'number' || (!isNaN(Number(s)) && s !== '')
+      })
+      const partsOfWhole = numericCols.length > 2 && numericCols.every(c => {
+        const cl = c.toLowerCase()
+        return cl.includes('pct') || cl.includes('percent') ||
+               cl.includes('ratio') || cl.includes('share') ||
+               cl.includes('fraction')
+      })
+      kind = partsOfWhole ? 'stacked-bar' : 'bar'
+    }
+
+    if (kind) {
+      setChartKind(kind)
+      setViewMode('chart')
+      // Build the default chart configuration (live-only: resets each query).
+      setChartConfig(buildDefaultConfig(res.columns ?? [], res.rows ?? [], kind))
+    } else {
+      setViewMode('table')
+      setChartConfig(null)
+    }
+  }
+
+  // Route a planner response: a clarifying turn shows the question UI; a ready
+  // turn renders results. Both carry `debug_planner_prompt` so the planner's
+  // contribution is always visible.
+  const processPlannerResponse = async (res: PlannerResponse) => {
+    if (res.status === 'clarifying') {
+      setClarifying({
+        question: res.question ?? 'Could you clarify your request?',
+        sessionId: res.session_id,
+        plannerPrompt: res.debug_planner_prompt,
+      })
+      setResult(null)
+      return
+    }
+    setClarifying(null)
+    applyResult(res)
+    await refreshHistory()
+  }
+
   const handleQuery = async (payload: string | File, mode: InputMode = 'nl', targetDb: string = 'macht413') => {
     setLoading(true)
     setError(null)
+    setClarifying(null)
+    setActiveTargetDb(targetDb)
     if (typeof payload === 'string') setCurrentQuery(payload)
     else setCurrentQuery(`[Image] ${payload.name}`)
     try {
-      const res =
-        mode === 'image' && payload instanceof File ? await runImageQuery(payload, targetDb)
-        : mode === 'sql' ? await runSqlDirect(payload as string, targetDb)
-        : await runQuery(payload as string, targetDb)
-      if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
-      setResult(res)
-      setCacheDecision('pending')
-      // Auto-select chart kind based on data shape
-      if (res.chart_type === 'line') {
-        setChartKind('line')
-        setViewMode('chart')
-      } else if (res.chart_type === 'bar') {
-        // Only use stacked-bar when the numeric columns are clearly parts of a
-        // whole (their names contain 'pct', 'percent', 'ratio', or 'share').
-        // For independent metrics (cpu_busy_time, intr_busy_time, etc.) a
-        // grouped bar is more honest — stacked bars imply the values sum to 100%.
-        const numericCols = res.columns.filter(c => {
-          const s = res.rows[0]?.[c]
-          return typeof s === 'number' || (!isNaN(Number(s)) && s !== '')
-        })
-        const partsOfWhole = numericCols.length > 2 && numericCols.every(c => {
-          const cl = c.toLowerCase()
-          return cl.includes('pct') || cl.includes('percent') ||
-                 cl.includes('ratio') || cl.includes('share') ||
-                 cl.includes('fraction')
-        })
-        setChartKind(partsOfWhole ? 'stacked-bar' : 'bar')
-        setViewMode('chart')
+      // Natural-language queries go through the Planner pipeline (clarification +
+      // IntentSpec). SQL and image modes keep their existing single-shot paths.
+      if (mode === 'nl') {
+        const res = await startPlannerQuery(payload as string, targetDb)
+        await processPlannerResponse(res)
       } else {
-        setViewMode('table')
+        const res = mode === 'image' && payload instanceof File
+          ? await runImageQuery(payload, targetDb)
+          : await runSqlDirect(payload as string, targetDb)
+        if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
+        applyResult(res)
+        await refreshHistory()
       }
-      await refreshHistory()
     } catch (e: any) {
+      // Only genuine network failures reach here (query-logic errors return 200+error field)
       setError(e.message)
-      setResult(null)
     } finally {
       setLoading(false)
     }
   }
 
-  // Always allow chart view when there's result data
-  const canChart = result && result.columns.length >= 2
+  // Submit the user's answer to a clarifying question.
+  const handleClarifyAnswer = async () => {
+    if (!clarifying || !clarifyAnswer.trim()) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await answerPlannerQuery(clarifying.sessionId, clarifyAnswer.trim())
+      setClarifyAnswer('')
+      await processPlannerResponse(res)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // "Just run it" — skip remaining questions; the planner fills gaps with defaults.
+  const handleClarifyForce = async () => {
+    if (!clarifying) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await forcePlannerQuery(clarifying.sessionId, activeTargetDb)
+      setClarifyAnswer('')
+      await processPlannerResponse(res)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Always allow chart view when there's result data (guard against error response with no columns)
+  const canChart = result && !result.error && (result.columns?.length ?? 0) >= 2
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0f0f0', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
@@ -405,25 +486,107 @@ export default function Dashboard() {
               />
             </div>
 
+            {/* Clarifying question (Planner pipeline) */}
+            {clarifying && (
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: '14px',
+                borderRadius: '12px', border: '1px solid rgba(59,130,246,0.3)',
+                background: 'rgba(59,130,246,0.05)', padding: '18px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles size={14} style={{ color: '#60a5fa' }} />
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#60a5fa', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    Planner needs a clarification
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '14px', color: '#f0f0f0', lineHeight: 1.5 }}>
+                  {clarifying.question}
+                </p>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                  <input
+                    value={clarifyAnswer}
+                    onChange={e => setClarifyAnswer(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !loading) handleClarifyAnswer() }}
+                    placeholder="Type your answer…"
+                    disabled={loading}
+                    autoFocus
+                    style={{
+                      flex: 1, background: '#0d0d0d', border: '1px solid #2a2a2a',
+                      borderRadius: '8px', padding: '10px 12px', fontSize: '13px',
+                      color: '#f0f0f0', outline: 'none', fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    onClick={handleClarifyAnswer}
+                    disabled={loading || !clarifyAnswer.trim()}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '0 16px', borderRadius: '8px', border: 'none',
+                      background: loading || !clarifyAnswer.trim() ? '#1a1a1a' : '#3b82f6',
+                      color: loading || !clarifyAnswer.trim() ? '#444' : '#fff',
+                      cursor: loading || !clarifyAnswer.trim() ? 'not-allowed' : 'pointer',
+                      fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
+                    }}
+                  >
+                    {loading
+                      ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                      : <Send size={12} />}
+                    Answer
+                  </button>
+                  <button
+                    onClick={handleClarifyForce}
+                    disabled={loading}
+                    title="Skip remaining questions — fill gaps with defaults"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '0 14px', borderRadius: '8px',
+                      border: '1px solid #2a2a2a', background: 'transparent',
+                      color: '#888', cursor: loading ? 'not-allowed' : 'pointer',
+                      fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
+                    }}
+                  >
+                    Just run it
+                  </button>
+                </div>
+
+                {/* The planner prompt that produced this question */}
+                {clarifying.plannerPrompt && (
+                  <PromptDebugPanel
+                    prompt={clarifying.plannerPrompt}
+                    title="Debug — Planner Prompt"
+                  />
+                )}
+              </div>
+            )}
+
             {/* Results */}
             {result && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <SQLPreview
-                  sql={result.sql}
-                  cacheHit={result.cache_hit}
-                  executionTimeMs={result.execution_time_ms}
-                  domain={result.domain}
+                  sql={result.sql ?? ''}
+                  cacheHit={result.cache_hit ?? false}
+                  executionTimeMs={result.execution_time_ms ?? 0}
+                  domain={result.domain ?? ''}
                 />
 
-                {/* Debug: show the exact prompt sent to the LLM and raw output */}
+                {/* Planner debug panel — shown when the planner pipeline was used */}
+                {result.debug_planner_prompt && (
+                  <PromptDebugPanel
+                    prompt={result.debug_planner_prompt}
+                    title="Debug — Planner Prompt"
+                  />
+                )}
+
+                {/* SQL generator debug panel — always shown when a prompt was built */}
                 {result.debug_prompt && (
                   <PromptDebugPanel prompt={result.debug_prompt} rawOutput={result.raw_llm_output} />
                 )}
 
-                {/* Stats + view controls */}
+                {/* Stats + view controls — only shown when the query succeeded */}
+                {!result.error && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                   <span style={{ fontSize: '12px', color: '#444' }}>
-                    {result.row_count.toLocaleString()} rows returned
+                    {(result.row_count ?? 0).toLocaleString()} rows returned
                   </span>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -437,7 +600,12 @@ export default function Dashboard() {
                         {CHART_TYPES.map(ct => (
                           <button
                             key={ct.kind}
-                            onClick={() => setChartKind(ct.kind)}
+                            onClick={() => {
+                              setChartKind(ct.kind)
+                              // Reset every series to the new baseline kind,
+                              // keeping X-axis, order, colours, and visibility.
+                              setChartConfig(c => (c ? applyGlobalKind(c, ct.kind) : c))
+                            }}
                             title={ct.label}
                             style={{
                               display: 'flex', alignItems: 'center', gap: '4px',
@@ -482,13 +650,24 @@ export default function Dashboard() {
                     )}
                   </div>
                 </div>
+                )} {/* end !result.error stats block */}
 
-                {viewMode === 'chart' && canChart
-                  ? <ChartView chartType={chartKind} columns={result.columns} rows={result.rows} />
-                  : <ResultsTable columns={result.columns} rows={result.rows} />
-                }
+                {!result.error && viewMode === 'chart' && canChart && chartConfig && (
+                  <ChartConfigPanel
+                    columns={result.columns ?? []}
+                    rows={result.rows ?? []}
+                    config={chartConfig}
+                    onChange={setChartConfig}
+                    hideSeriesKind={chartKind === 'scatter'}
+                  />
+                )}
 
-                {!result.cache_hit && cacheDecision !== 'rejected' && (
+                {!result.error && (viewMode === 'chart' && canChart
+                  ? <ChartView chartType={chartKind} columns={result.columns ?? []} rows={result.rows ?? []} config={chartConfig ?? undefined} />
+                  : <ResultsTable columns={result.columns ?? []} rows={result.rows ?? []} />
+                )}
+
+                {!result.error && !result.cache_hit && cacheDecision !== 'rejected' && (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '16px', background: '#111', border: '1px solid #1c1c1c', borderRadius: '12px',
@@ -531,17 +710,21 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                <AIExplanation sql={result.sql} queryText={currentQuery} columns={result.columns} rows={result.rows} />
+                {!result.error && (
+                  <AIExplanation sql={result.sql ?? ''} queryText={currentQuery} columns={result.columns ?? []} rows={result.rows ?? []} />
+                )}
 
                 {/* Download */}
-                <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '16px' }}>
-                  <ReportDownload sql={result.sql} queryText={currentQuery} />
-                </div>
+                {!result.error && result.sql && (
+                  <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '16px' }}>
+                    <ReportDownload sql={result.sql} queryText={currentQuery} />
+                  </div>
+                )}
               </div>
             )}
 
             {/* Empty state */}
-            {!result && !loading && !error && (
+            {!result && !loading && !error && !clarifying && (
               <div style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 borderRadius: '12px', border: '1px dashed #1c1c1c', padding: '80px 24px', textAlign: 'center',

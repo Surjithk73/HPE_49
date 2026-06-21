@@ -4,9 +4,10 @@ import { Bug, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 interface Props {
   prompt: string
   rawOutput?: string
+  title?: string
 }
 
-export default function PromptDebugPanel({ prompt, rawOutput }: Props) {
+export default function PromptDebugPanel({ prompt, rawOutput, title }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -92,7 +93,7 @@ export default function PromptDebugPanel({ prompt, rawOutput }: Props) {
             fontSize: '11px', fontWeight: 600, color: '#a855f7',
             letterSpacing: '0.08em', textTransform: 'uppercase',
           }}>
-            Debug — LLM Prompt & Reasoning
+            {title ?? 'Debug — LLM Prompt & Reasoning'}
           </span>
           {isCacheHit && (
             <span style={{

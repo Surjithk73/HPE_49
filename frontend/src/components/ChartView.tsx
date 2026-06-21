@@ -1,12 +1,11 @@
 import {
   ResponsiveContainer,
-  BarChart, Bar,
-  LineChart, Line,
-  AreaChart, Area,
+  ComposedChart, Bar, Line, Area,
   ScatterChart, Scatter, ZAxis,
   XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ReferenceLine,
 } from 'recharts'
+import { COLORS, buildDefaultConfig, type ChartConfig, type SeriesConfig } from '../lib/chartConfig'
 
 export type ChartKind = 'bar' | 'stacked-bar' | 'line' | 'area' | 'scatter'
 
@@ -14,20 +13,9 @@ interface Props {
   chartType: ChartKind
   columns: string[]
   rows: Record<string, unknown>[]
+  // Optional explicit configuration. When omitted, sensible defaults are derived.
+  config?: ChartConfig
 }
-
-// Colour palette matching the HPE reference charts
-const COLORS = [
-  '#4472C4', // blue  — User Processes / Primary Writes
-  '#ED7D31', // orange — Backup Disk / Primary Reads
-  '#A5A5A5', // grey  — Primary Disk Process
-  '#FFC000', // yellow — Other / Mirror Writes
-  '#5B9BD5', // light blue — Interrupt / Mirror Reads
-  '#70AD47', // green — Average line
-  '#FF0000', // red   — Average Disk Utilization line
-  '#264478', // dark blue
-  '#9E480E', // dark orange
-]
 
 // ── Tooltip ──────────────────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -68,19 +56,13 @@ const fmtLegend = (value: string) =>
   value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function ChartView({ chartType, columns, rows }: Props) {
-  // Pick X axis: prefer timestamp, then name/label cols, then first col
-  const xCol =
-    columns.find(c => c.includes('timestamp')) ||
-    columns.find(c => c.includes('name') || c.includes('device') || c.includes('num') || c.includes('cpu')) ||
-    columns[0]
-
-  // All numeric columns except X — cap at 8 to keep legend readable
-  const yColumns = columns.filter(c => {
-    if (c === xCol) return false
-    const sample = rows[0]?.[c]
-    return typeof sample === 'number' || (typeof sample === 'string' && !isNaN(Number(sample)) && sample !== '')
-  }).slice(0, 8)
+export default function ChartView({ chartType, columns, rows, config }: Props) {
+  // Fall back to derived defaults when no explicit config is supplied.
+  const cfg = config ?? buildDefaultConfig(columns, rows, chartType)
+  const xCol = cfg.xColumn
+  // Visible series, in configured order (defines line1, line2, …)
+  const series: SeriesConfig[] = cfg.series.filter(s => s.visible)
+  const yColumns = series.map(s => s.column)
 
   // Cap at 200 rows for rendering performance
   const data = rows.slice(0, 200).map(row => {
@@ -94,7 +76,7 @@ export default function ChartView({ chartType, columns, rows }: Props) {
     return point
   })
 
-  // Compute reference lines (average of each y column) for line overlays
+  // Compute reference lines (average of each y column) for bar overlays
   const averages: Record<string, number> = {}
   yColumns.forEach(col => {
     const vals = data.map(d => d[col] as number).filter(v => !isNaN(v))
@@ -146,120 +128,12 @@ export default function ChartView({ chartType, columns, rows }: Props) {
     formatter: fmtLegend,
   }
 
-  // ── Stacked Bar ─────────────────────────────────────────────────────────────
-  if (chartType === 'stacked-bar') {
-    return (
-      <ChartShell rows={rows} cap={200}>
-        <ResponsiveContainer width="100%" height={360}>
-          <BarChart {...commonProps}>
-            <CartesianGrid {...gridStyle} />
-            <XAxis {...xAxisProps} />
-            <YAxis {...yAxisProps} />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-            <Legend {...legendProps} />
-            {yColumns.map((col, i) => (
-              <Bar key={col} dataKey={col} stackId="a"
-                fill={COLORS[i % COLORS.length]}
-                radius={i === yColumns.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartShell>
-    )
-  }
-
-  // ── Grouped Bar ─────────────────────────────────────────────────────────────
-  if (chartType === 'bar') {
-    return (
-      <ChartShell rows={rows} cap={200}>
-        <ResponsiveContainer width="100%" height={360}>
-          <BarChart {...commonProps} barCategoryGap="20%">
-            <CartesianGrid {...gridStyle} />
-            <XAxis {...xAxisProps} />
-            <YAxis {...yAxisProps} />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-            {yColumns.length > 1 && <Legend {...legendProps} />}
-            {yColumns.map((col, i) => (
-              <Bar key={col} dataKey={col}
-                fill={COLORS[i % COLORS.length]}
-                radius={[3, 3, 0, 0]}
-                maxBarSize={40}
-              />
-            ))}
-            {/* Average reference lines */}
-            {yColumns.slice(0, 3).map((col, i) => (
-              <ReferenceLine key={`ref-${col}`} y={averages[col]}
-                stroke={COLORS[i % COLORS.length]} strokeDasharray="6 3"
-                strokeWidth={1.5} strokeOpacity={0.6}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartShell>
-    )
-  }
-
-  // ── Line ────────────────────────────────────────────────────────────────────
-  if (chartType === 'line') {
-    return (
-      <ChartShell rows={rows} cap={200}>
-        <ResponsiveContainer width="100%" height={360}>
-          <LineChart {...commonProps}>
-            <CartesianGrid {...gridStyle} />
-            <XAxis {...xAxisProps} />
-            <YAxis {...yAxisProps} />
-            <Tooltip content={<CustomTooltip />} />
-            {yColumns.length > 1 && <Legend {...legendProps} />}
-            {yColumns.map((col, i) => (
-              <Line key={col} type="monotone" dataKey={col}
-                stroke={COLORS[i % COLORS.length]}
-                strokeWidth={2} dot={data.length < 30 ? { r: 3, fill: COLORS[i % COLORS.length] } : false}
-                activeDot={{ r: 5 }}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </ChartShell>
-    )
-  }
-
-  // ── Area ────────────────────────────────────────────────────────────────────
-  if (chartType === 'area') {
-    return (
-      <ChartShell rows={rows} cap={200}>
-        <ResponsiveContainer width="100%" height={360}>
-          <AreaChart {...commonProps}>
-            <defs>
-              {yColumns.map((col, i) => (
-                <linearGradient key={col} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={COLORS[i % COLORS.length]} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.02} />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid {...gridStyle} />
-            <XAxis {...xAxisProps} />
-            <YAxis {...yAxisProps} />
-            <Tooltip content={<CustomTooltip />} />
-            {yColumns.length > 1 && <Legend {...legendProps} />}
-            {yColumns.map((col, i) => (
-              <Area key={col} type="monotone" dataKey={col}
-                stroke={COLORS[i % COLORS.length]} strokeWidth={2}
-                fill={`url(#grad-${i})`}
-                dot={false} activeDot={{ r: 5 }}
-              />
-            ))}
-          </AreaChart>
-        </ResponsiveContainer>
-      </ChartShell>
-    )
-  }
-
   // ── Scatter ─────────────────────────────────────────────────────────────────
+  // Special 2-axis mode: uses the first two visible series as X/Y.
   if (chartType === 'scatter') {
     const xNum = yColumns[0] || xCol
     const yNum = yColumns[1] || yColumns[0]
+    const scatterColor = series[0]?.color ?? COLORS[0]
     const scatterData = data.map(d => ({ x: Number(d[xNum]) || 0, y: Number(d[yNum]) || 0, label: d[xCol] }))
 
     return (
@@ -283,14 +157,83 @@ export default function ChartView({ chartType, columns, rows }: Props) {
                 </div>
               )
             }} />
-            <Scatter data={scatterData} fill={COLORS[0]} fillOpacity={0.8} />
+            <Scatter data={scatterData} fill={scatterColor} fillOpacity={0.8} />
           </ScatterChart>
         </ResponsiveContainer>
       </ChartShell>
     )
   }
 
-  return null
+  // ── Composed (bar / line / area / combo / stacked-bar) ──────────────────────
+  // A single ComposedChart renders each series per its own kind, enabling combo
+  // charts. For stacked-bar, all series are forced to stacked bars.
+  const stacked = chartType === 'stacked-bar'
+  const showLegend = series.length > 1 || stacked
+
+  return (
+    <ChartShell rows={rows} cap={200}>
+      <ResponsiveContainer width="100%" height={360}>
+        <ComposedChart {...commonProps} barCategoryGap="20%">
+          <defs>
+            {series.map((s, i) => (
+              <linearGradient key={s.column} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor={s.color} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={s.color} stopOpacity={0.02} />
+              </linearGradient>
+            ))}
+          </defs>
+          <CartesianGrid {...gridStyle} />
+          <XAxis {...xAxisProps} />
+          <YAxis {...yAxisProps} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          {showLegend && <Legend {...legendProps} />}
+
+          {series.map((s, i) => {
+            const effectiveKind = stacked ? 'bar' : s.kind
+            if (effectiveKind === 'bar') {
+              return (
+                <Bar key={s.column} dataKey={s.column}
+                  stackId={stacked ? 'a' : undefined}
+                  fill={s.color}
+                  radius={stacked
+                    ? (i === series.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0])
+                    : [3, 3, 0, 0]}
+                  maxBarSize={stacked ? undefined : 40}
+                />
+              )
+            }
+            if (effectiveKind === 'area') {
+              return (
+                <Area key={s.column} type="monotone" dataKey={s.column}
+                  stroke={s.color} strokeWidth={2}
+                  fill={`url(#grad-${i})`}
+                  dot={false} activeDot={{ r: 5 }}
+                />
+              )
+            }
+            return (
+              <Line key={s.column} type="monotone" dataKey={s.column}
+                stroke={s.color}
+                strokeWidth={2} dot={data.length < 30 ? { r: 3, fill: s.color } : false}
+                activeDot={{ r: 5 }}
+              />
+            )
+          })}
+
+          {/* Average reference lines for bar series (grouped bar only) */}
+          {!stacked && series
+            .filter(s => s.kind === 'bar')
+            .slice(0, 3)
+            .map(s => (
+              <ReferenceLine key={`ref-${s.column}`} y={averages[s.column]}
+                stroke={s.color} strokeDasharray="6 3"
+                strokeWidth={1.5} strokeOpacity={0.6}
+              />
+            ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartShell>
+  )
 }
 
 // ── Wrapper with row cap notice ───────────────────────────────────────────────

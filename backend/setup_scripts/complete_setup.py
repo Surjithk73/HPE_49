@@ -4,7 +4,7 @@ Complete database setup - recreate tables and load CSV data
 import psycopg2
 import os
 
-POSTGRES_PASSWORD = "admin"  # Replace with your postgres superuser password
+POSTGRES_PASSWORD = "santo"  # Replace with your postgres superuser password
 
 def main():
     print("=" * 60)

@@ -26,7 +26,7 @@ def load_schema_from_csv(schema_name: str, d_dir: str, append: bool = False):
     
     conn = psycopg2.connect(
         host=DB_HOST, port=DB_PORT,
-        user='postgres', password='371773',
+        user='santo', password='santo',
         dbname=DB_NAME
     )
     conn.autocommit = True
