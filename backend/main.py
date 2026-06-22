@@ -193,6 +193,7 @@ class CacheAcceptRequest(BaseModel):
     query: str
     sql: str
     row_count: int
+    target_db: str = "macht413"
 
 class SqlRequest(BaseModel):
     sql: str
@@ -441,13 +442,12 @@ def _execute_from_spec(spec, target_db: str, session=None) -> dict:
     for attempt in range(max_retries + 1):
         print(f"[Pipeline] Attempt {attempt + 1}/{max_retries + 1} — building prompt from spec...")
 
-        # Build prompt fresh from the current (possibly revised) spec
+        # SQLGenerator handles its own schema-linking + few-shot retrieval internally
+        # We only need a domain label for the response dict
         signal = _spec_to_signal(current_spec)
-        norm = _normalizer.normalize(signal)
+        norm   = _normalizer.normalize(signal)
         domain = norm["domain_category"]
-        schema_ctx = _linker.link_schema(norm["normalized_text"], domain, target_db)
-        top_k = _few_shot_retriever.get_top_k(norm["normalized_text"], k=3)
-        # Use SQLGenerator which owns build_spec_prompt + single-shot generation
+
         try:
             last_sql, last_raw = _sql_generator.generate(current_spec, target_db)
             last_prompt = "(see SQLGenerator internals)"
@@ -1077,8 +1077,9 @@ def delete_cache_entry(query: str = Query(..., description="The query text to de
 async def accept_cache(req: CacheAcceptRequest):
     if _cache is None:
         raise HTTPException(status_code=503, detail="Cache not available")
-        
-    norm_text = normalize_text(req.query)
+
+    norm = _normalizer.normalize(req.query)
+    norm_text = norm["normalized_text"]
     _cache.store(
         norm_text,
         req.sql,
