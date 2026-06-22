@@ -1,0 +1,65 @@
+# Golden evaluation set for QueryCraft NL→SQL pipeline.
+# Each case has:
+#   question:              the natural language input
+#   expected_columns:      required column names in the result (subset check)
+#   expected_row_count_min: minimum rows expected (0 = don't check)
+#   domain:                expected domain category
+#   notes:                 explanation of what this case tests
+
+cases:
+
+  - id: cpu_avg_busy
+    question: "Show average CPU busy time per CPU"
+    expected_columns: ["cpu_num"]
+    expected_row_count_min: 1
+    domain: cpu
+    notes: Simple single-table aggregation on cpu table
+
+  - id: cpu_top10_busy
+    question: "Which are the top 10 busiest CPUs by utilization?"
+    expected_columns: ["cpu_num"]
+    expected_row_count_min: 1
+    domain: cpu
+    notes: Top-N ranking with ORDER BY DESC LIMIT 10
+
+  - id: disc_read_write
+    question: "Show disk read and write counts per device"
+    expected_columns: ["disc_name"]
+    expected_row_count_min: 1
+    domain: disc
+    notes: Single-table disc metrics, verify 'disc' not 'disk' in SQL
+
+  - id: proc_top_cpu
+    question: "List the top 5 most CPU-intensive processes"
+    expected_columns: ["process_name"]
+    expected_row_count_min: 1
+    domain: proc
+    notes: Process table query with ranking and limit
+
+  - id: cpu_system_list
+    question: "List all distinct system names"
+    expected_columns: ["system_name"]
+    expected_row_count_min: 1
+    domain: cpu
+    notes: Distinct values query
+
+  - id: tmf_transaction_counts
+    question: "Show transaction backout counts"
+    expected_columns: []
+    expected_row_count_min: 0
+    domain: tmf
+    notes: TMF table query — verifies correct table selection
+
+  - id: ossns_stats
+    question: "Show OSS network statistics"
+    expected_columns: []
+    expected_row_count_min: 0
+    domain: ossns
+    notes: ossns table query
+
+  - id: cpu_disc_cross
+    question: "Compare CPU utilization with disk I/O rates"
+    expected_columns: []
+    expected_row_count_min: 0
+    domain: multi
+    notes: Cross-table join — verifies DATE_TRUNC timestamp join rule

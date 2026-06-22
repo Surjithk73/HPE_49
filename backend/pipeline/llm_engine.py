@@ -1,6 +1,12 @@
 """
 LLM Engine for QueryCraft
 Handles interaction with Gemini API for SQL generation.
+
+LLMEngine now delegates raw API calls to a ModelProvider (see model_provider.py).
+Two factory functions expose the two logical roles:
+  make_planner_engine()      — PLANNER role (intent clarification)
+  make_sql_engine()          — SQL_GENERATOR role (SQL compilation)
+  make_llm_engine()          — backward-compat alias for make_sql_engine()
 """
 import re
 import sys
@@ -10,9 +16,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 try:
-    from config import GEMINI_API_KEY, GEMINI_MODEL, NVIDIA_API_KEY
-    import google.generativeai as genai
-    from openai import OpenAI
+    from config import GEMINI_API_KEY, GEMINI_MODEL
     GEMINI_AVAILABLE = True
 except (ValueError, ImportError) as e:
     GEMINI_AVAILABLE = False
@@ -114,140 +118,89 @@ class BaseLLMEngine:
 
 
 class LLMEngine(BaseLLMEngine):
-    """Handles SQL generation using Gemini API."""
+    """
+    SQL generation engine. Delegates actual API calls to a ModelProvider.
 
-    def __init__(self, api_key: str = None, model: str = None):
-        """
-        Initialize the LLM engine.
+    Pass a pre-built provider for the PLANNER/SQL_GENERATOR role factories,
+    or omit it to get the legacy GeminiProvider built from config (backward compat).
+    Runtime model switching via POST /api/model still works: pass model= as before.
+    """
 
-        Args:
-            api_key: Gemini API key (defaults to config value)
-            model: Model name to use. If provided, overrides the config value.
-                   This allows runtime model switching via POST /api/model.
-        """
-        self.api_key = api_key or GEMINI_API_KEY
-        self.model_name = model or GEMINI_MODEL
-
-        if not self.api_key:
-            raise LLMError("Gemini API key not configured. Set GEMINI_API_KEY in .env file")
-
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(self.model_name)
-
-    def generate_sql(self, prompt: str) -> tuple[str, str]:
-        """
-        Generate SQL from a prompt.
-
-        Args:
-            prompt: Complete prompt string
-
-        Returns:
-            Tuple of (Raw SQL string, Raw LLM response string)
-
-        Raises:
-            LLMError: If generation fails
-        """
-        try:
-            response = self.model.generate_content(prompt)
-
-            if not response or not response.text:
-                raise LLMError("Empty response from LLM")
-
-            return self._extract_sql(response.text), response.text
-
-        except Exception as e:
-            raise LLMError(f"Failed to generate SQL: {str(e)}")
-
-    def generate_text(self, prompt: str) -> str:
-        """
-        Generate conversational/analytical text from a prompt.
-
-        Args:
-            prompt: Complete prompt string
-
-        Returns:
-            Generated text response
-
-        Raises:
-            LLMError: If generation fails
-        """
-        try:
-            response = self.model.generate_content(prompt)
-
-            if not response or not response.text:
-                raise LLMError("Empty response from LLM")
-
-            return response.text.strip()
-
-        except Exception as e:
-            raise LLMError(f"Failed to generate text: {str(e)}")
-
-
-class NvidiaEngine(BaseLLMEngine):
-    """Handles SQL generation using NVIDIA NIM API."""
-
-    def __init__(self, api_key: str = None, model: str = None):
-        self.api_key = api_key or NVIDIA_API_KEY
-        self.model_name = model
-
-        if not self.api_key:
-            raise LLMError("NVIDIA_API_KEY not configured. Please set it in your .env file to use Qwen or GPT models.")
-
-        self.client = OpenAI(
-            base_url="https://integrate.api.nvidia.com/v1",
-            api_key=self.api_key
-        )
+    def __init__(self, api_key: str = None, model: str = None, provider=None):
+        if provider is not None:
+            self._provider = provider
+            self.model_name = provider.model_name
+        else:
+            # Legacy path: build a GeminiProvider from api_key + model
+            from pipeline.model_provider import GeminiProvider
+            _key = api_key or GEMINI_API_KEY
+            _model = model or GEMINI_MODEL
+            if not _key:
+                raise LLMError("Gemini API key not configured. Set GEMINI_API_KEY in .env file")
+            self._provider = GeminiProvider(api_key=_key, model_name=_model)
+            self.model_name = _model
 
     def generate_sql(self, prompt: str) -> tuple[str, str]:
         try:
-            completion = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                top_p=0.8,
-                max_tokens=4096,
-                stream=False
-            )
-            content = completion.choices[0].message.content or ""
-            return self._extract_sql(content), content
+            raw = self._provider.generate(prompt)
+            if not raw:
+                raise LLMError("Empty response from LLM")
+            return self._extract_sql(raw), raw
+        except LLMError:
+            raise
         except Exception as e:
-            raise LLMError(f"Failed to generate SQL via NVIDIA NIM: {str(e)}")
+            raise LLMError(f"Failed to generate SQL: {e}")
 
     def generate_text(self, prompt: str) -> str:
         try:
-            completion = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                top_p=0.9,
-                max_tokens=2048,
-                stream=False
-            )
-            content = completion.choices[0].message.content or ""
-            return content.strip()
+            result = self._provider.generate(prompt)
+            if not result:
+                raise LLMError("Empty response from LLM")
+            return result.strip()
+        except LLMError:
+            raise
         except Exception as e:
-            raise LLMError(f"Failed to generate text via NVIDIA NIM: {str(e)}")
+            raise LLMError(f"Failed to generate text: {e}")
 
 
-
-def make_llm_engine() -> "BaseLLMEngine":
-    """
-    Factory that returns the configured LLM engine.
-
-    Reads LLM_PROVIDER from config:
-      - 'gemini' (default) -> LLMEngine
-      - 'ollama'           -> OllamaEngine (imported lazily so Gemini-only
-                              setups don't need to load the Ollama module)
-    """
+def _make_engine_for_role(model_name: str) -> "BaseLLMEngine":
+    """Internal helper: builds an engine for a given model name + current provider."""
     try:
-        from config import LLM_PROVIDER
+        from config import LLM_PROVIDER, GEMINI_API_KEY as _key
     except (ValueError, ImportError):
         LLM_PROVIDER = "gemini"
+        _key = GEMINI_API_KEY
 
     if LLM_PROVIDER == "ollama":
         from pipeline.ollama_engine import OllamaEngine
         return OllamaEngine()
-    return LLMEngine()
+
+    from pipeline.model_provider import GeminiProvider
+    provider = GeminiProvider(api_key=_key, model_name=model_name)
+    return LLMEngine(provider=provider)
+
+
+def make_planner_engine() -> "BaseLLMEngine":
+    """Returns an engine configured for the PLANNER role (PLANNER_MODEL)."""
+    try:
+        from config import PLANNER_MODEL as model
+    except (ValueError, ImportError):
+        model = GEMINI_MODEL
+    return _make_engine_for_role(model or GEMINI_MODEL)
+
+
+def make_sql_engine() -> "BaseLLMEngine":
+    """Returns an engine configured for the SQL_GENERATOR role (SQL_GENERATOR_MODEL)."""
+    try:
+        from config import SQL_GENERATOR_MODEL as model
+    except (ValueError, ImportError):
+        model = GEMINI_MODEL
+    return _make_engine_for_role(model or GEMINI_MODEL)
+
+
+def make_llm_engine() -> "BaseLLMEngine":
+    """Backward-compat alias for make_sql_engine()."""
+    return make_sql_engine()
 
 
 # Test the LLM engine (requires API key)
