@@ -1162,8 +1162,12 @@ def switch_model(req: ModelRequest):
         }
 
     try:
-        from pipeline.llm_engine import LLMEngine
-        _llm_engine = LLMEngine(model=requested)
+        from pipeline.llm_engine import _make_engine_for_role
+        _llm_engine = _make_engine_for_role(requested)
+        # Also update the planner engine if it's switched to the same model
+        _planner_engine = _make_engine_for_role(requested)
+        if _planner:
+            _planner._provider = _planner_engine._provider
         logger.info(f"[/api/model] Switched from {previous} → {requested}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialise model '{requested}': {e}")
