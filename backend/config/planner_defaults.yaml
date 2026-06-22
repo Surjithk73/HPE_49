@@ -5,6 +5,7 @@
 sql_dialect: postgres        # postgres | sqlmx | sqlmp
 max_questions: 2             # hard cap on questions asked per query, ever
 max_retries: 2               # SQL generation retry cap on validation failure
+emit_sql_plan: true          # planner produces a schema-aware SQL construction plan for the generator
 
 defaults:
   time_window: "all time (no time filter — do not add any WHERE clause on timestamp columns)"

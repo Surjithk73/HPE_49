@@ -47,12 +47,14 @@ class PlannerTurn:
 # ── System prompt for the Planner role ───────────────────────────────────────
 
 _PLANNER_SYSTEM = """You are the PLANNER for a natural-language query system that queries
-HPE NonStop server performance data. Your job is to understand what the user wants
-and fill in a structured Intent Spec — NOT to write SQL.
+HPE NonStop server performance data. Your job is to understand what the user wants,
+fill in a structured Intent Spec, and — once the intent is clear — produce an elaborate
+SQL construction plan for a downstream SQL_GENERATOR to follow. You do NOT write the
+final SQL yourself.
 
 HARD RULES:
 1. Questions to the user must use plain business/domain language only.
-   Never mention table names, column names, or any database schema.
+   Never mention table names, column names, or any database schema in a question.
 2. Distinguish intent ambiguity (ask the user) from schema-grounding ambiguity
    (resolve internally — never ask the user about this).
 3. You may ask at most {max_questions} questions total for any query.
@@ -61,6 +63,9 @@ HARD RULES:
 5. Do NOT invent a time range. If the user does not mention any time period,
    leave time_window unresolved (resolved=false) — the system will default it
    to "all time". Never assume "last 24 hours" or any other window on your own.
+6. A SCHEMA CONTEXT section may be provided below. It is for building the sql_plan
+   ONLY. The "question" field must NEVER contain a table name, column name, or any
+   other schema identifier — keep questions in plain business language.
 
 
 AVAILABLE SLOTS to fill:
@@ -70,6 +75,14 @@ AVAILABLE SLOTS to fill:
 - time_window: time range
 - ranking_and_limit: order by what, top/bottom N
 - filters: any extra constraints the user specified
+
+SQL PLAN (only when action=fill):
+Produce "sql_plan": an elaborate, ordered, schema-grounded plan the SQL_GENERATOR will
+follow. Ground every step in the SCHEMA CONTEXT below — name the concrete tables and
+columns, the join keys, the formulas to apply (e.g. busy% = col * 100.0 / NULLIF(MAX(delta_time)
+* COUNT(DISTINCT from_timestamp), 0)), GROUP BY / ORDER BY / LIMIT, and use CTE
+pre-aggregation when joining 3 or more large tables. Write it as numbered steps in a
+single string. If action=ask, omit sql_plan or leave it empty.
 
 OUTPUT FORMAT — always respond with a JSON object:
 {
@@ -83,30 +96,52 @@ OUTPUT FORMAT — always respond with a JSON object:
     "ranking_and_limit":{"value": ..., "resolved": true/false, "interpretations": [...]},
     "filters":          {"value": ..., "resolved": true/false, "interpretations": [...]}
   },
-  "assumptions": ["<assumption text if defaulting>", ...]
+  "assumptions": ["<assumption text if defaulting>", ...],
+  "sql_plan": "<numbered, schema-grounded SQL construction plan when action=fill>"
 }
 
 When action=ask, also include the current state of all slots (partially filled is fine).
-When action=fill, all critical slots (metric, entity_scope) must be resolved=true.
+When action=fill, all critical slots (metric, entity_scope) must be resolved=true, and
+sql_plan must be a populated, schema-grounded plan.
 """
 
 
 class Planner:
     """Stateless planner — session state lives in PlannerSession."""
 
-    def __init__(self, provider: ModelProvider, defaults: dict) -> None:
+    def __init__(
+        self,
+        provider: ModelProvider,
+        defaults: dict,
+        schema_linker=None,
+        normalizer=None,
+    ) -> None:
         self._provider = provider
         self._defaults = defaults
         self._max_questions: int = int(defaults.get("max_questions", 2))
         self._slot_defaults: dict = defaults.get("defaults", {})
+        # Optional deps used to ground the sql_plan in real schema. When absent
+        # (or emit_sql_plan is off) the planner falls back to slot-only behaviour.
+        self._schema_linker = schema_linker
+        self._normalizer = normalizer
+        self._emit_sql_plan: bool = bool(defaults.get("emit_sql_plan", True))
 
-    def _system_prompt(self) -> str:
+    def _system_prompt(self, schema_context: str = "") -> str:
         """
         Build the system prompt. We use str.replace (not str.format) because the
         template embeds a literal JSON example full of { } braces that str.format
         would misinterpret as format fields.
+
+        schema_context, when supplied, is appended for grounding the sql_plan ONLY
+        (the HARD RULES forbid leaking it into user-facing questions).
         """
-        return _PLANNER_SYSTEM.replace("{max_questions}", str(self._max_questions))
+        prompt = _PLANNER_SYSTEM.replace("{max_questions}", str(self._max_questions))
+        if schema_context:
+            prompt += (
+                "\n\nSCHEMA CONTEXT (for sql_plan only — never reference in a question):\n"
+                + schema_context
+            )
+        return prompt
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -118,17 +153,15 @@ class Planner:
             spec=spec,
         )
 
-        system_prompt = self._system_prompt()
         user_msg = f"User query: {user_query}"
         session.history.append({"role": "user", "content": user_msg})
 
-        return self._advance(session, system_prompt)
+        return self._advance(session)
 
     def answer(self, session: PlannerSession, user_answer: str) -> PlannerTurn:
         """Continue the loop with the user's answer to the last question."""
         session.history.append({"role": "user", "content": user_answer})
-        system_prompt = self._system_prompt()
-        return self._advance(session, system_prompt)
+        return self._advance(session)
 
     def revise_on_error(
         self,
@@ -149,13 +182,12 @@ class Planner:
             "The SQL compiled from the current intent spec failed.\n"
             f"Error: {error}\n"
             f"Failed SQL:\n{failed_sql}\n\n"
-            "Please revise the spec slots to fix the root cause. "
-            "Do NOT ask the user — update slot values internally based on the error. "
-            "Output action=fill with corrected slot values."
+            "Please revise the spec slots AND the sql_plan to fix the root cause. "
+            "Do NOT ask the user — update values internally based on the error. "
+            "Output action=fill with corrected slot values and a corrected sql_plan."
         )
         session.history.append({"role": "user", "content": feedback})
-        system_prompt = self._system_prompt()
-        return self._advance(session, system_prompt, force_fill=True)
+        return self._advance(session, force_fill=True)
 
     def force_proceed(self, session: PlannerSession) -> IntentSpec:
         """
@@ -170,7 +202,6 @@ class Planner:
     def _advance(
         self,
         session: PlannerSession,
-        system_prompt: str,
         force_fill: bool = False,
     ) -> PlannerTurn:
         """
@@ -179,6 +210,21 @@ class Planner:
         force_fill=True: never ask the user, always proceed to fill.
         Used by revise_on_error() so error-driven revisions stay internal.
         """
+        # Ground the sql_plan in real schema when deps are available. The schema
+        # context feeds the system prompt for plan-building only — questions stay
+        # schema-blind (enforced by the HARD RULES).
+        schema_context = ""
+        if self._emit_sql_plan and self._schema_linker and self._normalizer:
+            try:
+                signal = self._signal_from_session(session)
+                norm = self._normalizer.normalize(signal)
+                schema_context = self._schema_linker.link_schema(
+                    norm["normalized_text"], norm["domain_category"], session.target_db
+                )
+            except Exception as exc:  # schema grounding is best-effort
+                print(f"[Planner] schema grounding failed: {exc}")
+        system_prompt = self._system_prompt(schema_context)
+
         conversation = "\n\n".join(
             f"{'User' if m['role'] == 'user' else 'Planner'}: {m['content']}"
             for m in session.history
@@ -197,6 +243,11 @@ class Planner:
 
         parsed = _parse_planner_response(raw)
         self._update_spec(session.spec, parsed)
+
+        # Capture the SQL plan only when present, so an "ask" turn that omits it
+        # does not clobber a plan produced on an earlier turn.
+        if parsed.get("sql_plan"):
+            session.spec.sql_plan = str(parsed["sql_plan"])
 
         if parsed.get("assumptions"):
             for a in parsed["assumptions"]:
@@ -245,6 +296,24 @@ class Planner:
             session=session,
             debug_prompt=debug_prompt,
         )
+
+    def _signal_from_session(self, session: PlannerSession) -> str:
+        """
+        Build a short natural-language signal for schema retrieval: any resolved
+        slot values, falling back to the user's original query text.
+        """
+        spec = session.spec
+        parts = [
+            str(s.value)
+            for s in (spec.metric, spec.entity_scope, spec.aggregation, spec.filters)
+            if s.resolved and s.value
+        ]
+        if parts:
+            return " ".join(parts)
+        for m in session.history:
+            if m["role"] == "user":
+                return m["content"]
+        return "performance metrics"
 
     def _update_spec(self, spec: IntentSpec, parsed: dict) -> None:
         """Write LLM-parsed slot values into the IntentSpec."""

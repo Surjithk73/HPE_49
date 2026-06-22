@@ -59,6 +59,11 @@ class IntentSpec:
     # Populated whenever the system proceeds under uncertainty (default-fill,
     # budget exhausted, or user-forced). Always surfaced to the user.
     assumptions: list[str] = field(default_factory=list)
+    # Elaborate, schema-aware SQL construction plan produced by the Planner
+    # (numbered steps naming concrete tables/columns/joins/formulas/CTEs).
+    # Derived artifact, not an ambiguity-resolved slot. May reference schema —
+    # it is internal guidance for the SQL_GENERATOR, never shown as a question.
+    sql_plan: str = ""
 
     # ── Predicates ────────────────────────────────────────────────────────────
 
@@ -112,6 +117,10 @@ class IntentSpec:
             lines.append("## ASSUMPTIONS MADE")
             for a in self.assumptions:
                 lines.append(f"- {a}")
+        if self.sql_plan:
+            lines.append("")
+            lines.append("## SQL CONSTRUCTION PLAN (authoritative — follow these steps)")
+            lines.append(self.sql_plan)
         return "\n".join(lines)
 
     def to_dict(self) -> dict:
@@ -126,6 +135,7 @@ class IntentSpec:
                 for s in self._all_slots()
             },
             "assumptions": self.assumptions,
+            "sql_plan": self.sql_plan,
             "confidence": self.numeric_confidence(),
             "ready": self.is_ready(),
         }

@@ -38,9 +38,9 @@ BUCKETS: List[Bucket] = [
         pattern=re.compile(r"\b429\b|quota|rate.?limit|RESOURCE_EXHAUSTED", re.IGNORECASE),
         fix_surface="env / model config",
         recommendation=(
-            "Not a prompt issue. Check GEMINI_MODEL in backend/.env — free-tier accounts "
-            "often have zero quota on gemini-2.0-flash. Switch to gemini-2.5-flash or "
-            "another model with available quota."
+            "Not a prompt issue. Check SQL_GENERATOR_MODEL / PLANNER_MODEL in backend/.env — "
+            "the NVIDIA NIM account may be rate-limited or out of credits for the configured "
+            "model. Switch to another available NVIDIA NIM model or check your API quota."
         ),
     ),
     Bucket(

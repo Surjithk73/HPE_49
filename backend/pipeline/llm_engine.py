@@ -1,6 +1,6 @@
 """
 LLM Engine for QueryCraft
-Handles interaction with Gemini API for SQL generation.
+Handles interaction with NVIDIA NIM (OpenAI-compatible) for SQL generation.
 
 LLMEngine now delegates raw API calls to a ModelProvider (see model_provider.py).
 Two factory functions expose the two logical roles:
@@ -16,13 +16,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 try:
-    from config import GEMINI_API_KEY, GEMINI_MODEL
-    GEMINI_AVAILABLE = True
+    from config import SQL_GENERATOR_API_KEY, SQL_GENERATOR_MODEL
+    NIM_AVAILABLE = True
 except (ValueError, ImportError) as e:
-    GEMINI_AVAILABLE = False
-    GEMINI_API_KEY = None
-    GEMINI_MODEL = "gemini-3.1-flash-lite"
-    print(f"Warning: Gemini API not configured: {e}")
+    NIM_AVAILABLE = False
+    SQL_GENERATOR_API_KEY = None
+    SQL_GENERATOR_MODEL = "deepseek-ai/deepseek-v4-pro"
+    print(f"Warning: NVIDIA NIM not configured: {e}")
 
 
 class LLMError(Exception):
@@ -122,8 +122,9 @@ class LLMEngine(BaseLLMEngine):
     SQL generation engine. Delegates actual API calls to a ModelProvider.
 
     Pass a pre-built provider for the PLANNER/SQL_GENERATOR role factories,
-    or omit it to get the legacy GeminiProvider built from config (backward compat).
-    Runtime model switching via POST /api/model still works: pass model= as before.
+    or omit it to get a NIMProvider built from the SQL-generator config
+    (backward compat). Runtime model switching via POST /api/model still works:
+    pass model= as before.
     """
 
     def __init__(self, api_key: str = None, model: str = None, provider=None):
@@ -131,13 +132,27 @@ class LLMEngine(BaseLLMEngine):
             self._provider = provider
             self.model_name = provider.model_name
         else:
-            # Legacy path: build a GeminiProvider from api_key + model
-            from pipeline.model_provider import GeminiProvider
-            _key = api_key or GEMINI_API_KEY
-            _model = model or GEMINI_MODEL
+            # Legacy path: build a NIMProvider from the SQL-generator config
+            from pipeline.model_provider import NIMProvider
+            from config import (
+                NVIDIA_BASE_URL,
+                SQL_GENERATOR_TEMPERATURE,
+                SQL_GENERATOR_TOP_P,
+            )
+            _key = api_key or SQL_GENERATOR_API_KEY
+            _model = model or SQL_GENERATOR_MODEL
             if not _key:
-                raise LLMError("Gemini API key not configured. Set GEMINI_API_KEY in .env file")
-            self._provider = GeminiProvider(api_key=_key, model_name=_model)
+                raise LLMError(
+                    "NVIDIA NIM API key not configured. "
+                    "Set SQL_GENERATOR_API_KEY (or NVIDIA_API_KEY) in .env file"
+                )
+            self._provider = NIMProvider(
+                api_key=_key,
+                model_name=_model,
+                base_url=NVIDIA_BASE_URL,
+                temperature=SQL_GENERATOR_TEMPERATURE,
+                top_p=SQL_GENERATOR_TOP_P,
+            )
             self.model_name = _model
 
     def generate_sql(self, prompt: str) -> tuple[str, str]:
@@ -163,39 +178,59 @@ class LLMEngine(BaseLLMEngine):
             raise LLMError(f"Failed to generate text: {e}")
 
 
-def _make_engine_for_role(model_name: str) -> "BaseLLMEngine":
-    """Internal helper: builds an engine for a given model name + current provider."""
+def _make_engine_for_role(
+    model_name: str,
+    api_key: str,
+    temperature: float = 0.0,
+    top_p: float = 1.0,
+) -> "BaseLLMEngine":
+    """Internal helper: builds an engine for a role's model + key + sampling."""
     try:
-        from config import LLM_PROVIDER, GEMINI_API_KEY as _key
+        from config import LLM_PROVIDER
     except (ValueError, ImportError):
-        LLM_PROVIDER = "gemini"
-        _key = GEMINI_API_KEY
+        LLM_PROVIDER = "nvidia"
 
     if LLM_PROVIDER == "ollama":
         from pipeline.ollama_engine import OllamaEngine
         return OllamaEngine()
 
-    from pipeline.model_provider import GeminiProvider
-    provider = GeminiProvider(api_key=_key, model_name=model_name)
+    from pipeline.model_provider import NIMProvider
+    from config import NVIDIA_BASE_URL
+    provider = NIMProvider(
+        api_key=api_key,
+        model_name=model_name,
+        base_url=NVIDIA_BASE_URL,
+        temperature=temperature,
+        top_p=top_p,
+    )
     return LLMEngine(provider=provider)
 
 
 def make_planner_engine() -> "BaseLLMEngine":
     """Returns an engine configured for the PLANNER role (PLANNER_MODEL)."""
-    try:
-        from config import PLANNER_MODEL as model
-    except (ValueError, ImportError):
-        model = GEMINI_MODEL
-    return _make_engine_for_role(model or GEMINI_MODEL)
+    from config import (
+        PLANNER_MODEL,
+        PLANNER_API_KEY,
+        PLANNER_TEMPERATURE,
+        PLANNER_TOP_P,
+    )
+    return _make_engine_for_role(
+        PLANNER_MODEL, PLANNER_API_KEY, PLANNER_TEMPERATURE, PLANNER_TOP_P
+    )
 
 
 def make_sql_engine() -> "BaseLLMEngine":
     """Returns an engine configured for the SQL_GENERATOR role (SQL_GENERATOR_MODEL)."""
-    try:
-        from config import SQL_GENERATOR_MODEL as model
-    except (ValueError, ImportError):
-        model = GEMINI_MODEL
-    return _make_engine_for_role(model or GEMINI_MODEL)
+    from config import (
+        SQL_GENERATOR_TEMPERATURE,
+        SQL_GENERATOR_TOP_P,
+    )
+    return _make_engine_for_role(
+        SQL_GENERATOR_MODEL,
+        SQL_GENERATOR_API_KEY,
+        SQL_GENERATOR_TEMPERATURE,
+        SQL_GENERATOR_TOP_P,
+    )
 
 
 def make_llm_engine() -> "BaseLLMEngine":
@@ -208,10 +243,10 @@ if __name__ == "__main__":
     print("Testing LLM Engine...")
     print("=" * 80)
     
-    if not GEMINI_AVAILABLE or not GEMINI_API_KEY:
-        print("✗ Gemini API not configured")
+    if not NIM_AVAILABLE or not SQL_GENERATOR_API_KEY:
+        print("✗ NVIDIA NIM not configured")
         print("To test the LLM engine:")
-        print("1. Set GEMINI_API_KEY in backend/.env")
+        print("1. Set SQL_GENERATOR_API_KEY (or NVIDIA_API_KEY) in backend/.env")
         print("2. Run: python llm_engine.py")
         sys.exit(1)
     

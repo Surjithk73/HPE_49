@@ -45,5 +45,5 @@ python stress_test.py > stress_test_result.md
 
 - Backend running on `http://localhost:8000`
 - PostgreSQL with `macht413` schema populated
-- Valid Gemini API key in `backend/.env`
+- Valid NVIDIA NIM API key(s) in `backend/.env` (PLANNER_API_KEY / SQL_GENERATOR_API_KEY)
 - Python packages: `requests`

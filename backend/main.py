@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from config import (
     SCHEMA_YAML_PATH, FEW_SHOTS_PATH, AUDIT_LOG_PATH,
-    GEMINI_MODEL, MAX_ROWS, LLM_PROVIDER, OLLAMA_MODEL,
+    SQL_GENERATOR_MODEL, MAX_ROWS, LLM_PROVIDER, OLLAMA_MODEL,
 )
 from pipeline.schema_loader import load_schema
 from pipeline.normalizer import QueryNormalizer
@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI):
     _validator  = SQLValidator(_schema)
     print("[QueryCraft] Pipeline components ready")
 
-    # LLM engine — provider chosen by LLM_PROVIDER (gemini|ollama)
+    # LLM engine — provider chosen by LLM_PROVIDER (nvidia|ollama)
     _llm_engine = make_llm_engine()
     print(f"[QueryCraft] LLM engine ready — provider: {LLM_PROVIDER}, model: {_llm_engine.model_name}")
 
@@ -114,7 +114,12 @@ async def lifespan(app: FastAPI):
         _planner_defaults = {"max_questions": 2, "max_retries": 2, "defaults": {}}
     from pipeline.planner import Planner  # noqa: F811 — local import after global set
     _planner_engine = make_planner_engine()
-    _planner = Planner(provider=_planner_engine._provider, defaults=_planner_defaults)
+    _planner = Planner(
+        provider=_planner_engine._provider,
+        defaults=_planner_defaults,
+        schema_linker=_linker,
+        normalizer=_normalizer,
+    )
     print(f"[QueryCraft] Planner ready — model: {_planner_engine.model_name}")
 
     # Executor — creates the connection pool
@@ -203,7 +208,7 @@ class ThresholdRequest(BaseModel):
                              description="Cosine similarity threshold (0 < value ≤ 1)")
 
 class ModelRequest(BaseModel):
-    model: str = Field(..., description="Gemini model name to switch to")
+    model: str = Field(..., description="NVIDIA NIM model name to switch to")
 
 class ExplainRequest(BaseModel):
     sql: str
@@ -249,7 +254,7 @@ def health():
         "cache_ready":       cache_ok,
         "cache_model_ready": _cache.is_model_ready if _cache else False,
         "llm_provider":      LLM_PROVIDER,
-        "llm_model":         (_llm_engine.model_name if _llm_engine else None) or GEMINI_MODEL,
+        "llm_model":         (_llm_engine.model_name if _llm_engine else None) or SQL_GENERATOR_MODEL,
         "cache_entries":     _cache.count() if _cache else 0,
         "schema_tables":     len(_schema) if _schema else 0,
     }
@@ -763,8 +768,11 @@ async def image_to_query(
     """
     Image-based query entry point.
 
-    Pipeline: chart image → Gemini multimodal (image→NL question) → /api/query.
+    Pipeline: chart image → NVIDIA NIM multimodal (image→NL question) → /api/query.
     Returns the standard QueryResponse plus the inferred natural-language prompt.
+
+    Requires NVIDIA_VISION_MODEL to be a multimodal NIM model. If the configured
+    model does not accept images, the NIM call fails and a clear 502 is returned.
     """
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Uploaded file must be an image")
@@ -776,15 +784,18 @@ async def image_to_query(
         raise HTTPException(status_code=400, detail="Image too large (max 8 MB)")
 
     try:
-        from config import GEMINI_API_KEY
-        import google.generativeai as genai
+        from openai import OpenAI
+        from config import (
+            NVIDIA_BASE_URL, NVIDIA_VISION_MODEL, PLANNER_API_KEY,
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini SDK not available: {e}")
+        raise HTTPException(status_code=500, detail=f"NVIDIA NIM client not available: {e}")
 
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
-
-    model_name = (_llm_engine.model_name if _llm_engine else None) or GEMINI_MODEL
+    if not PLANNER_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="NVIDIA NIM API key not configured (PLANNER_API_KEY / NVIDIA_API_KEY)",
+        )
 
     instruction = (
         "You are looking at a chart screenshot from HPE NonStop Measure performance reports. "
@@ -796,18 +807,28 @@ async def image_to_query(
     )
 
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(model_name)
-        resp = model.generate_content([
-            instruction,
-            {"mime_type": file.content_type, "data": image_bytes},
-        ])
-        nl_question = (resp.text or "").strip().splitlines()[0].strip()
+        import base64
+        data_url = f"data:{file.content_type};base64,{base64.b64encode(image_bytes).decode()}"
+        client = OpenAI(api_key=PLANNER_API_KEY, base_url=NVIDIA_BASE_URL)
+        resp = client.chat.completions.create(
+            model=NVIDIA_VISION_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": instruction},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }],
+            temperature=0.2,
+            max_tokens=256,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        nl_question = raw.splitlines()[0].strip() if raw else ""
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Gemini image call failed: {e}")
+        raise HTTPException(status_code=502, detail=f"NVIDIA NIM image call failed: {e}")
 
     if not nl_question:
-        raise HTTPException(status_code=502, detail="Gemini returned an empty question for the image")
+        raise HTTPException(status_code=502, detail="NVIDIA NIM returned an empty question for the image")
 
     # Reuse the existing NL→SQL pipeline.
     result = run_query(QueryRequest(query=nl_question, target_db=target_db))
@@ -1115,14 +1136,12 @@ def set_threshold(req: ThresholdRequest):
 
 # ── Model switcher ────────────────────────────────────────────────────────────
 
-# Models the UI is allowed to switch to.  Only Gemini models are listed here;
-# Ollama switching is handled by restarting with a different .env.
-ALLOWED_GEMINI_MODELS = [
-    "gemini-3.1-flash-lite",    # default — fast, low cost
-    "gemini-2.0-flash",         # stronger reasoning
-    "gemini-2.5-flash",         # latest generation
-    "gemini-3.5-flash",         # latest 3.x series
-    "gemini-3-flash-preview",   # gemini-3-flash (preview name on API)
+# Models the UI is allowed to switch to (NVIDIA NIM model IDs). This hot-swaps
+# the SQL-generator engine only; Ollama switching is handled by restarting with
+# a different .env.
+ALLOWED_MODELS = [
+    "deepseek-ai/deepseek-v4-pro",   # default SQL generator
+    "z-ai/glm-5.1",                  # planner model (also usable for generation)
 ]
 
 
@@ -1132,7 +1151,7 @@ def get_model():
     """Return the currently active LLM model name and the list of available models."""
     return {
         "current_model":   _llm_engine.model_name if _llm_engine else None,
-        "available_models": ALLOWED_GEMINI_MODELS,
+        "available_models": ALLOWED_MODELS,
         "provider":        LLM_PROVIDER,
     }
 
@@ -1141,33 +1160,33 @@ def get_model():
 @app.post("/api/model")
 def switch_model(req: ModelRequest):
     """
-    Hot-swap the active Gemini model at runtime.
+    Hot-swap the active NVIDIA NIM model (SQL generator) at runtime.
 
     No server restart required.  The new model takes effect immediately
     for all subsequent queries.  Cache entries are not invalidated — cached
     SQL is model-agnostic.
 
     Body:
-        { "model": "gemini-2.5-flash" }
+        { "model": "z-ai/glm-5.1" }
 
-    Only Gemini models are supported via this endpoint.  To switch to Ollama,
+    Only NVIDIA NIM models are supported via this endpoint.  To switch to Ollama,
     update LLM_PROVIDER in .env and restart the server.
     """
     global _llm_engine
 
-    if LLM_PROVIDER != "gemini":
+    if LLM_PROVIDER != "nvidia":
         raise HTTPException(
             status_code=400,
-            detail=f"Model switching is only supported for LLM_PROVIDER=gemini. "
+            detail=f"Model switching is only supported for LLM_PROVIDER=nvidia. "
                    f"Current provider: {LLM_PROVIDER}"
         )
 
     requested = req.model.strip()
-    if requested not in ALLOWED_GEMINI_MODELS:
+    if requested not in ALLOWED_MODELS:
         raise HTTPException(
             status_code=400,
             detail=f"Model '{requested}' is not in the allowed list. "
-                   f"Allowed: {ALLOWED_GEMINI_MODELS}"
+                   f"Allowed: {ALLOWED_MODELS}"
         )
 
     previous = _llm_engine.model_name if _llm_engine else None

@@ -47,7 +47,7 @@ class PromptBuilder:
             few_shots = []
         
         # Build few-shot examples section as explicit input/output pairs.
-        # Gemini follows the pattern more reliably when each example is a
+        # The model follows the pattern more reliably when each example is a
         # labeled INPUT/OUTPUT block separated by a delimiter, rather than
         # interleaved SQL comments which the model can mistake for schema.
         few_shot_section = ""
@@ -170,6 +170,20 @@ USER REQUEST:
             f"Generate a single valid PostgreSQL SELECT query for the schema '{target_db}'.",
             f"Generate a single valid SQL SELECT query for the schema '{target_db}'.\n{dialect_note}",
         )
+
+        # When the spec carries a SQL CONSTRUCTION PLAN, instruct the generator to
+        # treat it as the authoritative build order.
+        if "## SQL CONSTRUCTION PLAN" in spec_block:
+            base_prompt = base_prompt.replace(
+                "OUTPUT CONTRACT:",
+                "PLAN CONTRACT:\n"
+                "A SQL CONSTRUCTION PLAN is provided in the USER REQUEST below. Follow its "
+                "steps as the authoritative build order. Deviate only to correct a step that "
+                "references a column/table absent from the SCHEMA CONTEXT, and note any such "
+                "correction in your `<thought>` block.\n\n"
+                "OUTPUT CONTRACT:",
+                1,
+            )
         return base_prompt
 
     def build_retry_prompt(self, original_prompt: str, failed_sql: str, error: str) -> str:
