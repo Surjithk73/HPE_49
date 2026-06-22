@@ -100,6 +100,7 @@ FORMULA REFERENCE LEGEND:
 The `delta_time` column represents the measurement interval and is measured in MICROSECONDS. 
 When computing metrics, you must account for multiple intervals/CPUs in your denominator.
 Define `base_time_us` = (MAX(delta_time) * COUNT(DISTINCT from_timestamp))
+(NOTE: If normalizing metrics with `ipus`, redefine `base_time_us` = SUM(delta_time * ipus) instead)
 Apply these formulas based on the counter tags in the schema:
 - [Busy counter]       percentage  = col * 100.0 / NULLIF(base_time_us, 0)
 - [Queue counter]      avg queue   = col * 1.0   / NULLIF(base_time_us, 0)
@@ -111,6 +112,7 @@ Apply these formulas based on the counter tags in the schema:
 - [Snapshot counter]  use directly — no rate conversion needed.
 
 AGGREGATION & MATH RULES:
+- HIGHEST PRIORITY: The FEW-SHOT EXAMPLES provided below are curated by experts (HPT). If a few-shot example contradicts the FORMULA REFERENCE LEGEND or any other rule, the few-shot example STRICTLY OVERRIDES the rigid rules. Always follow the patterns in the examples first!
 - If a specific formula is provided directly in the schema comment for a column, it strictly overrides the global FORMULA REFERENCE LEGEND.
 - When calculating Queue lengths or ratios that may result in very small decimals, explicitly CAST the final result to NUMERIC(10,4) so it does not truncate to 0.
 - When computing process-category breakdowns from {target_db}.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
