@@ -57,6 +57,48 @@ class GeminiProvider(ModelProvider):
             raise LLMError(f"Gemini API call failed: {exc}") from exc
 
 
+class NvidiaProvider(ModelProvider):
+    """Calls NVIDIA NIM API using OpenAI client."""
+
+    def __init__(self, api_key: str, model_name: str) -> None:
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            from pipeline.llm_engine import LLMError
+            raise LLMError("openai package not installed. Run 'pip install openai'") from exc
+
+        if not api_key:
+            from pipeline.llm_engine import LLMError
+            raise LLMError("NVIDIA_API_KEY not configured. Please set it in your .env file to use Qwen or GPT models.")
+
+        self.client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key
+        )
+        self.model_name = model_name
+
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        from pipeline.llm_engine import LLMError
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            completion = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=0.2,
+                top_p=0.8,
+                max_tokens=4096,
+                stream=False
+            )
+            content = completion.choices[0].message.content or ""
+            return content.strip()
+        except Exception as exc:
+            raise LLMError(f"NVIDIA NIM API call failed: {exc}") from exc
+
+
 class OllamaProvider(ModelProvider):
     """
     Stub — not yet wired for the clarification pipeline.

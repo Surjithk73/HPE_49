@@ -166,17 +166,22 @@ class LLMEngine(BaseLLMEngine):
 def _make_engine_for_role(model_name: str) -> "BaseLLMEngine":
     """Internal helper: builds an engine for a given model name + current provider."""
     try:
-        from config import LLM_PROVIDER, GEMINI_API_KEY as _key
+        from config import LLM_PROVIDER, GEMINI_API_KEY as _gem_key, NVIDIA_API_KEY as _nvd_key
     except (ValueError, ImportError):
         LLM_PROVIDER = "gemini"
-        _key = GEMINI_API_KEY
+        _gem_key = None
+        _nvd_key = None
 
     if LLM_PROVIDER == "ollama":
         from pipeline.ollama_engine import OllamaEngine
         return OllamaEngine()
 
-    from pipeline.model_provider import GeminiProvider
-    provider = GeminiProvider(api_key=_key, model_name=model_name)
+    if "qwen" in model_name.lower() or "gpt" in model_name.lower() or "openai" in model_name.lower():
+        from pipeline.model_provider import NvidiaProvider
+        provider = NvidiaProvider(api_key=_nvd_key, model_name=model_name)
+    else:
+        from pipeline.model_provider import GeminiProvider
+        provider = GeminiProvider(api_key=_gem_key, model_name=model_name)
     return LLMEngine(provider=provider)
 
 

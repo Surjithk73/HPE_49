@@ -43,11 +43,10 @@ export default function Dashboard() {
   const [activeTargetDb, setActiveTargetDb] = useState('macht413')
   // Model switcher state
   const AVAILABLE_MODELS = [
-    { id: 'gemini-3.1-flash-lite',  label: 'Gemini 3.1 Flash Lite',  badge: 'fast'    },
-    { id: 'gemini-2.0-flash',       label: 'Gemini 2.0 Flash',        badge: 'balanced' },
-    { id: 'gemini-2.5-flash',       label: 'Gemini 2.5 Flash',        badge: 'smart'   },
-    { id: 'gemini-3.5-flash',       label: 'Gemini 3.5 Flash',        badge: 'latest'  },
-    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash',          badge: 'preview' },
+    { id: 'gemini-3.1-flash-lite',            label: 'Gemini 3.1 Flash Lite',  badge: 'fast'    },
+    { id: 'gemini-3.5-flash',                 label: 'Gemini 3.5 Flash',        badge: 'latest'  },
+    { id: 'openai/gpt-oss-20b',               label: 'GPT OSS 20B',             badge: 'nvidia' },
+    { id: 'qwen/qwen3-next-80b-a3b-instruct', label: 'Qwen 80B A3B',            badge: 'nvidia' },
   ]
   const [activeModel, setActiveModel] = useState<string>(
     health?.llm_model ?? 'gemini-3.1-flash-lite'

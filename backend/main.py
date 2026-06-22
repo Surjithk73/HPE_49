@@ -1115,14 +1115,12 @@ def set_threshold(req: ThresholdRequest):
 
 # ── Model switcher ────────────────────────────────────────────────────────────
 
-# Models the UI is allowed to switch to.  Only Gemini models are listed here;
-# Ollama switching is handled by restarting with a different .env.
-ALLOWED_GEMINI_MODELS = [
-    "gemini-3.1-flash-lite",    # default — fast, low cost
-    "gemini-2.0-flash",         # stronger reasoning
-    "gemini-2.5-flash",         # latest generation
-    "gemini-3.5-flash",         # latest 3.x series
-    "gemini-3-flash-preview",   # gemini-3-flash (preview name on API)
+# Models the UI is allowed to switch to.  
+ALLOWED_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3-next-80b-a3b-instruct"
 ]
 
 
@@ -1132,7 +1130,7 @@ def get_model():
     """Return the currently active LLM model name and the list of available models."""
     return {
         "current_model":   _llm_engine.model_name if _llm_engine else None,
-        "available_models": ALLOWED_GEMINI_MODELS,
+        "available_models": ALLOWED_MODELS,
         "provider":        LLM_PROVIDER,
     }
 
@@ -1141,33 +1139,16 @@ def get_model():
 @app.post("/api/model")
 def switch_model(req: ModelRequest):
     """
-    Hot-swap the active Gemini model at runtime.
-
-    No server restart required.  The new model takes effect immediately
-    for all subsequent queries.  Cache entries are not invalidated — cached
-    SQL is model-agnostic.
-
-    Body:
-        { "model": "gemini-2.5-flash" }
-
-    Only Gemini models are supported via this endpoint.  To switch to Ollama,
-    update LLM_PROVIDER in .env and restart the server.
+    Hot-swap the active LLM model at runtime.
     """
-    global _llm_engine
-
-    if LLM_PROVIDER != "gemini":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model switching is only supported for LLM_PROVIDER=gemini. "
-                   f"Current provider: {LLM_PROVIDER}"
-        )
+    global _llm_engine, _planner
 
     requested = req.model.strip()
-    if requested not in ALLOWED_GEMINI_MODELS:
+    if requested not in ALLOWED_MODELS:
         raise HTTPException(
             status_code=400,
             detail=f"Model '{requested}' is not in the allowed list. "
-                   f"Allowed: {ALLOWED_GEMINI_MODELS}"
+                   f"Allowed: {ALLOWED_MODELS}"
         )
 
     previous = _llm_engine.model_name if _llm_engine else None
