@@ -27,6 +27,15 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL")
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 
+# Model role overrides — both fall back to GEMINI_MODEL if not set.
+# Lets PLANNER and SQL_GENERATOR run on different backends later (config only).
+PLANNER_MODEL = os.getenv("PLANNER_MODEL") or GEMINI_MODEL
+SQL_GENERATOR_MODEL = os.getenv("SQL_GENERATOR_MODEL") or GEMINI_MODEL
+
+# SQL dialect used by the generator prompt and the validator lint pass.
+# postgres | sqlmx | sqlmp  (see backend/config/planner_defaults.yaml)
+SQL_DIALECT = os.getenv("SQL_DIALECT", "postgres")
+
 # Ollama Configuration (required when LLM_PROVIDER='ollama')
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")

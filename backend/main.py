@@ -70,8 +70,9 @@ _few_shot_retriever = None
 _audit         = None
 _few_shots     = []
 
-# Planner (clarification loop) — initialised alongside _llm_engine
+# Planner (clarification loop) + SQLGenerator
 _planner          = None
+_sql_generator    = None
 _planner_defaults: dict = {}
 # In-memory session store: {session_id: PlannerSession}
 # Sessions are ephemeral; no persistence needed for local single-user deployment.
@@ -84,7 +85,7 @@ async def lifespan(app: FastAPI):
     """Initialise all pipeline components at startup."""
     global _schema_loader, _schema, _normalizer, _linker, _builder
     global _llm_engine, _validator, _executor, _cache, _audit, _few_shots, _few_shot_retriever
-    global _planner, _planner_defaults
+    global _planner, _planner_defaults, _sql_generator
 
     print("\n[QueryCraft] Starting up...")
 
@@ -100,9 +101,10 @@ async def lifespan(app: FastAPI):
     _validator  = SQLValidator(_schema)
     print("[QueryCraft] Pipeline components ready")
 
-    # LLM engine — provider chosen by LLM_PROVIDER (gemini|ollama)
+    # LLM engine + SQLGenerator + Planner
     _llm_engine = make_llm_engine()
     print(f"[QueryCraft] LLM engine ready — provider: {LLM_PROVIDER}, model: {_llm_engine.model_name}")
+
 
     # Planner — uses a separate engine instance (PLANNER_MODEL role)
     try:
@@ -141,6 +143,17 @@ async def lifespan(app: FastAPI):
     # Few-shot retriever (RAG for prompts)
     _few_shot_retriever = FewShotRetriever(_few_shots, persist_path="cache_store")
     print("[QueryCraft] Few-shot retriever ready")
+
+    # SQLGenerator — wired after few_shot_retriever is ready
+    from pipeline.sql_generator import SQLGenerator
+    _sql_generator = SQLGenerator(
+        provider=_llm_engine._provider,
+        schema_linker=_linker,
+        few_shot_retriever=_few_shot_retriever,
+        prompt_builder=_builder,
+        validator=_validator,
+    )
+    print("[QueryCraft] SQLGenerator ready")
 
     print("[QueryCraft] Pre-embedding schema tables...")
     _linker._ensure_bm25_index()
@@ -434,11 +447,10 @@ def _execute_from_spec(spec, target_db: str, session=None) -> dict:
         domain = norm["domain_category"]
         schema_ctx = _linker.link_schema(norm["normalized_text"], domain, target_db)
         top_k = _few_shot_retriever.get_top_k(norm["normalized_text"], k=3)
-        last_prompt = _builder.build_spec_prompt(current_spec, schema_ctx, top_k, target_db)
-
-        # Single-shot SQL generation — retry is owned by this outer loop
+        # Use SQLGenerator which owns build_spec_prompt + single-shot generation
         try:
-            last_sql, last_raw = _llm_engine.generate_sql(last_prompt)
+            last_sql, last_raw = _sql_generator.generate(current_spec, target_db)
+            last_prompt = "(see SQLGenerator internals)"
         except LLMError as exc:
             last_error = str(exc)
             print(f"[Pipeline] Attempt {attempt + 1} generation error: {last_error}")
@@ -1141,7 +1153,7 @@ def switch_model(req: ModelRequest):
     """
     Hot-swap the active LLM model at runtime.
     """
-    global _llm_engine, _planner
+    global _llm_engine, _planner, _sql_generator
 
     requested = req.model.strip()
     if requested not in ALLOWED_MODELS:
@@ -1163,8 +1175,17 @@ def switch_model(req: ModelRequest):
 
     try:
         from pipeline.llm_engine import _make_engine_for_role
+        from pipeline.sql_generator import SQLGenerator
         _llm_engine = _make_engine_for_role(requested)
-        # Also update the planner engine if it's switched to the same model
+        # Rewire SQLGenerator to use the new provider
+        _sql_generator = SQLGenerator(
+            provider=_llm_engine._provider,
+            schema_linker=_linker,
+            few_shot_retriever=_few_shot_retriever,
+            prompt_builder=_builder,
+            validator=_validator,
+        )
+        # Also update the planner to use the same model
         _planner_engine = _make_engine_for_role(requested)
         if _planner:
             _planner._provider = _planner_engine._provider
