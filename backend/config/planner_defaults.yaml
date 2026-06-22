@@ -1,0 +1,14 @@
+# Planner runtime defaults — edit here without touching code.
+# These values fill unfilled slots when the clarification loop exits early
+# (question budget hit, user forced proceed, or slot is non-critical).
+
+sql_dialect: postgres        # postgres | sqlmx | sqlmp
+max_questions: 2             # hard cap on questions asked per query, ever
+max_retries: 2               # SQL generation retry cap on validation failure
+
+defaults:
+  time_window: "all time (no time filter — do not add any WHERE clause on timestamp columns)"
+  busy_definition: "CPU utilization (cpu_busy_time / delta_time)"
+  limit: 10
+  aggregation: "average"
+  ranking: "descending"

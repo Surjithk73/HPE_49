@@ -58,7 +58,7 @@ class PromptBuilder:
                 sql = example.get('sql', '').strip()
                 
                 # Dynamically inject the actual target database into the few shots
-                sql = sql.replace('%db%.', f"{target_db}.")
+                sql = sql.replace('macht413.', f"{target_db}.")
                 
                 blocks.append(
                     f"### Example {i}\n"
@@ -96,11 +96,11 @@ OUTPUT CONTRACT:
 6. Only use columns shown in the schema context; never invent column names.
 7. Always include LIMIT {self.max_rows} unless a smaller limit is specified.
 
-FORMULA REFERENCE LEGEND (Use as fallback if not demonstrated in EXAMPLES):
+FORMULA REFERENCE LEGEND:
 The `delta_time` column represents the measurement interval and is measured in MICROSECONDS. 
 When computing metrics, you must account for multiple intervals/CPUs in your denominator.
 Define `base_time_us` = (MAX(delta_time) * COUNT(DISTINCT from_timestamp))
-Apply these formulas based on the counter tags in the schema ONLY when the calculation isn't obvious from the examples:
+Apply these formulas based on the counter tags in the schema:
 - [Busy counter]       percentage  = col * 100.0 / NULLIF(base_time_us, 0)
 - [Queue counter]      avg queue   = col * 1.0   / NULLIF(base_time_us, 0)
 - [Queue-Busy counter] percentage  = col * 100.0 / NULLIF(base_time_us, 0)
@@ -112,16 +112,13 @@ Apply these formulas based on the counter tags in the schema ONLY when the calcu
 
 AGGREGATION & MATH RULES:
 - If a specific formula is provided directly in the schema comment for a column, it strictly overrides the global FORMULA REFERENCE LEGEND.
-- When calculating Queue lengths or ratios that may result in very small decimals, consider explicitly CASTing the final result to NUMERIC(10,4) if necessary.
-- When computing process-category breakdowns from {target_db}.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator.
+- When calculating Queue lengths or ratios that may result in very small decimals, explicitly CAST the final result to NUMERIC(10,4) so it does not truncate to 0.
+- When computing process-category breakdowns from {target_db}.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
 - Use from_timestamp / to_timestamp for time filtering.
 
 CROSS-TABLE & JOIN RULES:
-- The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You generally MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions unless instructed otherwise by an example.
-- When joining 3 or more tables that each have many rows, consider using CTEs to pre-aggregate if it avoids multiplying rows.
-
-CRITICAL INSTRUCTION ON EXAMPLES: 
-The EXAMPLES section contains the highest priority instructions. The behavior, formulas, and structural patterns (like whether or not to use CTEs, what columns to include, and whether to cast) demonstrated in the EXAMPLES completely SUPERSEDE the rules above. Only apply the fallback rules if the examples do not cover the requested behavior.
+- CRITICAL: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
+- CRITICAL: When joining 3 or more tables that each have many rows, ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results.
 
 SCHEMA CONTEXT:
 {schema_context}
@@ -132,6 +129,49 @@ USER REQUEST:
         
         return prompt
     
+    def build_spec_prompt(
+        self,
+        spec,
+        schema_context: str,
+        few_shots: List[Dict] = None,
+        target_db: str = "macht413",
+        dialect: str = "postgres",
+    ) -> str:
+        """
+        Build a SQL_GENERATOR prompt from a completed IntentSpec.
+
+        Uses the same structure as build_prompt() but replaces the raw user
+        query with a structured intent block. The dialect is injected into
+        the system instruction so the model targets the right SQL variant.
+        """
+        from pipeline.intent_spec import IntentSpec
+        spec_block = spec.to_prompt_block() if hasattr(spec, "to_prompt_block") else str(spec)
+
+        _DIALECT_NOTES = {
+            "postgres": "Use standard PostgreSQL syntax. LIMIT n is correct.",
+            "sqlmx":    "Use HPE NonStop SQL/MX syntax. Use [FIRST n] instead of LIMIT n.",
+            "sqlmp":    "Use HPE NonStop SQL/MP syntax. Use [FIRST n] instead of LIMIT n.",
+        }
+        dialect_note = _DIALECT_NOTES.get(dialect.lower(), f"Dialect: {dialect}.")
+
+        # Reuse build_prompt() with the spec block as the "query" — the spec
+        # block already contains structured intent; the system instruction adds
+        # the dialect note at the top.
+        base_prompt = self.build_prompt(
+            normalized_query=spec_block,
+            schema_context=schema_context,
+            few_shots=few_shots,
+            target_db=target_db,
+        )
+
+        # Inject dialect note right after the opening system instruction line
+        dialect_line = f"\nSQL DIALECT: {dialect_note}\n"
+        base_prompt = base_prompt.replace(
+            f"Generate a single valid PostgreSQL SELECT query for the schema '{target_db}'.",
+            f"Generate a single valid SQL SELECT query for the schema '{target_db}'.\n{dialect_note}",
+        )
+        return base_prompt
+
     def build_retry_prompt(self, original_prompt: str, failed_sql: str, error: str) -> str:
         """
         Build a retry prompt after validation failure.
@@ -153,59 +193,6 @@ Please fix the SQL. Output your reasoning in a `<thought>` block, followed by th
 SQL:"""
         
         return retry_prompt
-
-    def build_refinement_prompt(
-        self,
-        original_query: str,
-        current_sql: str,
-        refinement_instruction: str,
-        schema_context: str,
-        few_shots: List[Dict] = None,
-        target_db: str = "macht413",
-    ) -> str:
-        """
-        Build a prompt that rewrites an existing SQL query based on a plain-English
-        refinement instruction from the user.
-
-        The full pipeline (normalize → schema link → few-shots) is run again so
-        the model always has fresh context. The original question and current SQL
-        are injected as additional context so the model understands what already
-        works and only applies the targeted change.
-
-        Args:
-            original_query:         The original natural language query.
-            current_sql:            The SQL that was already generated.
-            refinement_instruction: Plain-English change the user wants (e.g. 'filter to CPU 0').
-            schema_context:         Filtered schema DDL from schema linker.
-            few_shots:              Retrieved few-shot examples.
-            target_db:              Target database schema prefix.
-
-        Returns:
-            Complete prompt string for the refinement LLM call.
-        """
-        base_prompt = self.build_prompt(
-            normalized_query=original_query,
-            schema_context=schema_context,
-            few_shots=few_shots or [],
-            target_db=target_db,
-        )
-
-        refinement_context = f"""
-REFINEMENT CONTEXT:
-The user previously asked: "{original_query}"
-You generated this SQL, which executed successfully:
-```sql
-{current_sql}
-```
-
-The user now wants you to refine it with the following instruction:
-"{refinement_instruction}"
-
-Apply ONLY the requested change. Keep all other aspects of the SQL identical to the current SQL above unless the refinement instruction explicitly changes them.
-Output your reasoning in a `<thought>` block, then output the refined SQL in a ```sql block.
-"""
-        return base_prompt + refinement_context
-
 
 
 # Test the prompt builder
@@ -245,7 +232,7 @@ CREATE TABLE macht413.cpu (
     assert "USER REQUEST:" in prompt
     assert f"LIMIT {MAX_ROWS}" in prompt
     assert "EXAMPLES" not in prompt  # Should be omitted when empty
-    print("[OK] Basic prompt structure correct")
+    print("✓ Basic prompt structure correct")
     
     # Test 2: Prompt with few-shot examples
     print("\n[Test 2] Prompt with few-shot examples")
@@ -278,7 +265,7 @@ CREATE TABLE macht413.cpu (
     assert "OUTPUT:\n<thought>" in prompt_with_examples
     assert "```sql\nSELECT cpu_num" in prompt_with_examples
     assert "### Example 2" in prompt_with_examples
-    print("[OK] Few-shot examples included correctly")
+    print("✓ Few-shot examples included correctly")
     
     # Test 3: Retry prompt
     print("\n[Test 3] Retry prompt with error feedback")
@@ -301,7 +288,7 @@ CREATE TABLE macht413.cpu (
     assert error in retry_prompt
     assert failed_sql in retry_prompt
     assert "Please fix the SQL" in retry_prompt
-    print("[OK] Retry prompt structure correct")
+    print("✓ Retry prompt structure correct")
     
     # Test 4: Custom max_rows
     print("\n[Test 4] Custom max_rows value")
@@ -315,7 +302,7 @@ CREATE TABLE macht413.cpu (
     
     assert "LIMIT 5000" in custom_prompt
     assert "LIMIT 10000" not in custom_prompt
-    print("[OK] Custom max_rows injected correctly")
+    print("✓ Custom max_rows injected correctly")
     
     print("\n" + "=" * 80)
-    print("[OK] All Prompt Builder tests passed!")
+    print("✓ All Prompt Builder tests passed!")
