@@ -420,10 +420,6 @@ export default function Dashboard() {
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: health.db_connected ? '#10b981' : '#ef4444' }} />
                   {health.db_connected ? 'Connected' : 'Disconnected'}
                 </span>
-                <span style={{ color: '#2a2a2a' }}>·</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Database size={11} /> {health.schema_tables} tables
-                </span>
               </div>
             )}
           </div>
