@@ -376,17 +376,6 @@ def stats():
     return _audit.get_stats()
 
 
-# POST /api/admin/retry-analysis
-@app.post("/api/admin/retry-analysis")
-def retry_analysis():
-    """
-    Analyze the audit log for queries that exhausted the retry budget,
-    bucket them by failure mode, and emit recommended prompt / pipeline
-    changes. See backend/jobs/retry_analysis.py for the classifier rules.
-    """
-    from jobs.retry_analysis import run_analysis
-    return run_analysis()
-
 
 # ── Planner clarification endpoints ──────────────────────────────────────────
 # Multi-turn flow: start → (answer)* → force OR natural ready state → execute

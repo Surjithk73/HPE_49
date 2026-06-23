@@ -235,36 +235,6 @@ export async function acceptQueryCache(query: string, sql: string, rowCount: num
   })
 }
 
-export interface RetryAnalysisSample {
-  id: number
-  timestamp: string
-  original_input: string
-  domain: string | null
-  validation_error: string
-  retry_count: number | null
-}
-
-export interface RetryAnalysisBucket {
-  key: string
-  label: string
-  fix_surface: string
-  recommendation: string
-  count: number
-  samples: RetryAnalysisSample[]
-}
-
-export interface RetryAnalysisReport {
-  total_failures: number
-  buckets: RetryAnalysisBucket[]
-  unclassified: RetryAnalysisSample[]
-  summary: string
-}
-
-export async function runRetryAnalysis(): Promise<RetryAnalysisReport> {
-  return request<RetryAnalysisReport>('/api/admin/retry-analysis', {
-    method: 'POST',
-  })
-}
 
 export async function setModel(model: string): Promise<{ model: string; previous_model: string }> {
   return request<{ model: string; previous_model: string }>('/api/model', {
