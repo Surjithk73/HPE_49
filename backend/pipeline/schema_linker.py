@@ -642,8 +642,8 @@ class SchemaLinker:
 
             # Check if column actually exists in DB
             if valid_db_columns is not None:
-                # remove {N} and check if it's in valid_db_columns
-                check_name = col_name.replace('{N}', '0')
+                # remove {N} and replace dots with underscores to match DB format
+                check_name = col_name.replace('{N}', '0').replace('.', '_')
                 # For basic columns this works. Arrays in postgres are usually single columns like 'ipus' 
                 # but if the DB has expanded them like ipu0, ipu1... then checking '0' works.
                 # If neither the exact name nor the replaced name is in DB, we skip it.

@@ -449,8 +449,7 @@ def _execute_from_spec(spec, target_db: str, session=None) -> dict:
         domain = norm["domain_category"]
 
         try:
-            last_sql, last_raw = _sql_generator.generate(current_spec, target_db)
-            last_prompt = "(see SQLGenerator internals)"
+            last_sql, last_raw, last_prompt = _sql_generator.generate(current_spec, target_db)
         except LLMError as exc:
             last_error = str(exc)
             print(f"[Pipeline] Attempt {attempt + 1} generation error: {last_error}")

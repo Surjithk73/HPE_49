@@ -117,10 +117,14 @@ AGGREGATION & MATH RULES:
 - When calculating Queue lengths or ratios that may result in very small decimals, explicitly CAST the final result to NUMERIC(10,4) so it does not truncate to 0.
 - When computing process-category breakdowns from {target_db}.proc grouped by cpu_num, use SUM(CASE WHEN ...) for the numerator and `base_time_us` for the denominator.
 - Use from_timestamp / to_timestamp for time filtering.
+- EXPLICIT TOTAL RULE: If the query asks for a "total" metric, you MUST use SUM() to aggregate across time intervals. NEVER use AVG() when a total is requested.
+- EXPLICIT FILE NAME RULE: If grouping or reporting by "file name" for disk files (dfile, dopen), you MUST concatenate the schema columns: `file_name.volume || '.' || file_name.subvol || '.' || file_name.filename`. NEVER use `device_name` as a substitute.
+- EXPLICIT TIME INTERVAL RULE: Measurement tables contain multiple intervals. When asked for total combined metrics (e.g. "total reads and writes combined"), you MUST use SUM() and GROUP BY, rather than just adding columns on individual rows.
 
 CROSS-TABLE & JOIN RULES:
 - CRITICAL: The from_timestamp values have microsecond precision and DO NOT match exactly across tables. You MUST use DATE_TRUNC('second', from_timestamp) on BOTH sides of timestamp join conditions. Direct equality joins will return zero rows.
 - CRITICAL: When joining 3 or more tables that each have many rows, ALWAYS use CTEs to pre-aggregate each table down to (system_name, ts) first, then join the small aggregated results.
+- EXPLICIT DFILE TO FILE JOIN RULE: If you must join `dfile` and `file` (e.g. to combine physical and logical file metrics), you MUST aggregate them separately in CTEs grouping by `system_name, file_name_volume, file_name_subvol, file_name_filename` and then join them strictly on those 4 columns. NEVER join them on `device_name`, `cpu_num`, or `fcb_number` as they represent different concepts in those two tables.
 
 SCHEMA CONTEXT:
 {schema_context}

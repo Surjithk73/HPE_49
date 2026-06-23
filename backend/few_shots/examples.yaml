@@ -427,6 +427,9 @@ examples:
     AS disk_file, AVG(100000.0 * transient_opens / NULLIF(delta_time, 0)) AS transient_opens_per_sec
     FROM %db%.dfile GROUP BY file_name_volume, file_name_subvol, file_name_filename
     ORDER BY transient_opens_per_sec DESC LIMIT 10;
+- domain: multi-table
+  query: Show total lock wait time and number of lock escalations per file
+  sql: "WITH dfile_agg AS (\n  SELECT system_name, file_name_volume, file_name_subvol, file_name_filename, SUM(lockwait_time) AS total_lockwait_time\n  FROM %db%.dfile\n  GROUP BY system_name, file_name_volume, file_name_subvol, file_name_filename\n),\nfile_agg AS (\n  SELECT system_name, file_name_volume, file_name_subvol, file_name_filename, SUM(escalations) AS total_escalations\n  FROM %db%.file\n  GROUP BY system_name, file_name_volume, file_name_subvol, file_name_filename\n)\nSELECT \n  d.system_name,\n  d.file_name_volume || '.' || d.file_name_subvol || '.' || d.file_name_filename AS file_name,\n  d.total_lockwait_time,\n  COALESCE(f.total_escalations, 0) AS total_escalations\nFROM dfile_agg d\nLEFT JOIN file_agg f\n  ON d.system_name = f.system_name\n  AND d.file_name_volume = f.file_name_volume\n  AND d.file_name_subvol = f.file_name_subvol\n  AND d.file_name_filename = f.file_name_filename\nORDER BY d.total_lockwait_time DESC\nLIMIT 10;"
 - domain: proc
   query: Show process CPU busy time for a specific time range ordered by busy time
     descending

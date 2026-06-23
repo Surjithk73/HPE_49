@@ -56,7 +56,7 @@ class SQLGenerator:
         self._max_retries = max_retries
         self._dialect = dialect
 
-    def generate(self, spec: IntentSpec, target_db: str = "macht413") -> tuple[str, str]:
+    def generate(self, spec: IntentSpec, target_db: str = "macht413") -> tuple[str, str, str]:
         """
         Compile a completed IntentSpec into SQL — single shot, no internal retry.
 
@@ -65,7 +65,7 @@ class SQLGenerator:
         on validation failure so the orchestrator can route the error to the planner.
 
         Returns:
-            (validated_sql, raw_llm_output)
+            (validated_sql, raw_llm_output, prompt)
 
         Raises:
             LLMError: on generation failure or validation failure
@@ -90,9 +90,9 @@ class SQLGenerator:
             result = self._validator.validate(sql)
             if not result.valid:
                 raise LLMError(f"Validation failed: {result.error}")
-            return result.sanitized_sql, raw
+            return result.sanitized_sql, raw, prompt
 
-        return sql, raw
+        return sql, raw, prompt
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

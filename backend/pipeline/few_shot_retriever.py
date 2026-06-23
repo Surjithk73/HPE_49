@@ -43,7 +43,7 @@ class FewShotRetriever:
         except Exception:
             pass
 
-        self.collection = self.client.create_collection(
+        self.collection = self.client.get_or_create_collection(
             name=self.COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"}
         )
