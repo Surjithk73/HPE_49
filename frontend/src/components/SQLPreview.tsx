@@ -52,8 +52,8 @@ export default function SQLPreview({ sql, cacheHit, executionTimeMs, domain }: P
   return (
     <div style={{
       borderRadius: '10px',
-      border: '1px solid #2a2a2a',
-      background: '#161616',
+      border: '1px solid var(--theme-border)',
+      background: 'var(--theme-surface-2)',
       overflow: 'hidden',
       animation: 'slideUp 0.25s ease-out',
     }}>
@@ -62,11 +62,11 @@ export default function SQLPreview({ sql, cacheHit, executionTimeMs, domain }: P
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderBottom: '1px solid #2a2a2a',
+        borderBottom: '1px solid var(--theme-border)',
         padding: '10px 16px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--theme-tx-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             Generated SQL
           </span>
           {cacheHit && (
@@ -79,23 +79,23 @@ export default function SQLPreview({ sql, cacheHit, executionTimeMs, domain }: P
             </span>
           )}
           <span style={{
-            border: '1px solid #2a2a2a', background: '#1c1c1c',
-            borderRadius: '999px', padding: '2px 8px', fontSize: '11px', color: '#555', textTransform: 'capitalize',
+            border: '1px solid var(--theme-border)', background: 'var(--theme-border)',
+            borderRadius: '999px', padding: '2px 8px', fontSize: '11px', color: 'var(--theme-tx-muted)', textTransform: 'capitalize',
           }}>
             {domain}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#444' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>
             <Clock size={10} /> {executionTimeMs}ms
           </span>
           <button
             onClick={copy}
             style={{
               display: 'flex', alignItems: 'center', gap: '5px',
-              border: '1px solid #2a2a2a', background: '#1c1c1c',
+              border: '1px solid var(--theme-border)', background: 'var(--theme-border)',
               borderRadius: '6px', padding: '4px 10px', fontSize: '11px',
-              color: copied ? '#34d399' : '#888', cursor: 'pointer', fontFamily: 'inherit',
+              color: copied ? '#34d399' : 'var(--theme-tx-secondary)', cursor: 'pointer', fontFamily: 'inherit',
               transition: 'all 0.15s',
             }}
           >
@@ -107,7 +107,7 @@ export default function SQLPreview({ sql, cacheHit, executionTimeMs, domain }: P
       {/* SQL */}
       <div style={{ overflowX: 'auto', padding: '16px' }}>
         <pre
-          style={{ fontFamily: 'inherit', fontSize: '12px', lineHeight: 1.7, color: '#f0f0f0', margin: 0, whiteSpace: 'pre-wrap' }}
+          style={{ fontFamily: 'inherit', fontSize: '12px', lineHeight: 1.7, color: 'var(--theme-tx-primary)', margin: 0, whiteSpace: 'pre-wrap' }}
           dangerouslySetInnerHTML={{ __html: highlighted }}
         />
       </div>

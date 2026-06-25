@@ -144,7 +144,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{
           display: 'flex', borderRadius: '8px',
-          border: '1px solid #2a2a2a', background: '#0d0d0d', padding: '3px', gap: '2px',
+          border: '1px solid var(--theme-border)', background: 'var(--theme-surface-2)', padding: '3px', gap: '2px',
         }}>
           {/* NL button */}
           <button
@@ -154,8 +154,8 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
               borderRadius: '6px', padding: '5px 14px', fontSize: '11px',
               border: 'none', cursor: 'pointer', fontFamily: 'inherit',
               fontWeight: 600, letterSpacing: '0.05em',
-              background: mode === 'nl' ? 'rgba(59,130,246,0.15)' : 'transparent',
-              color:      mode === 'nl' ? '#60a5fa' : '#555',
+              background: mode === 'nl' ? 'rgba(16,185,129,0.15)' : 'transparent',
+              color:      mode === 'nl' ? 'var(--theme-tab-sql-text)' : 'var(--theme-tx-muted)',
               transition: 'all 0.15s',
             }}
           >
@@ -171,8 +171,8 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
               borderRadius: '6px', padding: '5px 14px', fontSize: '11px',
               border: 'none', cursor: 'pointer', fontFamily: 'inherit',
               fontWeight: 600, letterSpacing: '0.05em',
-              background: isSql ? 'rgba(16,185,129,0.15)' : 'transparent',
-              color:      isSql ? '#34d399' : '#555',
+              background: mode === 'sql' ? 'rgba(16,185,129,0.15)' : 'transparent',
+              color:      mode === 'sql' ? 'var(--theme-tab-sql-text)' : 'var(--theme-tx-muted)',
               transition: 'all 0.15s',
             }}
           >
@@ -188,8 +188,8 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
               borderRadius: '6px', padding: '5px 14px', fontSize: '11px',
               border: 'none', cursor: 'pointer', fontFamily: 'inherit',
               fontWeight: 600, letterSpacing: '0.05em',
-              background: isImage ? 'rgba(168,85,247,0.15)' : 'transparent',
-              color:      isImage ? '#c084fc' : '#555',
+              background: mode === 'image' ? 'rgba(147,51,234,0.15)' : 'transparent',
+              color:      mode === 'image' ? 'var(--theme-tab-img-text)' : 'var(--theme-tx-muted)',
               transition: 'all 0.15s',
             }}
           >
@@ -200,7 +200,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
 
         {/* Mode hint and DB Selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '11px', color: '#333' }}>
+          <span style={{ fontSize: '11px', color: 'var(--theme-tx-muted)' }}>
             {isImage ? 'Chart image — Gemini infers an NL question, then SQL'
               : isSql ? 'Direct SQL — bypasses LLM'
               : 'AI-powered — generates SQL for you'}
@@ -211,9 +211,9 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             style={{
               padding: '6px 12px',
               borderRadius: '6px',
-              background: '#0a0a0a',
-              border: targetDb ? '1px solid #333' : '1px solid #ef4444',
-              color: targetDb ? '#fff' : '#ef4444',
+              background: 'var(--theme-bg)',
+              border: targetDb ? '1px solid var(--theme-border-bright)' : '1px solid #ef4444',
+              color: targetDb ? 'var(--theme-tx-primary)' : '#ef4444',
               fontSize: '12px',
               outline: 'none',
               cursor: 'pointer',
@@ -235,8 +235,8 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
         border: `1px solid ${error
           ? 'rgba(239,68,68,0.4)'
           : isImage ? 'rgba(168,85,247,0.2)'
-          : isSql ? 'rgba(16,185,129,0.2)' : '#2a2a2a'}`,
-        background: error ? 'rgba(239,68,68,0.05)' : '#161616',
+          : isSql ? 'rgba(16,185,129,0.2)' : 'var(--theme-border)'}`,
+        background: error ? 'rgba(239,68,68,0.05)' : 'var(--theme-surface-2)',
         transition: 'border-color 0.15s',
         position: 'relative',
       }}>
@@ -266,7 +266,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
                 <img
                   src={imagePreview}
                   alt="upload preview"
-                  style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '6px', border: '1px solid #2a2a2a' }}
+                  style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '6px', border: '1px solid var(--theme-border)' }}
                 />
                 <span style={{ fontSize: '11px', color: '#666' }}>
                   {imageFile?.name} — click to replace
@@ -275,10 +275,10 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             ) : (
               <>
                 <Upload size={20} style={{ color: '#c084fc' }} />
-                <span style={{ fontSize: '12px', color: '#aaa' }}>
+                <span style={{ fontSize: '12px', color: 'var(--theme-tx-muted)' }}>
                   Drop, paste (Ctrl+V), or click to choose a chart screenshot
                 </span>
-                <span style={{ fontSize: '10px', color: '#444' }}>
+                <span style={{ fontSize: '10px', color: 'var(--theme-tx-secondary)' }}>
                   PNG / JPG · max 8 MB
                 </span>
               </>
@@ -306,7 +306,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             background: 'transparent',
             padding: '14px 16px',
             fontSize: isSql ? '12px' : '13px',
-            color: '#f0f0f0',
+            color: 'var(--theme-tx-primary)',
             outline: 'none',
             fontFamily: isSql ? 'JetBrains Mono, Fira Code, Consolas, monospace' : 'inherit',
             opacity: loading ? 0.5 : 1,
@@ -319,7 +319,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
         {isSql && value === '' && (
           <div style={{
             position: 'absolute', top: '10px', right: '12px',
-            fontSize: '10px', color: '#2a2a2a', pointerEvents: 'none',
+            fontSize: '10px', color: 'var(--theme-border)', pointerEvents: 'none',
             fontFamily: 'JetBrains Mono, monospace',
           }}>
             schema: {targetDb}
@@ -330,10 +330,10 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          borderTop: '1px solid #1c1c1c', padding: '8px 16px',
+          borderTop: '1px solid var(--theme-border)', padding: '8px 16px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '11px', color: '#333' }}>
+            <span style={{ fontSize: '11px', color: 'var(--theme-tx-muted)' }}>
               {isImage
                 ? (imageFile ? 'Ready — click Analyze Image' : 'Pick or drop a chart image')
                 : isSql ? 'Only SELECT statements · Ctrl+Enter to run'
@@ -347,7 +347,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
                   ? '#ef4444'
                   : value.length >= MAX_QUERY_LENGTH * 0.85
                     ? '#fbbf24'
-                    : '#333',
+                    : 'var(--theme-border-bright)',
                 transition: 'color 0.2s',
               }}>
                 {value.length}/{MAX_QUERY_LENGTH}
@@ -358,19 +358,20 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             const disabled = loading
               || (isImage ? !imageFile : !value.trim() || value.length > MAX_QUERY_LENGTH)
             const bg = disabled
-              ? '#1a1a1a'
+              ? 'var(--theme-surface-2)'
               : isImage ? '#9333ea'
               : isSql ? '#059669'
-              : '#3b82f6'
+              : 'var(--theme-accent)'
             return (
               <button
+                className={!disabled ? "hpe-gradient-btn" : ""}
                 onClick={handleSubmit}
                 disabled={disabled}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '6px 14px', borderRadius: '7px',
                   background: bg,
-                  color: disabled ? '#444' : '#fff',
+                  color: disabled ? 'var(--theme-tx-secondary)' : 'var(--theme-tx-primary)',
                   border: 'none',
                   cursor: disabled ? 'not-allowed' : 'pointer',
                   fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
@@ -405,7 +406,7 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
       {/* ── Suggestions ── */}
       {!isImage && !value && !loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span style={{ fontSize: '10px', color: '#333', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: '10px', color: 'var(--theme-tx-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             {isSql ? 'Example queries' : 'Try asking'}
           </span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -415,10 +416,10 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
                 onClick={() => setValue(s)}
                 style={{
                   borderRadius: isSql ? '6px' : '999px',
-                  border: `1px solid ${isSql ? 'rgba(16,185,129,0.15)' : '#2a2a2a'}`,
-                  background: '#161616',
+                  border: `1px solid ${isSql ? 'rgba(16,185,129,0.15)' : 'var(--theme-border)'}`,
+                  background: 'var(--theme-surface-2)',
                   padding: isSql ? '6px 10px' : '4px 12px',
-                  fontSize: '11px', color: '#555',
+                  fontSize: '11px', color: 'var(--theme-tx-muted)',
                   cursor: 'pointer', fontFamily: isSql ? 'JetBrains Mono, monospace' : 'inherit',
                   transition: 'all 0.15s',
                   textAlign: 'left',
@@ -428,13 +429,13 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
                 }}
                 onMouseEnter={e => {
                   const el = e.currentTarget
-                  el.style.borderColor = isSql ? 'rgba(16,185,129,0.4)' : 'rgba(59,130,246,0.4)'
-                  el.style.color = '#f0f0f0'
+                  el.style.borderColor = isSql ? 'rgba(16,185,129,0.4)' : 'var(--theme-accent)'
+                  el.style.color = 'var(--theme-tx-primary)'
                 }}
                 onMouseLeave={e => {
                   const el = e.currentTarget
-                  el.style.borderColor = isSql ? 'rgba(16,185,129,0.15)' : '#2a2a2a'
-                  el.style.color = '#555'
+                  el.style.borderColor = isSql ? 'rgba(16,185,129,0.15)' : 'var(--theme-border)'
+                  el.style.color = 'var(--theme-tx-muted)'
                 }}
               >
                 {isSql ? s.slice(0, 80) + (s.length > 80 ? '…' : '') : s}

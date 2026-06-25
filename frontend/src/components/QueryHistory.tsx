@@ -10,29 +10,29 @@ export default function QueryHistory({ history, onSelect }: Props) {
   if (history.length === 0) {
     return (
       <div style={{
-        borderRadius: '10px', border: '1px solid #2a2a2a', background: '#111',
+        borderRadius: '10px', border: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)',
         padding: '32px 16px', textAlign: 'center',
       }}>
-        <History size={20} style={{ color: '#333', margin: '0 auto 8px' }} />
-        <p style={{ fontSize: '12px', color: '#444', margin: 0 }}>No history yet</p>
+        <History size={20} style={{ color: 'var(--theme-tx-muted)', margin: '0 auto 8px' }} />
+        <p style={{ fontSize: '12px', color: 'var(--theme-tx-secondary)', margin: 0 }}>No history yet</p>
       </div>
     )
   }
 
   return (
-    <div style={{ borderRadius: '10px', border: '1px solid #2a2a2a', background: '#111', overflow: 'hidden' }}>
+    <div style={{ borderRadius: '10px', border: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '8px',
-        borderBottom: '1px solid #2a2a2a', padding: '10px 16px',
+        borderBottom: '1px solid var(--theme-border)', padding: '10px 16px',
       }}>
-        <History size={13} style={{ color: '#555' }} />
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+        <History size={13} style={{ color: 'var(--theme-tx-muted)' }} />
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--theme-tx-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
           Recent Queries
         </span>
         <span style={{
-          marginLeft: 'auto', background: '#1c1c1c', border: '1px solid #2a2a2a',
-          borderRadius: '999px', padding: '1px 8px', fontSize: '11px', color: '#444',
+          marginLeft: 'auto', background: 'var(--theme-border)', border: '1px solid var(--theme-border)',
+          borderRadius: '999px', padding: '1px 8px', fontSize: '11px', color: 'var(--theme-tx-secondary)',
         }}>
           {history.length}
         </span>
@@ -50,24 +50,24 @@ export default function QueryHistory({ history, onSelect }: Props) {
               borderBottom: i < history.length - 1 ? '1px solid rgba(42,42,42,0.5)' : 'none',
               transition: 'background 0.1s', fontFamily: 'inherit',
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#1c1c1c')}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hpe-tint)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
               <p style={{
-                flex: 1, margin: 0, fontSize: '12px', color: '#ccc',
+                flex: 1, margin: 0, fontSize: '12px', color: 'var(--theme-tx-primary)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {entry.original_input}
               </p>
-              <ChevronRight size={12} style={{ color: '#333', flexShrink: 0, marginTop: '2px' }} />
+              <ChevronRight size={12} style={{ color: 'var(--theme-tx-muted)', flexShrink: 0, marginTop: '2px' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
-              <span style={{ fontSize: '11px', color: '#444' }}>
+              <span style={{ fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>
                 {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
               {entry.row_count != null && (
-                <span style={{ fontSize: '11px', color: '#444' }}>{entry.row_count.toLocaleString()} rows</span>
+                <span style={{ fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>{entry.row_count.toLocaleString()} rows</span>
               )}
               {entry.cache_hit === 1 && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: '#d97706' }}>
@@ -75,14 +75,14 @@ export default function QueryHistory({ history, onSelect }: Props) {
                 </span>
               )}
               {entry.execution_time_ms != null && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: '#444' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>
                   <Clock size={9} /> {entry.execution_time_ms}ms
                 </span>
               )}
               {entry.domain_category && (
                 <span style={{
-                  border: '1px solid #2a2a2a', borderRadius: '999px',
-                  padding: '1px 7px', fontSize: '10px', color: '#444', textTransform: 'capitalize',
+                  border: '1px solid var(--theme-border)', borderRadius: '999px',
+                  padding: '1px 7px', fontSize: '10px', color: 'var(--theme-tx-secondary)', textTransform: 'capitalize',
                 }}>
                   {entry.domain_category}
                 </span>

@@ -4,6 +4,8 @@ import JSZip from 'jszip'
 import { Database, Upload, Loader2, CheckCircle2, XCircle, AlertCircle, Plus, FileText, X, ArrowLeft, Cpu, Trash2 } from 'lucide-react'
 import { getDatabaseDetails, appendMeasureData, uploadMeasureData, deleteDatabase } from '../lib/api'
 import type { DatabaseDetails } from '../lib/api'
+import { HPELogo } from '../components/HPELogo'
+import ThemeToggle from '../components/ThemeToggle'
 
 const STANDARD_TABLES = [
   'cpu', 'dfile', 'disc', 'dopen', 'file', 
@@ -204,24 +206,27 @@ export default function DatabaseManager() {
 
   if (loading && details.length === 0) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0f0f0', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
-        <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--theme-bg)', color: 'var(--theme-tx-primary)', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
+        <header style={{ borderBottom: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)' }}>
+          <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Cpu size={15} style={{ color: '#3b82f6' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <HPELogo width={98} height={28} />
               </div>
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em' }}>QueryCraft</div>
-                <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--theme-tx-primary)', letterSpacing: '-0.02em' }}>QueryCraft</div>
+                <div style={{ fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>HPE NonStop Performance Analytics</div>
               </div>
             </Link>
-            <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: '#1a1a1a', border: '1px solid #333', color: '#fff', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
-              Back to Dashboard
-            </Link>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--theme-surface-2)', border: '1px solid var(--theme-border-bright)', color: 'var(--theme-tx-primary)', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
+                Back to Dashboard
+              </Link>
+              <ThemeToggle />
+            </div>
           </div>
         </header>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '64px', color: '#888' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '64px', color: 'var(--theme-tx-secondary)' }}>
           <Loader2 className="spinner" size={24} style={{ animation: 'spin 1s linear infinite' }} />
         </div>
       </div>
@@ -229,31 +234,34 @@ export default function DatabaseManager() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0f0f0', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
-      <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--theme-bg)', color: 'var(--theme-tx-primary)', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
+      <header style={{ borderBottom: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Cpu size={15} style={{ color: '#3b82f6' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <HPELogo width={98} height={28} />
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em' }}>QueryCraft</div>
-              <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--theme-tx-primary)', letterSpacing: '-0.02em' }}>QueryCraft</div>
+              <div style={{ fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>HPE NonStop Performance Analytics</div>
             </div>
           </Link>
-          <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: '#1a1a1a', border: '1px solid #333', color: '#fff', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
-            Back to Dashboard
-          </Link>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--theme-surface-2)', border: '1px solid var(--theme-border-bright)', color: 'var(--theme-tx-primary)', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
+              Back to Dashboard
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       <div style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto' }}>
         <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Database size={28} color="#3b82f6" />
+          <Database size={28} color="var(--theme-accent)" />
           Database Manager
         </h1>
-        <p style={{ color: '#888', margin: 0 }}>
+        <p style={{ color: 'var(--theme-tx-secondary)', margin: 0 }}>
           View existing nodes, see which Measure files are loaded, and append missing or custom data files directly to a schema.
         </p>
       </div>
@@ -261,16 +269,16 @@ export default function DatabaseManager() {
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
         <button 
           onClick={() => setShowCreate(!showCreate)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', background: showCreate ? '#222' : '#3b82f6', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', background: showCreate ? 'var(--theme-surface-4)' : 'var(--theme-accent)', color: 'var(--theme-tx-primary)', border: 'none', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
         >
           {showCreate ? <><X size={18} /> Cancel</> : <><Plus size={18} /> Create New Database</>}
         </button>
       </div>
 
       {showCreate && (
-        <div style={{ background: '#111', border: '1px solid #222', borderRadius: '12px', padding: '24px', marginBottom: '32px' }}>
+        <div style={{ background: 'var(--theme-surface-1)', border: '1px solid var(--theme-surface-4)', borderRadius: '12px', padding: '24px', marginBottom: '32px' }}>
           <h2 style={{ margin: '0 0 20px', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Upload size={20} color="#3b82f6" /> Create New Database
+            <Upload size={20} color="var(--theme-accent)" /> Create New Database
           </h2>
           
           {createError && (
@@ -280,27 +288,27 @@ export default function DatabaseManager() {
           )}
 
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#ccc' }}>Database Name</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: 'var(--theme-tx-primary)' }}>Database Name</label>
             <input 
               type="text" 
               value={newDbName} 
               onChange={e => setNewDbName(e.target.value)} 
               placeholder="e.g. machd600"
-              style={{ width: '100%', padding: '10px 14px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '6px', color: '#fff', outline: 'none' }}
+              style={{ width: '100%', padding: '10px 14px', background: 'var(--theme-bg)', border: '1px solid var(--theme-border-bright)', borderRadius: '6px', color: 'var(--theme-tx-primary)', outline: 'none' }}
               disabled={isCreating}
             />
           </div>
 
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#ccc' }}>Measure Files</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: 'var(--theme-tx-primary)' }}>Measure Files</label>
             <div 
               onDragOver={e => e.preventDefault()}
               onDrop={handleCreateDrop}
               onClick={() => fileInputRef.current?.click()}
-              style={{ border: '2px dashed #333', borderRadius: '8px', padding: '32px', textAlign: 'center', cursor: isCreating ? 'not-allowed' : 'pointer', background: '#0a0a0a' }}
+              style={{ border: '2px dashed var(--theme-border-bright)', borderRadius: '8px', padding: '32px', textAlign: 'center', cursor: isCreating ? 'not-allowed' : 'pointer', background: 'var(--theme-bg)' }}
             >
-              <Upload size={24} color="#555" style={{ marginBottom: '12px' }} />
-              <div style={{ fontSize: '14px', color: '#ccc' }}>Drag files or ZIP archives here</div>
+              <Upload size={24} color="var(--theme-tx-muted)" style={{ marginBottom: '12px' }} />
+              <div style={{ fontSize: '14px', color: 'var(--theme-tx-primary)' }}>Drag files or ZIP archives here</div>
               <input 
                 ref={fileInputRef} type="file" multiple
                 onChange={handleCreateSelect} style={{ display: 'none' }} disabled={isCreating}
@@ -311,8 +319,8 @@ export default function DatabaseManager() {
           {newDbFiles.length > 0 && (
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {newDbFiles.map((f, i) => (
-                <li key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#161616', padding: '8px 12px', borderRadius: '6px', fontSize: '13px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><FileText size={14} color="#3b82f6" /> {f.name}</div>
+                <li key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--theme-surface-2)', padding: '8px 12px', borderRadius: '6px', fontSize: '13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><FileText size={14} color="var(--theme-accent)" /> {f.name}</div>
                   <button onClick={() => setNewDbFiles(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><X size={14} /></button>
                 </li>
               ))}
@@ -323,7 +331,7 @@ export default function DatabaseManager() {
             <button 
               onClick={handleCreateSubmit}
               disabled={isCreating || !newDbName.trim() || newDbFiles.length === 0}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#3b82f6', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: (isCreating || !newDbName.trim() || newDbFiles.length === 0) ? 'not-allowed' : 'pointer', opacity: (isCreating || !newDbName.trim() || newDbFiles.length === 0) ? 0.5 : 1, fontWeight: 600 }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--theme-accent)', color: 'var(--theme-tx-primary)', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: (isCreating || !newDbName.trim() || newDbFiles.length === 0) ? 'not-allowed' : 'pointer', opacity: (isCreating || !newDbName.trim() || newDbFiles.length === 0) ? 0.5 : 1, fontWeight: 600 }}
             >
               {isCreating ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Creating...</> : 'Create Database'}
             </button>
@@ -349,11 +357,11 @@ export default function DatabaseManager() {
           const customTables = db.tables.filter(t => !STANDARD_TABLES.includes(t))
 
           return (
-            <div key={db.database} style={{ background: '#111', border: '1px solid #222', borderRadius: '12px', overflow: 'hidden' }}>
-              <div style={{ padding: '20px 24px', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161616' }}>
-                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: '#f0f0f0' }}>{db.database}</h2>
+            <div key={db.database} style={{ background: 'var(--theme-surface-1)', border: '1px solid var(--theme-surface-4)', borderRadius: '12px', overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--theme-surface-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--theme-surface-2)' }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: 'var(--theme-tx-primary)' }}>{db.database}</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <span style={{ fontSize: '13px', color: '#888', background: '#222', padding: '4px 10px', borderRadius: '12px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--theme-tx-secondary)', background: 'var(--theme-surface-4)', padding: '4px 10px', borderRadius: '12px' }}>
                     {db.tables.length} tables
                   </span>
                   <button
@@ -385,7 +393,7 @@ export default function DatabaseManager() {
                 
                 {/* Tables Status */}
                 <div>
-                  <h3 style={{ fontSize: '14px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px', marginTop: 0 }}>Standard Measure Files</h3>
+                  <h3 style={{ fontSize: '14px', color: 'var(--theme-tx-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px', marginTop: 0 }}>Standard Measure Files</h3>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
                     {STANDARD_TABLES.map(table => {
                       const present = db.tables.includes(table)
@@ -394,10 +402,10 @@ export default function DatabaseManager() {
                           display: 'flex', alignItems: 'center', gap: '6px', 
                           padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 500,
                           background: present ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.05)',
-                          color: present ? '#34d399' : '#888',
+                          color: present ? '#34d399' : 'var(--theme-tx-secondary)',
                           border: `1px solid ${present ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)'}`
                         }}>
-                          {present ? <CheckCircle2 size={14} /> : <XCircle size={14} color="#555" />}
+                          {present ? <CheckCircle2 size={14} /> : <XCircle size={14} color="var(--theme-tx-muted)" />}
                           {table}
                         </div>
                       )
@@ -406,12 +414,12 @@ export default function DatabaseManager() {
 
                   {customTables.length > 0 && (
                     <>
-                      <h3 style={{ fontSize: '14px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px', marginTop: 0 }}>Custom Tables</h3>
+                      <h3 style={{ fontSize: '14px', color: 'var(--theme-tx-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px', marginTop: 0 }}>Custom Tables</h3>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                         {customTables.map(table => (
                           <div key={table} style={{ 
                             padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 500,
-                            background: '#222', color: '#a78bfa', border: '1px solid #333'
+                            background: 'var(--theme-surface-4)', color: '#a78bfa', border: '1px solid var(--theme-border-bright)'
                           }}>
                             {table}
                           </div>
@@ -423,23 +431,23 @@ export default function DatabaseManager() {
 
                 {/* Upload Zone */}
                 <div>
-                  <h3 style={{ fontSize: '14px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px', marginTop: 0 }}>Append Data</h3>
+                  <h3 style={{ fontSize: '14px', color: 'var(--theme-tx-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px', marginTop: 0 }}>Append Data</h3>
                   <div 
                     onDragOver={e => e.preventDefault()}
                     onDrop={e => handleAppendDrop(e, db.database)}
                     onClick={() => document.getElementById(`file-input-${db.database}`)?.click()}
                     style={{
-                      border: '2px dashed #333',
+                      border: '2px dashed var(--theme-border-bright)',
                       borderRadius: '8px',
                       padding: '32px 16px',
                       textAlign: 'center',
                       cursor: isUploading ? 'not-allowed' : 'pointer',
-                      background: '#161616',
+                      background: 'var(--theme-surface-2)',
                       transition: 'all 0.2s',
                       opacity: isUploading ? 0.5 : 1
                     }}
-                    onMouseEnter={e => { if(!isUploading) e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.background = '#1a1a1a' }}
-                    onMouseLeave={e => { if(!isUploading) e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.background = '#161616' }}
+                    onMouseEnter={e => { if(!isUploading) e.currentTarget.style.borderColor = 'var(--theme-accent)'; e.currentTarget.style.background = 'var(--theme-surface-2)' }}
+                    onMouseLeave={e => { if(!isUploading) e.currentTarget.style.borderColor = 'var(--theme-border-bright)'; e.currentTarget.style.background = 'var(--theme-surface-2)' }}
                   >
                     <input 
                       id={`file-input-${db.database}`}
@@ -451,14 +459,14 @@ export default function DatabaseManager() {
                     />
                     
                     {isUploading ? (
-                      <div style={{ color: '#3b82f6', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ color: 'var(--theme-accent)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                         <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
                         <span style={{ fontSize: '14px', fontWeight: 500 }}>Appending data...</span>
                       </div>
                     ) : (
                       <>
-                        <Upload size={24} color="#555" style={{ marginBottom: '12px' }} />
-                        <div style={{ fontSize: '14px', color: '#ccc', fontWeight: 500, marginBottom: '4px' }}>
+                        <Upload size={24} color="var(--theme-tx-muted)" style={{ marginBottom: '12px' }} />
+                        <div style={{ fontSize: '14px', color: 'var(--theme-tx-primary)', fontWeight: 500, marginBottom: '4px' }}>
                           Drag files here
                         </div>
                         <div style={{ fontSize: '12px', color: '#666' }}>
@@ -485,7 +493,7 @@ export default function DatabaseManager() {
         })}
 
         {details.length === 0 && !loading && (
-          <div style={{ textAlign: 'center', padding: '64px', color: '#888', background: '#111', borderRadius: '12px', border: '1px dashed #333' }}>
+          <div style={{ textAlign: 'center', padding: '64px', color: 'var(--theme-tx-secondary)', background: 'var(--theme-surface-1)', borderRadius: '12px', border: '1px dashed var(--theme-border-bright)' }}>
             No databases found. Go to the Upload page to create your first one.
           </div>
         )}

@@ -22,18 +22,18 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      borderRadius: '8px', border: '1px solid #2a2a2a', background: '#1a1a1a',
+      borderRadius: '8px', border: '1px solid var(--theme-border)', background: 'var(--theme-surface-2)',
       padding: '10px 14px', boxShadow: '0 8px 32px rgba(0,0,0,0.7)', fontSize: '12px',
       fontFamily: 'JetBrains Mono, monospace',
     }}>
-      <p style={{ marginBottom: '8px', color: '#aaa', fontWeight: 600, borderBottom: '1px solid #2a2a2a', paddingBottom: '6px' }}>
+      <p style={{ marginBottom: '8px', color: 'var(--theme-tx-muted)', fontWeight: 600, borderBottom: '1px solid var(--theme-border)', paddingBottom: '6px' }}>
         {String(label)}
       </p>
       {payload.map((p: any, i: number) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
           <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: p.color, flexShrink: 0 }} />
           <span style={{ color: '#777', flex: 1 }}>{p.name}</span>
-          <span style={{ color: '#f0f0f0', fontWeight: 600, marginLeft: '12px' }}>
+          <span style={{ color: 'var(--theme-tx-primary)', fontWeight: 600, marginLeft: '12px' }}>
             {typeof p.value === 'number'
               ? p.value % 1 === 0 ? p.value.toLocaleString() : p.value.toFixed(3)
               : p.value}
@@ -84,8 +84,8 @@ export default function ChartView({ chartType, columns, rows, config }: Props) {
   })
 
   const axisStyle = { fill: '#666', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }
-  const gridStyle = { stroke: '#222', strokeDasharray: '3 3' }
-  const axisLine  = { stroke: '#2a2a2a' }
+  const gridStyle = { stroke: 'var(--theme-surface-4)', strokeDasharray: '3 3' }
+  const axisLine  = { stroke: 'var(--theme-border)' }
 
   const commonProps = {
     data,
@@ -123,7 +123,7 @@ export default function ChartView({ chartType, columns, rows, config }: Props) {
   const legendProps = {
     verticalAlign: 'top' as const,
     align: 'center' as const,
-    wrapperStyle: { fontSize: 11, color: '#888', paddingBottom: '16px', lineHeight: '22px' },
+    wrapperStyle: { fontSize: 11, color: 'var(--theme-tx-secondary)', paddingBottom: '16px', lineHeight: '22px' },
     iconSize: 10,
     formatter: fmtLegend,
   }
@@ -142,7 +142,7 @@ export default function ChartView({ chartType, columns, rows, config }: Props) {
           <ScatterChart margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
             <CartesianGrid {...gridStyle} />
             <XAxis type="number" dataKey="x" name={xNum} tick={axisStyle} tickLine={false}
-              axisLine={axisLine} tickFormatter={fmtY} label={{ value: fmtLegend(xNum), position: 'insideBottom', offset: -4, fill: '#555', fontSize: 11 }} />
+              axisLine={axisLine} tickFormatter={fmtY} label={{ value: fmtLegend(xNum), position: 'insideBottom', offset: -4, fill: 'var(--theme-tx-muted)', fontSize: 11 }} />
             <YAxis type="number" dataKey="y" name={yNum} tick={axisStyle} tickLine={false}
               axisLine={false} tickFormatter={fmtY} width={56} />
             <ZAxis range={[40, 40]} />
@@ -150,10 +150,10 @@ export default function ChartView({ chartType, columns, rows, config }: Props) {
               if (!active || !payload?.length) return null
               const d = payload[0].payload
               return (
-                <div style={{ borderRadius: '8px', border: '1px solid #2a2a2a', background: '#1a1a1a', padding: '10px 14px', fontSize: '12px' }}>
-                  <p style={{ color: '#aaa', marginBottom: '4px' }}>{String(d.label)}</p>
-                  <p style={{ color: '#f0f0f0' }}>{fmtLegend(xNum)}: <b>{fmtY(d.x)}</b></p>
-                  <p style={{ color: '#f0f0f0' }}>{fmtLegend(yNum)}: <b>{fmtY(d.y)}</b></p>
+                <div style={{ borderRadius: '8px', border: '1px solid var(--theme-border)', background: 'var(--theme-surface-2)', padding: '10px 14px', fontSize: '12px' }}>
+                  <p style={{ color: 'var(--theme-tx-muted)', marginBottom: '4px' }}>{String(d.label)}</p>
+                  <p style={{ color: 'var(--theme-tx-primary)' }}>{fmtLegend(xNum)}: <b>{fmtY(d.x)}</b></p>
+                  <p style={{ color: 'var(--theme-tx-primary)' }}>{fmtLegend(yNum)}: <b>{fmtY(d.y)}</b></p>
                 </div>
               )
             }} />
@@ -241,7 +241,7 @@ function ChartShell({ rows, cap, children }: { rows: unknown[], cap: number, chi
   return (
     <div style={{ position: 'relative', overflow: 'hidden' }}>
       {rows.length > cap && (
-        <div style={{ position: 'absolute', top: 0, right: 0, fontSize: '11px', color: '#444', zIndex: 1 }}>
+        <div style={{ position: 'absolute', top: 0, right: 0, fontSize: '11px', color: 'var(--theme-tx-secondary)', zIndex: 1 }}>
           showing first {cap} of {rows.length.toLocaleString()} rows
         </div>
       )}

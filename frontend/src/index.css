@@ -2,30 +2,72 @@
 
 @import "tailwindcss";
 
+:root {
+  --theme-bg: #0a0a0a;
+  --theme-surface-1: #111111;
+  --theme-surface-2: #161616;
+  --theme-surface-3: #1c1c1c;
+  --theme-surface-4: #222222;
+  --theme-surface-5: #2a2a2a;
+  --theme-accent: #01A982;
+  --theme-accent-dim: #008567;
+  --theme-border: #2a2a2a;
+  --theme-border-bright: #333;
+  --theme-tx-primary: #f0f0f0;
+  --theme-tx-secondary: #aaa;
+  --theme-tx-muted: #888;
+  --theme-hpe-tint: rgba(1,169,130,0.1);
+  --theme-hpe-tint-border: rgba(1,169,130,0.2);
+  --theme-tab-nl-text: #60a5fa;
+  --theme-tab-sql-text: #10b981;
+  --theme-tab-img-text: #a855f7;
+}
+
+[data-theme="light"] {
+  --theme-bg: #f9fafb;
+  --theme-surface-1: #ffffff;
+  --theme-surface-2: #f3f4f6;
+  --theme-surface-3: #e5e7eb;
+  --theme-surface-4: #d1d5db;
+  --theme-surface-5: #9ca3af;
+  --theme-accent: #01A982;
+  --theme-accent-dim: #008567;
+  --theme-border: #e5e7eb;
+  --theme-border-bright: #d1d5db;
+  --theme-tx-primary: #0f172a;
+  --theme-tx-secondary: #334155;
+  --theme-tx-muted: #64748b;
+  --theme-hpe-tint: rgba(1,169,130,0.1);
+  --theme-hpe-tint-border: rgba(1,169,130,0.2);
+  --theme-tab-nl-text: #2563eb;
+  --theme-tab-sql-text: #059669;
+  --theme-tab-img-text: #9333ea;
+}
+
 @theme {
-  --color-surface:   #0a0a0a;
-  --color-surface-1: #111111;
-  --color-surface-2: #161616;
-  --color-surface-3: #1c1c1c;
-  --color-surface-4: #222222;
-  --color-surface-5: #2a2a2a;
+  --color-surface: var(--theme-bg);
+  --color-surface-1: var(--theme-surface-1);
+  --color-surface-2: var(--theme-surface-2);
+  --color-surface-3: var(--theme-surface-3);
+  --color-surface-4: var(--theme-surface-4);
+  --color-surface-5: var(--theme-surface-5);
 
-  --color-accent:    #3b82f6;
-  --color-accent-dim:#1d4ed8;
+  --color-accent: var(--theme-accent);
+  --color-accent-dim: var(--theme-accent-dim);
 
-  --color-border:    #2a2a2a;
-  --color-border-bright: #3a3a3a;
+  --color-border: var(--theme-border);
+  --color-border-bright: var(--theme-border-bright);
 
-  --color-tx-primary:   #f0f0f0;
-  --color-tx-secondary: #888888;
-  --color-tx-muted:     #555555;
+  --color-tx-primary: var(--theme-tx-primary);
+  --color-tx-secondary: var(--theme-tx-secondary);
+  --color-tx-muted: var(--theme-tx-muted);
 
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
-  --animate-fade-in:  fadeIn 0.2s ease-out;
+  --animate-fade-in: fadeIn 0.2s ease-out;
   --animate-slide-up: slideUp 0.25s ease-out;
 
-  @keyframes fadeIn  { from { opacity: 0 }              to { opacity: 1 } }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
   @keyframes slideUp { from { opacity: 0; translate: 0 8px } to { opacity: 1; translate: 0 0 } }
 }
 
@@ -33,15 +75,32 @@
 
 html, body, #root {
   height: 100%;
-  background-color: #0a0a0a;
-  color: #f0f0f0;
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  background-color: var(--theme-bg);
+  color: var(--theme-tx-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::placeholder {
+  color: var(--theme-tx-muted);
+  opacity: 1;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar       { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #111; }
-::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--theme-surface-1); }
+::-webkit-scrollbar-thumb { background: var(--theme-surface-5); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-border-bright); }
 
-::selection { background: rgba(59,130,246,.25); color: #f0f0f0; }
+::selection { background: rgba(59,130,246,.25); color: var(--theme-tx-primary); }
+[data-theme="light"] ::selection { background: rgba(1,169,130,.25); }
+
+.hpe-gradient-btn {
+  background: linear-gradient(to right, #01A982, #03A883) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+.hpe-gradient-btn:hover {
+  background: linear-gradient(to right, #008567, #01A982) !important;
+}

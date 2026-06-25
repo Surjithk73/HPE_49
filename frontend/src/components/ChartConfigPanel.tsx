@@ -23,7 +23,7 @@ const fmtLabel = (value: string) =>
   value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
 const selectStyle: React.CSSProperties = {
-  background: '#161616', color: '#ccc', border: '1px solid #2a2a2a',
+  background: 'var(--theme-surface-2)', color: 'var(--theme-tx-primary)', border: '1px solid var(--theme-border)',
   borderRadius: '6px', padding: '4px 8px', fontSize: '11px',
   fontFamily: 'inherit', cursor: 'pointer',
 }
@@ -31,7 +31,7 @@ const selectStyle: React.CSSProperties = {
 const iconBtnStyle = (disabled: boolean): React.CSSProperties => ({
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   background: 'transparent', border: 'none', padding: '2px',
-  color: disabled ? '#333' : '#777', cursor: disabled ? 'default' : 'pointer',
+  color: disabled ? 'var(--theme-border-bright)' : '#777', cursor: disabled ? 'default' : 'pointer',
 })
 
 export default function ChartConfigPanel({ columns, rows, config, onChange, hideSeriesKind }: Props) {
@@ -56,8 +56,8 @@ export default function ChartConfigPanel({ columns, rows, config, onChange, hide
 
   return (
     <div style={{
-      border: '1px solid #2a2a2a', background: '#111', borderRadius: '8px',
-      fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: '#888',
+      border: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)', borderRadius: '8px',
+      fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--theme-tx-secondary)',
     }}>
       {/* Header / toggle */}
       <button
@@ -65,7 +65,7 @@ export default function ChartConfigPanel({ columns, rows, config, onChange, hide
         style={{
           display: 'flex', alignItems: 'center', gap: '6px', width: '100%',
           background: 'transparent', border: 'none', cursor: 'pointer',
-          color: open ? '#f0f0f0' : '#777', padding: '8px 12px',
+          color: open ? 'var(--theme-tx-primary)' : '#777', padding: '8px 12px',
           fontFamily: 'inherit', fontSize: '11px',
         }}
       >
@@ -77,7 +77,7 @@ export default function ChartConfigPanel({ columns, rows, config, onChange, hide
       </button>
 
       {open && (
-        <div style={{ padding: '4px 12px 12px', borderTop: '1px solid #1c1c1c' }}>
+        <div style={{ padding: '4px 12px 12px', borderTop: '1px solid var(--theme-border)' }}>
           {/* X-axis */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0' }}>
             <span style={{ width: '64px', color: '#666' }}>X-axis</span>
@@ -122,13 +122,13 @@ export default function ChartConfigPanel({ columns, rows, config, onChange, hide
                   title="Series colour"
                   onChange={e => updateSeries(i, { color: e.target.value })}
                   style={{
-                    width: '22px', height: '22px', padding: 0, border: '1px solid #2a2a2a',
+                    width: '22px', height: '22px', padding: 0, border: '1px solid var(--theme-border)',
                     borderRadius: '4px', background: 'transparent', cursor: 'pointer',
                   }}
                 />
 
                 {/* name */}
-                <span style={{ flex: 1, color: '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ flex: 1, color: 'var(--theme-tx-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {fmtLabel(s.column)}
                 </span>
 
@@ -147,12 +147,12 @@ export default function ChartConfigPanel({ columns, rows, config, onChange, hide
               </div>
             ))}
             {config.series.length === 0 && (
-              <span style={{ color: '#555' }}>No numeric columns available to plot.</span>
+              <span style={{ color: 'var(--theme-tx-muted)' }}>No numeric columns available to plot.</span>
             )}
           </div>
 
           {hideSeriesKind && (
-            <div style={{ color: '#555', marginTop: '8px' }}>
+            <div style={{ color: 'var(--theme-tx-muted)', marginTop: '8px' }}>
               Scatter uses the first two visible series as X and Y.
             </div>
           )}

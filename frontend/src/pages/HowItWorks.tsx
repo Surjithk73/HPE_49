@@ -1,31 +1,36 @@
 import { Database, Cpu, Search, Sparkles, Zap, Shield, ArrowRight, Server, FileText, CheckCircle2, Code2, BarChart3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ArchitectureDiagram from '../components/ArchitectureDiagram'
+import { HPELogo } from '../components/HPELogo'
+import ThemeToggle from '../components/ThemeToggle'
 
 export default function HowItWorks() {
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0f0f0', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--theme-bg)', color: 'var(--theme-tx-primary)', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
       
       {/* Header */}
-      <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
+      <header style={{ borderBottom: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Cpu size={15} style={{ color: '#3b82f6' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <HPELogo width={98} height={28} />
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em' }}>QueryCraft</div>
-              <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--theme-tx-primary)', letterSpacing: '-0.02em' }}>QueryCraft</div>
+              <div style={{ fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>HPE NonStop Performance Analytics</div>
             </div>
           </Link>
-          <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: '#1a1a1a', border: '1px solid #333', color: '#fff', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
-            Back to Dashboard
-          </Link>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <Link to="/dashboard" style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--theme-surface-2)', border: '1px solid var(--theme-border-bright)', color: 'var(--theme-tx-primary)', fontSize: '12px', textDecoration: 'none', fontWeight: 600 }}>
+              Back to Dashboard
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section style={{ borderBottom: '1px solid #1c1c1c', background: 'linear-gradient(180deg, #111 0%, #0a0a0a 100%)' }}>
+      <section style={{ borderBottom: '1px solid var(--theme-border)', background: 'linear-gradient(180deg, var(--theme-surface-1) 0%, var(--theme-bg) 100%)' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>
           <div style={{ 
             display: 'inline-block',
@@ -34,7 +39,7 @@ export default function HowItWorks() {
             border: '1px solid rgba(59,130,246,0.2)', 
             background: 'rgba(59,130,246,0.05)',
             fontSize: '11px',
-            color: '#3b82f6',
+            color: 'var(--theme-accent)',
             marginBottom: '24px',
             fontWeight: 600,
             letterSpacing: '0.5px'
@@ -58,13 +63,13 @@ export default function HowItWorks() {
           <h2 style={{ fontSize: '32px', fontWeight: 700, marginBottom: '24px', letterSpacing: '-0.02em' }}>
             System Overview
           </h2>
-          <p style={{ fontSize: '16px', color: '#888', lineHeight: 1.8, marginBottom: '40px' }}>
+          <p style={{ fontSize: '16px', color: 'var(--theme-tx-secondary)', lineHeight: 1.8, marginBottom: '40px' }}>
             QueryCraft transforms natural language questions into optimized SQL queries, executes them against a PostgreSQL database containing HPE NonStop performance metrics, and returns structured reports. The system uses a multi-stage pipeline with AI-powered query generation, semantic caching, and comprehensive validation.
           </p>
 
           {/* Architecture Diagram */}
           <div style={{ marginBottom: '40px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', textAlign: 'center', color: '#3b82f6' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', textAlign: 'center', color: 'var(--theme-accent)' }}>
               Interactive Pipeline Architecture
             </h3>
             <ArchitectureDiagram />
@@ -89,14 +94,14 @@ export default function HowItWorks() {
             ].map((item, idx) => (
               <div key={idx} style={{
                 borderRadius: '12px',
-                border: '1px solid #1c1c1c',
-                background: '#111',
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-surface-1)',
                 padding: '20px'
               }}>
-                <div style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600, marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--theme-accent)', fontWeight: 600, marginBottom: '8px' }}>
                   {item.title}
                 </div>
-                <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#f0f0f0' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--theme-tx-primary)' }}>
                   {item.tech}
                 </div>
                 <div style={{ fontSize: '12px', color: '#666', lineHeight: 1.5 }}>
@@ -120,7 +125,7 @@ export default function HowItWorks() {
                 title: 'Query Normalization',
                 desc: 'Cleans and standardizes the natural language input: lowercases, strips whitespace, expands HPE-specific abbreviations (e.g. "disk" → "disc", "proc" → "process"), and detects the domain category (cpu, disc, proc, tmf, etc.).',
                 tech: 'normalizer.py',
-                color: '#3b82f6'
+                color: 'var(--theme-accent)'
               },
               {
                 num: '02',
@@ -181,8 +186,8 @@ export default function HowItWorks() {
             ].map((stage) => (
               <div key={stage.num} style={{
                 borderRadius: '12px',
-                border: '1px solid #1c1c1c',
-                background: '#111',
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-surface-1)',
                 padding: '28px',
                 display: 'flex',
                 gap: '24px',
@@ -205,18 +210,18 @@ export default function HowItWorks() {
                   {stage.num}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: '#f0f0f0' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--theme-tx-primary)' }}>
                     {stage.title}
                   </h3>
-                  <p style={{ fontSize: '14px', color: '#888', lineHeight: 1.7, marginBottom: '12px' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--theme-tx-secondary)', lineHeight: 1.7, marginBottom: '12px' }}>
                     {stage.desc}
                   </p>
                   <div style={{
                     display: 'inline-block',
                     padding: '4px 10px',
                     borderRadius: '6px',
-                    background: '#161616',
-                    border: '1px solid #2a2a2a',
+                    background: 'var(--theme-surface-2)',
+                    border: '1px solid var(--theme-border)',
                     fontSize: '11px',
                     color: '#666',
                     fontFamily: 'monospace'
@@ -276,30 +281,30 @@ export default function HowItWorks() {
             ].map((feature, idx) => (
               <div key={idx} style={{
                 borderRadius: '12px',
-                border: '1px solid #1c1c1c',
-                background: '#111',
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-surface-1)',
                 padding: '24px'
               }}>
                 <div style={{
                   width: '48px',
                   height: '48px',
                   borderRadius: '10px',
-                  background: 'rgba(59,130,246,0.1)',
+                  background: 'var(--theme-blue-tint)',
                   border: '1px solid rgba(59,130,246,0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: '16px'
                 }}>
-                  <feature.icon size={22} style={{ color: '#3b82f6' }} />
+                  <feature.icon size={22} style={{ color: 'var(--theme-accent)' }} />
                 </div>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: '#f0f0f0' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--theme-tx-primary)' }}>
                   {feature.title}
                 </h3>
-                <p style={{ fontSize: '13px', color: '#888', lineHeight: 1.6, marginBottom: '12px' }}>
+                <p style={{ fontSize: '13px', color: 'var(--theme-tx-secondary)', lineHeight: 1.6, marginBottom: '12px' }}>
                   {feature.desc}
                 </p>
-                <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600 }}>
+                <div style={{ fontSize: '11px', color: 'var(--theme-accent)', fontWeight: 600 }}>
                   {feature.stats}
                 </div>
               </div>
@@ -315,8 +320,8 @@ export default function HowItWorks() {
 
           <div style={{
             borderRadius: '16px',
-            border: '1px solid #1c1c1c',
-            background: '#111',
+            border: '1px solid var(--theme-border)',
+            background: 'var(--theme-surface-1)',
             padding: '32px'
           }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -325,7 +330,7 @@ export default function HowItWorks() {
                   step: 'User Input',
                   content: '"Show me CPU usage for processes with high memory consumption"',
                   type: 'Natural Language',
-                  color: '#3b82f6'
+                  color: 'var(--theme-accent)'
                 },
                 {
                   step: 'Schema Linking',
@@ -381,14 +386,14 @@ export default function HowItWorks() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: '#f0f0f0' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--theme-tx-primary)' }}>
                           {item.step}
                         </span>
                         <span style={{
                           padding: '2px 8px',
                           borderRadius: '4px',
-                          background: '#161616',
-                          border: '1px solid #2a2a2a',
+                          background: 'var(--theme-surface-2)',
+                          border: '1px solid var(--theme-border)',
                           fontSize: '10px',
                           color: '#666'
                         }}>
@@ -398,10 +403,10 @@ export default function HowItWorks() {
                       <div style={{
                         padding: '12px 16px',
                         borderRadius: '8px',
-                        background: '#0a0a0a',
-                        border: '1px solid #1c1c1c',
+                        background: 'var(--theme-bg)',
+                        border: '1px solid var(--theme-border)',
                         fontSize: '12px',
-                        color: '#888',
+                        color: 'var(--theme-tx-secondary)',
                         fontFamily: 'monospace',
                         lineHeight: 1.6,
                         overflowX: 'auto'
@@ -414,7 +419,7 @@ export default function HowItWorks() {
                     <div style={{
                       width: '1px',
                       height: '24px',
-                      background: '#1c1c1c',
+                      background: 'var(--theme-border)',
                       marginLeft: '16px'
                     }} />
                   )}
@@ -441,15 +446,15 @@ export default function HowItWorks() {
             ].map((stat, idx) => (
               <div key={idx} style={{
                 borderRadius: '12px',
-                border: '1px solid #1c1c1c',
-                background: '#111',
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-surface-1)',
                 padding: '24px',
                 textAlign: 'center'
               }}>
-                <div style={{ fontSize: '32px', fontWeight: 800, color: '#3b82f6', marginBottom: '8px', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--theme-accent)', marginBottom: '8px', letterSpacing: '-0.02em' }}>
                   {stat.value}
                 </div>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: '#f0f0f0', marginBottom: '4px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--theme-tx-primary)', marginBottom: '4px' }}>
                   {stat.label}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666' }}>
@@ -463,9 +468,9 @@ export default function HowItWorks() {
       </main>
 
       {/* Footer */}
-      <footer style={{ borderTop: '1px solid #1c1c1c', background: '#111', padding: '32px 24px', textAlign: 'center' }}>
+      <footer style={{ borderTop: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)', padding: '32px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-          <p style={{ fontSize: '12px', color: '#444', margin: 0 }}>
+          <p style={{ fontSize: '12px', color: 'var(--theme-tx-secondary)', margin: 0 }}>
             QueryCraft v1.0.0 — HPE NonStop Performance Report Generator
           </p>
         </div>

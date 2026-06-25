@@ -41,14 +41,14 @@ export default function ResultsTable({ columns, rows }: Props) {
 
   return (
     <div style={{
-      borderRadius: '10px', border: '1px solid #2a2a2a',
-      background: '#161616', overflow: 'hidden',
+      borderRadius: '10px', border: '1px solid var(--theme-border)',
+      background: 'var(--theme-surface-2)', overflow: 'hidden',
       animation: 'slideUp 0.25s ease-out',
     }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
-            <tr style={{ background: '#1c1c1c', borderBottom: '1px solid #2a2a2a' }}>
+            <tr style={{ background: 'var(--theme-border)', borderBottom: '1px solid var(--theme-border)' }}>
               {columns.map(col => (
                 <th
                   key={col}
@@ -58,15 +58,15 @@ export default function ResultsTable({ columns, rows }: Props) {
                     color: '#666', cursor: 'pointer', whiteSpace: 'nowrap',
                     userSelect: 'none', transition: 'color 0.15s',
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#f0f0f0')}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--theme-tx-primary)')}
                   onMouseLeave={e => (e.currentTarget.style.color = '#666')}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     {col}
                     {sortCol === col
                       ? sortDir === 'asc'
-                        ? <ChevronUp size={11} style={{ color: '#3b82f6' }} />
-                        : <ChevronDown size={11} style={{ color: '#3b82f6' }} />
+                        ? <ChevronUp size={11} style={{ color: 'var(--theme-accent)' }} />
+                        : <ChevronDown size={11} style={{ color: 'var(--theme-accent)' }} />
                       : <ChevronsUpDown size={11} style={{ opacity: 0.3 }} />
                     }
                   </div>
@@ -77,7 +77,7 @@ export default function ResultsTable({ columns, rows }: Props) {
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} style={{ padding: '48px 16px', textAlign: 'center', color: '#444' }}>
+                <td colSpan={columns.length} style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--theme-tx-secondary)' }}>
                   No results returned
                 </td>
               </tr>
@@ -85,11 +85,11 @@ export default function ResultsTable({ columns, rows }: Props) {
               <tr
                 key={i}
                 style={{ borderBottom: '1px solid rgba(42,42,42,0.5)', transition: 'background 0.1s' }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#1c1c1c')}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-border)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
                 {columns.map(col => (
-                  <td key={col} style={{ padding: '9px 16px', color: '#f0f0f0', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+                  <td key={col} style={{ padding: '9px 16px', color: 'var(--theme-tx-primary)', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
                     {fmt(row[col])}
                   </td>
                 ))}
@@ -102,9 +102,9 @@ export default function ResultsTable({ columns, rows }: Props) {
       {/* Pagination */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderTop: '1px solid #2a2a2a', padding: '10px 16px',
+        borderTop: '1px solid var(--theme-border)', padding: '10px 16px',
       }}>
-        <span style={{ fontSize: '11px', color: '#444' }}>
+        <span style={{ fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>
           Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length.toLocaleString()} rows
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -112,21 +112,21 @@ export default function ResultsTable({ columns, rows }: Props) {
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
             style={{
-              border: '1px solid #2a2a2a', background: 'transparent', borderRadius: '6px',
+              border: '1px solid var(--theme-border)', background: 'transparent', borderRadius: '6px',
               padding: '5px', color: '#666', cursor: page === 0 ? 'not-allowed' : 'pointer',
               opacity: page === 0 ? 0.3 : 1, display: 'flex', alignItems: 'center',
             }}
           >
             <ChevronLeft size={12} />
           </button>
-          <span style={{ padding: '0 8px', fontSize: '11px', color: '#555' }}>
+          <span style={{ padding: '0 8px', fontSize: '11px', color: 'var(--theme-tx-muted)' }}>
             {page + 1} / {Math.max(1, totalPages)}
           </span>
           <button
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
             style={{
-              border: '1px solid #2a2a2a', background: 'transparent', borderRadius: '6px',
+              border: '1px solid var(--theme-border)', background: 'transparent', borderRadius: '6px',
               padding: '5px', color: '#666', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
               opacity: page >= totalPages - 1 ? 0.3 : 1, display: 'flex', alignItems: 'center',
             }}

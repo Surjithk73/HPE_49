@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BarChart2, Table2, AlertTriangle, Database, Cpu, BookOpen, TrendingUp, AreaChart, ScatterChart, Layers, Activity, X, ChevronDown, Check, Sparkles, Send, Loader2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { HPELogo } from '../components/HPELogo'
+import ThemeToggle from '../components/ThemeToggle'
 import QueryInput, { type InputMode } from '../components/QueryInput'
 import SQLPreview from '../components/SQLPreview'
 import ResultsTable from '../components/ResultsTable'
@@ -215,22 +217,18 @@ export default function Dashboard() {
   const canChart = result && !result.error && (result.columns?.length ?? 0) >= 2
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f0f0f0', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--theme-bg)', color: 'var(--theme-tx-primary)', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
 
       {/* ── Header ── */}
-      <header style={{ borderBottom: '1px solid #1c1c1c', background: '#111' }}>
+      <header style={{ borderBottom: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{
-              width: '32px', height: '32px', borderRadius: '8px',
-              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Cpu size={15} style={{ color: '#3b82f6' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <HPELogo width={98} height={28} />
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em' }}>QueryCraft</div>
-              <div style={{ fontSize: '11px', color: '#444' }}>HPE NonStop Performance Analytics</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--theme-tx-primary)', letterSpacing: '-0.02em' }}>QueryCraft</div>
+              <div style={{ fontSize: '11px', color: 'var(--theme-tx-secondary)' }}>HPE NonStop Performance Analytics</div>
             </div>
           </Link>
 
@@ -244,12 +242,13 @@ export default function Dashboard() {
                 gap: '6px',
                 padding: '8px 14px',
                 borderRadius: '8px',
-                background: '#222',
-                color: '#fff',
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-surface-2)',
+                color: 'var(--theme-tx-primary)',
                 fontSize: '12px',
                 textDecoration: 'none',
                 transition: 'all 0.2s',
-                fontWeight: 600
+                fontWeight: 500
               }}
             >
               Databases
@@ -263,9 +262,9 @@ export default function Dashboard() {
                 gap: '6px',
                 padding: '8px 14px',
                 borderRadius: '8px',
-                border: '1px solid #2a2a2a',
-                background: '#161616',
-                color: '#f0f0f0',
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-surface-2)',
+                color: 'var(--theme-tx-primary)',
                 fontSize: '12px',
                 textDecoration: 'none',
                 transition: 'all 0.2s',
@@ -284,9 +283,9 @@ export default function Dashboard() {
                 gap: '6px',
                 padding: '8px 14px',
                 borderRadius: '8px',
-                border: '1px solid #2a2a2a',
-                background: '#161616',
-                color: '#f0f0f0',
+                border: '1px solid var(--theme-border)',
+                background: 'var(--theme-surface-2)',
+                color: 'var(--theme-tx-primary)',
                 fontSize: '12px',
                 textDecoration: 'none',
                 transition: 'all 0.2s',
@@ -305,21 +304,21 @@ export default function Dashboard() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '8px 14px', borderRadius: '8px',
-                  border: `1px solid ${modelDropdownOpen ? 'rgba(59,130,246,0.5)' : '#2a2a2a'}`,
-                  background: modelDropdownOpen ? 'rgba(59,130,246,0.08)' : '#161616',
-                  color: '#f0f0f0', fontSize: '12px', cursor: modelSwitching ? 'not-allowed' : 'pointer',
+                  border: `1px solid ${modelDropdownOpen ? 'rgba(59,130,246,0.5)' : 'var(--theme-border)'}`,
+                  background: modelDropdownOpen ? 'rgba(59,130,246,0.08)' : 'var(--theme-surface-2)',
+                  color: 'var(--theme-tx-primary)', fontSize: '12px', cursor: modelSwitching ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit', fontWeight: 500, transition: 'all 0.15s',
                   opacity: modelSwitching ? 0.6 : 1,
                 }}
               >
-                <Cpu size={13} style={{ color: '#3b82f6' }} />
+                <Cpu size={13} style={{ color: 'var(--theme-accent)' }} />
                 <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {AVAILABLE_MODELS.find(m => m.id === activeModel)?.label ?? activeModel}
                 </span>
                 <ChevronDown
                   size={11}
                   style={{
-                    color: '#555',
+                    color: 'var(--theme-tx-muted)',
                     transform: modelDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                     transition: 'transform 0.15s',
                   }}
@@ -336,16 +335,16 @@ export default function Dashboard() {
                   <div style={{
                     position: 'absolute', top: 'calc(100% + 6px)', right: 0,
                     zIndex: 50, minWidth: '220px',
-                    background: '#111', border: '1px solid #2a2a2a',
+                    background: 'var(--theme-surface-1)', border: '1px solid var(--theme-border)',
                     borderRadius: '10px', overflow: 'hidden',
                     boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
                     animation: 'slideDown 0.15s ease-out',
                   }}>
                     <div style={{
                       padding: '8px 12px 6px',
-                      fontSize: '10px', fontWeight: 600, color: '#444',
+                      fontSize: '10px', fontWeight: 600, color: 'var(--theme-tx-secondary)',
                       letterSpacing: '0.08em', textTransform: 'uppercase',
-                      borderBottom: '1px solid #1c1c1c',
+                      borderBottom: '1px solid var(--theme-border)',
                     }}>
                       Select Model
                     </div>
@@ -374,14 +373,14 @@ export default function Dashboard() {
                             justifyContent: 'space-between', gap: '8px',
                             padding: '10px 12px', border: 'none',
                             background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent',
-                            color: isActive ? '#f0f0f0' : '#888',
+                            color: isActive ? 'var(--theme-tx-primary)' : 'var(--theme-tx-secondary)',
                             fontSize: '12px', cursor: 'pointer',
                             fontFamily: 'inherit', textAlign: 'left',
                             transition: 'background 0.1s',
                             borderLeft: isActive ? '2px solid #3b82f6' : '2px solid transparent',
                           }}
                           onMouseEnter={e => {
-                            if (!isActive) (e.currentTarget as HTMLElement).style.background = '#1c1c1c'
+                            if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--theme-border)'
                           }}
                           onMouseLeave={e => {
                             if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
@@ -391,7 +390,7 @@ export default function Dashboard() {
                           <span style={{
                             fontSize: '10px', padding: '2px 7px', borderRadius: '999px',
                             background: badgeColor[m.badge] ?? 'rgba(255,255,255,0.05)',
-                            color: badgeText[m.badge] ?? '#888',
+                            color: badgeText[m.badge] ?? 'var(--theme-tx-secondary)',
                             fontWeight: 600, letterSpacing: '0.04em',
                           }}>
                             {m.badge}
@@ -415,13 +414,14 @@ export default function Dashboard() {
               </div>
             )}
             {health && !healthFailed && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: '#555' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: 'var(--theme-tx-muted)' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: health.db_connected ? '#10b981' : '#ef4444' }} />
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: health.db_connected ? 'var(--theme-accent)' : '#ef4444' }} />
                   {health.db_connected ? 'Connected' : 'Disconnected'}
                 </span>
               </div>
             )}
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -434,7 +434,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
             {/* Query Input */}
-            <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '20px' }}>
+            <div style={{ borderRadius: '12px', border: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)', padding: '20px' }}>
               <QueryInput
                 onSubmit={handleQuery}
                 loading={loading}
@@ -456,7 +456,7 @@ export default function Dashboard() {
                     Planner needs a clarification
                   </span>
                 </div>
-                <p style={{ margin: 0, fontSize: '14px', color: '#f0f0f0', lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--theme-tx-primary)', lineHeight: 1.5 }}>
                   {clarifying.question}
                 </p>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
@@ -468,9 +468,9 @@ export default function Dashboard() {
                     disabled={loading}
                     autoFocus
                     style={{
-                      flex: 1, background: '#0d0d0d', border: '1px solid #2a2a2a',
+                      flex: 1, background: 'var(--theme-surface-2)', border: '1px solid var(--theme-border)',
                       borderRadius: '8px', padding: '10px 12px', fontSize: '13px',
-                      color: '#f0f0f0', outline: 'none', fontFamily: 'inherit',
+                      color: 'var(--theme-tx-primary)', outline: 'none', fontFamily: 'inherit',
                     }}
                   />
                   <button
@@ -479,8 +479,8 @@ export default function Dashboard() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '6px',
                       padding: '0 16px', borderRadius: '8px', border: 'none',
-                      background: loading || !clarifyAnswer.trim() ? '#1a1a1a' : '#3b82f6',
-                      color: loading || !clarifyAnswer.trim() ? '#444' : '#fff',
+                      background: loading || !clarifyAnswer.trim() ? 'var(--theme-surface-2)' : 'var(--theme-accent)',
+                      color: loading || !clarifyAnswer.trim() ? 'var(--theme-tx-secondary)' : 'var(--theme-tx-primary)',
                       cursor: loading || !clarifyAnswer.trim() ? 'not-allowed' : 'pointer',
                       fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
                     }}
@@ -497,8 +497,8 @@ export default function Dashboard() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '6px',
                       padding: '0 14px', borderRadius: '8px',
-                      border: '1px solid #2a2a2a', background: 'transparent',
-                      color: '#888', cursor: loading ? 'not-allowed' : 'pointer',
+                      border: '1px solid var(--theme-border)', background: 'transparent',
+                      color: 'var(--theme-tx-secondary)', cursor: loading ? 'not-allowed' : 'pointer',
                       fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
                     }}
                   >
@@ -542,7 +542,7 @@ export default function Dashboard() {
                 {/* Stats + view controls — only shown when the query succeeded */}
                 {!result.error && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                  <span style={{ fontSize: '12px', color: '#444' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--theme-tx-secondary)' }}>
                     {(result.row_count ?? 0).toLocaleString()} rows returned
                   </span>
 
@@ -552,7 +552,7 @@ export default function Dashboard() {
                     {viewMode === 'chart' && canChart && (
                       <div style={{
                         display: 'flex', borderRadius: '8px',
-                        border: '1px solid #2a2a2a', background: '#111', padding: '3px', gap: '2px',
+                        border: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)', padding: '3px', gap: '2px',
                       }}>
                         {CHART_TYPES.map(ct => (
                           <button
@@ -568,8 +568,8 @@ export default function Dashboard() {
                               display: 'flex', alignItems: 'center', gap: '4px',
                               borderRadius: '6px', padding: '5px 10px', fontSize: '11px',
                               border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                              background: chartKind === ct.kind ? '#2a2a2a' : 'transparent',
-                              color: chartKind === ct.kind ? '#f0f0f0' : '#555',
+                              background: chartKind === ct.kind ? 'var(--theme-border)' : 'transparent',
+                              color: chartKind === ct.kind ? 'var(--theme-tx-primary)' : 'var(--theme-tx-muted)',
                               transition: 'all 0.15s',
                             }}
                           >
@@ -584,7 +584,7 @@ export default function Dashboard() {
                     {canChart && (
                       <div style={{
                         display: 'flex', borderRadius: '8px',
-                        border: '1px solid #2a2a2a', background: '#161616', padding: '3px',
+                        border: '1px solid var(--theme-border)', background: 'var(--theme-surface-2)', padding: '3px',
                       }}>
                         {(['chart', 'table'] as const).map(mode => (
                           <button
@@ -594,8 +594,8 @@ export default function Dashboard() {
                               display: 'flex', alignItems: 'center', gap: '5px',
                               borderRadius: '6px', padding: '5px 12px', fontSize: '11px',
                               border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                              background: viewMode === mode ? '#2a2a2a' : 'transparent',
-                              color: viewMode === mode ? '#f0f0f0' : '#555',
+                              background: viewMode === mode ? 'var(--theme-border)' : 'transparent',
+                              color: viewMode === mode ? 'var(--theme-tx-primary)' : 'var(--theme-tx-muted)',
                               transition: 'all 0.15s',
                             }}
                           >
@@ -627,12 +627,12 @@ export default function Dashboard() {
                 {!result.error && !result.cache_hit && cacheDecision !== 'rejected' && (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '16px', background: '#111', border: '1px solid #1c1c1c', borderRadius: '12px',
+                    padding: '16px', background: 'var(--theme-surface-1)', border: '1px solid var(--theme-border)', borderRadius: '12px',
                     marginTop: '8px'
                   }}>
                     <div>
-                      <h4 style={{ margin: '0 0 4px', fontSize: '13px', color: '#f0f0f0', fontWeight: 600 }}>Train the AI</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#888' }}>
+                      <h4 style={{ margin: '0 0 4px', fontSize: '13px', color: 'var(--theme-tx-primary)', fontWeight: 600 }}>Train the AI</h4>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--theme-tx-secondary)' }}>
                         {cacheDecision === 'pending' ? 'Would you like to add this successful query to the system cache?' : 'Query successfully added to the cache.'}
                       </p>
                     </div>
@@ -641,8 +641,8 @@ export default function Dashboard() {
                         <button
                           onClick={() => setCacheDecision('rejected')}
                           style={{
-                            padding: '6px 12px', background: 'transparent', border: '1px solid #2a2a2a',
-                            color: '#888', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                            padding: '6px 12px', background: 'transparent', border: '1px solid var(--theme-border)',
+                            color: 'var(--theme-tx-secondary)', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', gap: '6px',
                           }}
                         >
@@ -652,7 +652,7 @@ export default function Dashboard() {
                           onClick={handleAcceptCache}
                           style={{
                             padding: '6px 12px', background: '#a855f7', border: '1px solid #a855f7',
-                            color: '#fff', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                            color: 'var(--theme-tx-primary)', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600
                           }}
                         >
@@ -673,7 +673,7 @@ export default function Dashboard() {
 
                 {/* Download */}
                 {!result.error && result.sql && (
-                  <div style={{ borderRadius: '12px', border: '1px solid #1c1c1c', background: '#111', padding: '16px' }}>
+                  <div style={{ borderRadius: '12px', border: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)', padding: '16px' }}>
                     <ReportDownload sql={result.sql} queryText={currentQuery} />
                   </div>
                 )}
@@ -684,19 +684,19 @@ export default function Dashboard() {
             {!result && !loading && !error && !clarifying && (
               <div style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                borderRadius: '12px', border: '1px dashed #1c1c1c', padding: '80px 24px', textAlign: 'center',
+                borderRadius: '12px', border: '1px dashed var(--theme-border)', padding: '80px 24px', textAlign: 'center',
               }}>
                 <div style={{
                   width: '52px', height: '52px', borderRadius: '50%',
-                  background: '#161616', border: '1px solid #2a2a2a',
+                  background: 'var(--theme-surface-2)', border: '1px solid var(--theme-border)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px',
                 }}>
-                  <BarChart2 size={22} style={{ color: '#333' }} />
+                  <BarChart2 size={22} style={{ color: 'var(--theme-tx-muted)' }} />
                 </div>
-                <p style={{ fontSize: '14px', fontWeight: 500, color: '#555', margin: '0 0 6px' }}>
+                <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--theme-tx-muted)', margin: '0 0 6px' }}>
                   Ask a question to get started
                 </p>
-                <p style={{ fontSize: '12px', color: '#333', margin: 0 }}>
+                <p style={{ fontSize: '12px', color: 'var(--theme-tx-muted)', margin: 0 }}>
                   Results will appear here
                 </p>
               </div>

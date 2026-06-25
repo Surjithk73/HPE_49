@@ -23,7 +23,7 @@ export default function ArchitectureDiagram() {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
   const [nodes, setNodes] = useState<FlowNode[]>([
     // Row 1 - Left to Right
-    { id: 'input', label: 'Natural Language', sublabel: 'User Query', color: '#3b82f6', x: 40, y: 40, width: 180, height: 90 },
+    { id: 'input', label: 'Natural Language', sublabel: 'User Query', color: 'var(--theme-accent)', x: 40, y: 40, width: 180, height: 90 },
     { id: 'normalize', label: 'Normalizer', sublabel: 'Text Cleaning', color: '#8b5cf6', x: 290, y: 40, width: 180, height: 90 },
     { id: 'schema', label: 'Schema Linker', sublabel: 'Table Detection', color: '#a855f7', x: 540, y: 40, width: 180, height: 90 },
 
@@ -45,7 +45,7 @@ export default function ArchitectureDiagram() {
   const svgRef = useRef<SVGSVGElement>(null)
 
   const connections: FlowConnection[] = [
-    { from: 'input', to: 'normalize', color: '#3b82f6' },
+    { from: 'input', to: 'normalize', color: 'var(--theme-accent)' },
     { from: 'normalize', to: 'schema', color: '#8b5cf6' },
     { from: 'schema', to: 'cache', label: 'Check', color: '#a855f7' },
     { from: 'cache', to: 'prompt', label: 'Miss', color: '#f59e0b' },
@@ -123,9 +123,9 @@ export default function ArchitectureDiagram() {
       width: '100%',
       overflowX: 'auto',
       overflowY: 'auto',
-      background: '#0a0a0a',
+      background: 'var(--theme-bg)',
       borderRadius: '16px',
-      border: '1px solid #1c1c1c',
+      border: '1px solid var(--theme-border)',
       padding: '40px',
       maxHeight: '700px'
     }}>
@@ -141,7 +141,7 @@ export default function ArchitectureDiagram() {
       >
         <defs>
           {/* Arrow markers for each color */}
-          {['#3b82f6', '#8b5cf6', '#a855f7', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#ec4899', '#64748b'].map(color => (
+          {['var(--theme-accent)', '#8b5cf6', '#a855f7', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#ec4899', '#64748b'].map(color => (
             <marker
               key={color}
               id={`arrow-${color.replace('#', '')}`}
@@ -245,7 +245,7 @@ export default function ArchitectureDiagram() {
                             width={70}
                             height={24}
                             rx="4"
-                            fill="#0a0a0a"
+                            fill="var(--theme-bg)"
                             stroke={conn.color}
                             strokeWidth="1"
                             opacity="0.95"
@@ -253,7 +253,7 @@ export default function ArchitectureDiagram() {
                           <text
                             x={labelX}
                             y={labelY + 4}
-                            fill="#f0f0f0"
+                            fill="var(--theme-tx-primary)"
                             fontSize="11"
                             fontWeight="600"
                             textAnchor="middle"
@@ -306,7 +306,7 @@ export default function ArchitectureDiagram() {
                   width={node.width}
                   height={node.height}
                   rx="12"
-                  fill="#111"
+                  fill="var(--theme-surface-1)"
                   stroke={node.color}
                   strokeWidth={isHovered || isDragging ? "3" : "2"}
                   style={{ transition: 'all 0.2s' }}
@@ -327,7 +327,7 @@ export default function ArchitectureDiagram() {
                 <text
                   x={node.x + node.width / 2}
                   y={node.y + 42}
-                  fill="#f0f0f0"
+                  fill="var(--theme-tx-primary)"
                   fontSize="15"
                   fontWeight="700"
                   textAnchor="middle"
@@ -366,7 +366,7 @@ export default function ArchitectureDiagram() {
                     <text
                       x={node.x + node.width / 2}
                       y={node.y + node.height - 12}
-                      fill="#444"
+                      fill="var(--theme-tx-secondary)"
                       fontSize="9"
                       textAnchor="middle"
                       style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -382,15 +382,15 @@ export default function ArchitectureDiagram() {
 
         {/* Legend */}
         <g transform="translate(-100, 565)">
-          <rect x="0" y="0" width="500" height="60" rx="8" fill="#111" stroke="#1c1c1c" strokeWidth="1" />
+          <rect x="0" y="0" width="500" height="60" rx="8" fill="var(--theme-surface-1)" stroke="var(--theme-border)" strokeWidth="1" />
           <g transform="translate(10, 20)">
-            <text x="0" y="0" fill="#888" fontSize="12" fontWeight="700">PIPELINE FLOW</text>
+            <text x="0" y="0" fill="var(--theme-tx-secondary)" fontSize="12" fontWeight="700">PIPELINE FLOW</text>
 
-            <line x1="0" y1="18" x2="100" y2="18" stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrow-3b82f6)" />
-            <text x="110" y="23" fill="#888" fontSize="11">Primary Path</text>
+            <line x1="0" y1="18" x2="100" y2="18" stroke="var(--theme-accent)" strokeWidth="3" markerEnd="url(#arrow-3b82f6)" />
+            <text x="110" y="23" fill="var(--theme-tx-secondary)" fontSize="11">Primary Path</text>
 
             <line x1="230" y1="18" x2="330" y2="18" stroke="#f59e0b" strokeWidth="3" strokeDasharray="8,4" markerEnd="url(#arrow-f59e0b)" />
-            <text x="340" y="23" fill="#888" fontSize="11">Cache Hit (Fast)</text>
+            <text x="340" y="23" fill="var(--theme-tx-secondary)" fontSize="11">Cache Hit (Fast)</text>
           </g>
         </g>
       </svg>

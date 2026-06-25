@@ -58,8 +58,8 @@ export default function PromptDebugPanel({ prompt, rawOutput, title }: Props) {
   return (
     <div style={{
       borderRadius: '10px',
-      border: `1px solid ${expanded ? 'rgba(168,85,247,0.3)' : '#2a2a2a'}`,
-      background: expanded ? 'rgba(168,85,247,0.03)' : '#161616',
+      border: `1px solid ${expanded ? 'rgba(168,85,247,0.3)' : 'var(--theme-border)'}`,
+      background: expanded ? 'rgba(168,85,247,0.03)' : 'var(--theme-surface-2)',
       overflow: 'hidden',
       animation: 'slideUp 0.25s ease-out',
       transition: 'border-color 0.2s, background 0.2s',
@@ -105,7 +105,7 @@ export default function PromptDebugPanel({ prompt, rawOutput, title }: Props) {
             </span>
           )}
         </div>
-        <div style={{ color: '#555', display: 'flex', alignItems: 'center' }}>
+        <div style={{ color: 'var(--theme-tx-muted)', display: 'flex', alignItems: 'center' }}>
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </div>
       </button>
@@ -121,9 +121,9 @@ export default function PromptDebugPanel({ prompt, rawOutput, title }: Props) {
               onClick={copyPrompt}
               style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
-                border: '1px solid #2a2a2a', background: '#1c1c1c',
+                border: '1px solid var(--theme-border)', background: 'var(--theme-border)',
                 borderRadius: '6px', padding: '4px 10px', fontSize: '11px',
-                color: copied ? '#34d399' : '#888', cursor: 'pointer',
+                color: copied ? '#34d399' : 'var(--theme-tx-secondary)', cursor: 'pointer',
                 fontFamily: 'inherit', transition: 'all 0.15s',
               }}
             >
@@ -141,7 +141,7 @@ export default function PromptDebugPanel({ prompt, rawOutput, title }: Props) {
               maxHeight: '400px',
               overflowY: 'auto',
               scrollbarWidth: 'thin',
-              scrollbarColor: '#333 transparent',
+              scrollbarColor: 'var(--theme-border-bright) transparent',
             }}>
               <pre
                 style={{
@@ -170,7 +170,7 @@ export default function PromptDebugPanel({ prompt, rawOutput, title }: Props) {
                 maxHeight: '400px',
                 overflowY: 'auto',
                 scrollbarWidth: 'thin',
-                scrollbarColor: '#333 transparent',
+                scrollbarColor: 'var(--theme-border-bright) transparent',
               }}>
                 <pre
                   style={{
@@ -195,10 +195,10 @@ export default function PromptDebugPanel({ prompt, rawOutput, title }: Props) {
               display: 'flex', alignItems: 'center', gap: '12px',
               borderTop: '1px solid rgba(168,85,247,0.1)',
               marginTop: '12px', paddingTop: '10px',
-              fontSize: '10px', color: '#555',
+              fontSize: '10px', color: 'var(--theme-tx-muted)',
             }}>
               <span>{prompt.length.toLocaleString()} characters</span>
-              <span style={{ color: '#333' }}>·</span>
+              <span style={{ color: 'var(--theme-tx-muted)' }}>·</span>
               <span>~{Math.ceil(prompt.length / 4).toLocaleString()} tokens (est.)</span>
             </div>
           )}

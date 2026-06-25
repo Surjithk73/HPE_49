@@ -212,7 +212,7 @@ export default function AIExplanation({ sql, queryText, columns, rows }: Props) 
 
         /* Loading Card */
         .ai-card-loading {
-          background: linear-gradient(145deg, #18181b 0%, #0d0d0d 100%);
+          background: var(--theme-surface-2);
           border: 1px dashed rgba(147, 51, 234, 0.2);
           border-radius: 12px;
           padding: 20px;
@@ -327,7 +327,7 @@ export default function AIExplanation({ sql, queryText, columns, rows }: Props) 
 
         /* Result Card */
         .ai-card-result {
-          background: linear-gradient(145deg, #111113 0%, #080809 100%);
+          background: var(--theme-surface-2);
           border: 1px solid rgba(255, 255, 255, 0.05);
           box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
           border-radius: 12px;

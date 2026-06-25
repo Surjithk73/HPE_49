@@ -47,7 +47,7 @@ async function captureChartImage(): Promise<string | null> {
         const ctx = canvas.getContext('2d')
         if (!ctx) { URL.revokeObjectURL(url); resolve(null); return }
         // White background so the chart is readable on the PDF white page
-        ctx.fillStyle = '#ffffff'
+        ctx.fillStyle = 'var(--theme-tx-primary)'
         ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
         URL.revokeObjectURL(url)
@@ -114,7 +114,7 @@ export default function ReportDownload({ sql, queryText }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <Download size={13} style={{ color: '#666' }} />
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--theme-tx-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
           Export Report
         </span>
       </div>
@@ -126,9 +126,9 @@ export default function ReportDownload({ sql, queryText }: Props) {
             disabled={loading !== null}
             style={{
               display: 'flex', alignItems: 'center', gap: '7px',
-              border: '1px solid #2a2a2a', background: '#161616',
+              border: '1px solid var(--theme-border)', background: 'var(--theme-surface-2)',
               borderRadius: '8px', padding: '8px 16px',
-              fontSize: '12px', fontWeight: 500, color: '#888',
+              fontSize: '12px', fontWeight: 500, color: 'var(--theme-tx-secondary)',
               cursor: loading !== null ? 'not-allowed' : 'pointer',
               opacity: loading !== null && loading !== id ? 0.5 : 1,
               fontFamily: 'inherit', transition: 'all 0.15s',
@@ -136,12 +136,12 @@ export default function ReportDownload({ sql, queryText }: Props) {
             onMouseEnter={e => {
               if (!loading) {
                 (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.4)'
-                ;(e.currentTarget as HTMLElement).style.color = '#f0f0f0'
+                ;(e.currentTarget as HTMLElement).style.color = 'var(--theme-tx-primary)'
               }
             }}
             onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.borderColor = '#2a2a2a'
-              ;(e.currentTarget as HTMLElement).style.color = '#888'
+              (e.currentTarget as HTMLElement).style.borderColor = 'var(--theme-border)'
+              ;(e.currentTarget as HTMLElement).style.color = 'var(--theme-tx-secondary)'
             }}
           >
             {loading === id
@@ -291,7 +291,7 @@ export default function ReportDownload({ sql, queryText }: Props) {
         }
 
         .pdf-modal-container {
-          background: linear-gradient(145deg, #18181b 0%, #09090b 100%);
+          background: var(--theme-surface-2);
           border: 1px solid rgba(255, 255, 255, 0.08);
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
           border-radius: 16px;
