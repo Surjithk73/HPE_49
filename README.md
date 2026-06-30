@@ -358,7 +358,7 @@ Interactive docs: http://localhost:8000/docs
 
 As a core requirement for this project, the following guidelines **must never be violated**:
 1. **Schema Integrity:** The backend database schema must strictly mirror the exact tables and columns provided by HPE. Do not modify, add, or alter any of these database structures.
-2. **Examples Integrity:** The `examples.yaml` file acts as the official repository of frequently used queries provided by HPE. These are considered "gold standard" references and must not be altered, modified, or messed with under any circumstances.
+2. **Examples Integrity:** The `examples.yaml` file acts as the official repository of frequently used queries provided by HPE. All queries MUST strictly adhere to the flat structures and specific mathematical formulas (e.g., `100*sum(val)/sum(delta_time)`, `concat()`) found in the HPE source examples. Do not introduce unsupported multi-table CTEs or complex joins beyond what HPE explicitly dictates.
 
 ---
 

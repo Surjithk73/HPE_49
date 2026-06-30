@@ -10,7 +10,6 @@ import ChartView, { type ChartKind } from '../components/ChartView'
 import ChartConfigPanel from '../components/ChartConfigPanel'
 import { buildDefaultConfig, applyGlobalKind, type ChartConfig } from '../lib/chartConfig'
 import ReportDownload from '../components/ReportDownload'
-import AIExplanation from '../components/AIExplanation'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
 import { runSqlDirect, runImageQuery, getHistory, getHealth, setModel, acceptQueryCache, startPlannerQuery, answerPlannerQuery, forcePlannerQuery, type QueryResponse, type PlannerResponse, type HistoryEntry, type HealthResponse } from '../lib/api'
@@ -534,6 +533,7 @@ export default function Dashboard() {
                   />
                 )}
 
+
                 {/* SQL generator debug panel — always shown when a prompt was built */}
                 {result.debug_prompt && (
                   <PromptDebugPanel prompt={result.debug_prompt} rawOutput={result.raw_llm_output} />
@@ -667,9 +667,6 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {!result.error && (
-                  <AIExplanation sql={result.sql ?? ''} queryText={currentQuery} columns={result.columns ?? []} rows={result.rows ?? []} />
-                )}
 
                 {/* Download */}
                 {!result.error && result.sql && (

@@ -219,11 +219,6 @@ class ThresholdRequest(BaseModel):
 class ModelRequest(BaseModel):
     model: str = Field(..., description="Gemini model name to switch to")
 
-class ExplainRequest(BaseModel):
-    sql: str
-    query_text: str
-    columns: List[str]
-    rows: List[dict]
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -658,12 +653,6 @@ def run_query(req: QueryRequest):
             prompt = _builder.build_prompt(norm_text, schema_context, top_few_shots, target_db)
             debug_prompt = prompt
 
-            # Always print the SQL generator prompt to the terminal for debugging.
-            print("\n" + "=" * 70)
-            print("[SQL Generator] Prompt sent to LLM:")
-            print("=" * 70)
-            print(prompt)
-            print("=" * 70 + "\n")
 
             # Autonomous Self-Correction Loop (Auto-Healing)
             max_exec_retries = 2
@@ -1190,40 +1179,3 @@ def switch_model(req: ModelRequest):
     }
 
 
-# POST /api/explain
-@app.post("/api/explain")
-def explain_results(req: ExplainRequest):
-    """Explain query execution results and identify outliers using LLM."""
-    if not _llm_engine:
-        raise HTTPException(status_code=500, detail="LLM Engine not initialized")
-
-    # Save token usage by truncating rows to 50
-    limit = 50
-    truncated_rows = req.rows[:limit]
-
-    import json
-    rows_json = json.dumps(truncated_rows, indent=2)
-
-    prompt = f"""You are a senior database performance analyst and system administrator for HPE NonStop databases.
-Analyze the following query execution results to explain what they mean for the system's performance and health, and highlight any outliers, unusual values, anomalies, or potential issues.
-
-Context:
-- Original User Question: {req.query_text}
-- Executed SQL: {req.sql}
-
-Results (truncated to first {limit} rows if larger):
-Columns: {", ".join(req.columns)}
-Data Rows:
-{rows_json}
-
-Provide a concise analysis (approx. 2-3 short paragraphs or bullet points).
-Identify any outlier values or performance metrics that are high, low, or typical, and explain their significance to the system.
-Do not assume context that is not present in the columns.
-"""
-    try:
-        explanation = _llm_engine.generate_text(prompt)
-        return {"explanation": explanation}
-    except LLMError as e:
-        raise HTTPException(status_code=500, detail=f"LLM explanation generation failed: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected explanation generation error: {str(e)}")
