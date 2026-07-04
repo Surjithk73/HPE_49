@@ -16,8 +16,10 @@ Other improvements:
 import io
 import os
 import sys
+import time
 import traceback
 import logging
+from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
@@ -185,9 +187,15 @@ app.add_middleware(
 
 
 # ── Request / Response models ─────────────────────────────────────────────────
+_cancelled_queries: set[str] = set()
+
+class CancelRequest(BaseModel):
+    query_id: str
+
 class QueryRequest(BaseModel):
     query: str
     target_db: str = "macht413"
+    query_id: Optional[str] = None
 
 class CacheAcceptRequest(BaseModel):
     query: str
@@ -219,6 +227,12 @@ class ThresholdRequest(BaseModel):
 class ModelRequest(BaseModel):
     model: str = Field(..., description="Gemini model name to switch to")
 
+class QueryEditRequest(BaseModel):
+    original_query: str
+    previous_sql: str
+    edit_instruction: str
+    target_db: str = "macht413"
+    query_id: Optional[str] = None
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -263,6 +277,17 @@ def health():
         "schema_tables":     len(_schema) if _schema else 0,
     }
 
+# POST /api/cancel
+@app.post("/api/cancel")
+def cancel_query(req: CancelRequest):
+    if req.query_id:
+        _cancelled_queries.add(req.query_id)
+    return {"status": "cancelled"}
+
+def _check_cancelled(query_id: Optional[str]):
+    if query_id and query_id in _cancelled_queries:
+        _cancelled_queries.discard(query_id)
+        raise HTTPException(status_code=499, detail="Query cancelled by user.")
 
 # GET /api/databases
 @app.get("/api/databases")
@@ -379,21 +404,24 @@ def stats():
 class PlannerStartRequest(BaseModel):
     query: str
     target_db: str = "macht413"
+    query_id: Optional[str] = None
 
 class PlannerAnswerRequest(BaseModel):
     session_id: str
     answer: str
+    query_id: Optional[str] = None
 
 class PlannerForceRequest(BaseModel):
     session_id: str
     target_db: str = "macht413"
+    query_id: Optional[str] = None
 
 
 def _spec_to_signal(spec) -> str:
     """Extract a short natural-language signal from an IntentSpec for RAG retrieval."""
     parts = []
-    if spec.metric.resolved:
-        parts.append(str(spec.metric.value))
+    if spec.metrics.resolved:
+        parts.append(str(spec.metrics.value))
     if spec.entity_scope.resolved:
         parts.append(str(spec.entity_scope.value))
     if spec.aggregation.resolved:
@@ -401,7 +429,7 @@ def _spec_to_signal(spec) -> str:
     return " ".join(parts) if parts else spec.to_prompt_block()
 
 
-def _execute_from_spec(spec, target_db: str, session=None) -> dict:
+def _execute_from_spec(spec, target_db: str, session=None, query_id: Optional[str] = None) -> dict:
     """
     Compile a completed IntentSpec → SQL → execute, with planner-based retry.
 
@@ -424,6 +452,7 @@ def _execute_from_spec(spec, target_db: str, session=None) -> dict:
     last_raw: str | None = None
 
     for attempt in range(max_retries + 1):
+        _check_cancelled(query_id)
         print(f"[Pipeline] Attempt {attempt + 1}/{max_retries + 1} — building prompt from spec...")
 
         # SQLGenerator handles its own schema-linking + few-shot retrieval internally
@@ -444,6 +473,8 @@ def _execute_from_spec(spec, target_db: str, session=None) -> dict:
                 revised = _planner.revise_on_error(current_session, last_error, last_sql or "")
                 current_spec, current_session = revised.spec, revised.session
             continue
+
+        _check_cancelled(query_id)
 
         val_result = _validator.validate(last_sql)
         if not val_result.valid:
@@ -505,7 +536,7 @@ def planner_start(req: PlannerStartRequest):
     _sessions[turn.session_id] = turn.session
 
     if turn.status == "ready":
-        result = _execute_from_spec(turn.spec, turn.session.target_db, session=turn.session)
+        result = _execute_from_spec(turn.spec, turn.session.target_db, session=turn.session, query_id=req.query_id)
         _sessions.pop(turn.session_id, None)
         return {**result, "status": "ready", "session_id": turn.session_id,
                 "debug_planner_prompt": turn.debug_prompt}
@@ -533,7 +564,7 @@ def planner_answer(req: PlannerAnswerRequest):
     _sessions[req.session_id] = turn.session  # update with latest state
 
     if turn.status == "ready":
-        result = _execute_from_spec(turn.spec, session.target_db, session=turn.session)
+        result = _execute_from_spec(turn.spec, session.target_db, session=turn.session, query_id=req.query_id)
         _sessions.pop(req.session_id, None)
         return {**result, "status": "ready", "session_id": req.session_id,
                 "debug_planner_prompt": turn.debug_prompt}
@@ -561,7 +592,7 @@ def planner_force(req: PlannerForceRequest):
         raise HTTPException(status_code=404, detail="Session not found or expired")
 
     spec = _planner.force_proceed(session)
-    result = _execute_from_spec(spec, session.target_db, session=session)
+    result = _execute_from_spec(spec, session.target_db, session=session, query_id=req.query_id)
     _sessions.pop(req.session_id, None)
     return {**result, "status": "ready", "session_id": req.session_id}
 
@@ -655,10 +686,12 @@ def run_query(req: QueryRequest):
 
 
             # Autonomous Self-Correction Loop (Auto-Healing)
+            _check_cancelled(req.query_id)
             max_exec_retries = 2
             exec_retry_count = 0
 
             while exec_retry_count <= max_exec_retries:
+                _check_cancelled(req.query_id)
                 retry_count = 0
                 original_build_retry = _builder.build_retry_prompt
 
@@ -699,6 +732,7 @@ def run_query(req: QueryRequest):
                 log_entry["validation_passed"] = True
 
                 # Step 7 — Execute generated SQL
+                _check_cancelled(req.query_id)
                 try:
                     result = _executor.execute(sql)
                     break  # Success — exit the auto-heal loop
@@ -743,6 +777,141 @@ def run_query(req: QueryRequest):
         return _error_return(f"Internal error: {str(e)}")
 
 
+# POST /api/query/edit
+@app.post("/api/query/edit")
+def edit_query(req: QueryEditRequest):
+    """
+    Handles user follow-up instructions to refine an existing SQL query.
+    Bypasses the planner and directly instructs the SQL Generator to modify the SQL.
+    """
+    if not _llm_engine:
+        raise HTTPException(status_code=500, detail="LLM Engine not initialized")
+
+    t_start = time.time()
+    
+    # Audit log base
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "original_input": f"EDIT: {req.edit_instruction} (for query: {req.original_query})",
+        "execution_time_ms": 0,
+        "cache_hit": False,
+        "chart_type": "table",
+        "error": None
+    }
+
+    def _error_return(msg: str):
+        log_entry["error"] = msg
+        _audit.log_query(log_entry)
+        return {
+            "error": msg,
+            "sql": None, "columns": None, "rows": None, "row_count": 0,
+            "execution_time_ms": int((time.time() - t_start) * 1000),
+            "cache_hit": False, "chart_type": "table", "domain": "unknown"
+        }
+
+    # Use the combined original query + edit instruction for semantic schema linking
+    combined_intent = f"{req.original_query}. Edit instruction: {req.edit_instruction}"
+    
+    try:
+        norm = _normalizer.normalize(combined_intent)
+        norm_text = norm["normalized_text"]
+        domain = norm["domain_category"]
+        schema_context = _linker.link_schema(norm_text, domain, req.target_db)
+        
+        prompt = _builder.build_edit_prompt(
+            original_query=req.original_query,
+            previous_sql=req.previous_sql,
+            edit_instruction=req.edit_instruction,
+            schema_context=schema_context,
+            target_db=req.target_db,
+            dialect="postgres"
+        )
+        debug_prompt = prompt
+
+        _check_cancelled(req.query_id)
+
+        max_exec_retries = 2
+        exec_retry_count = 0
+
+        while exec_retry_count <= max_exec_retries:
+            _check_cancelled(req.query_id)
+            retry_count = 0
+            original_build_retry = _builder.build_retry_prompt
+
+            def _counting_retry(original_prompt, failed_sql, error):
+                nonlocal retry_count
+                retry_count += 1
+                return original_build_retry(original_prompt, failed_sql, error)
+
+            _builder.build_retry_prompt = _counting_retry
+
+            try:
+                sql, raw_llm_output = _llm_engine.generate_sql_with_retry(
+                    prompt=prompt,
+                    validator=_validator,
+                    prompt_builder=_builder,
+                    max_retries=2
+                )
+            except LLMError as e:
+                log_entry["validation_error"] = str(e)
+                _audit.log_query(log_entry)
+                return _error_return(f"LLM error: {str(e)}")
+            finally:
+                _builder.build_retry_prompt = original_build_retry
+
+            # Final validation
+            val = _validator.validate(sql, req.target_db)
+            if not val.valid:
+                log_entry["validation_error"] = val.error
+                _audit.log_query(log_entry)
+                return _error_return(f"SQL validation failed: {val.error}")
+
+            sql = val.sanitized_sql
+
+            _check_cancelled(req.query_id)
+
+            # Execution
+            try:
+                result = _executor.execute(sql)
+                break  # Success
+            except ExecutionError as e:
+                if exec_retry_count < max_exec_retries:
+                    prompt = _builder.build_retry_prompt(prompt, sql, f"PostgreSQL Execution Error: {str(e)}")
+                    exec_retry_count += 1
+                    continue
+                else:
+                    log_entry["validation_error"] = str(e)
+                    _audit.log_query(log_entry)
+                    return _error_return(f"Execution error: {str(e)}")
+
+        chart_type = detect_chart_type(result.columns, result.rows)
+        total_time = int((time.time() - t_start) * 1000)
+        
+        log_entry["execution_time_ms"] = total_time
+        log_entry["chart_type"] = chart_type
+        log_entry["final_sql"] = sql
+        _audit.log_query(log_entry)
+
+        return {
+            "sql": sql,
+            "columns": result.columns,
+            "rows": result.rows,
+            "row_count": result.row_count,
+            "execution_time_ms": total_time,
+            "db_execution_time_ms": result.execution_time_ms,
+            "cache_hit": False,
+            "chart_type": chart_type,
+            "domain": domain,
+            "debug_prompt": debug_prompt,
+            "raw_llm_output": raw_llm_output,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"[/api/query/edit] Unexpected error: {e}\\n{tb}")
+        return _error_return(f"Internal error: {str(e)}")
 # POST /api/image-to-query
 @app.post("/api/image-to-query")
 async def image_to_query(

@@ -64,7 +64,7 @@ HARD RULES:
 
 
 AVAILABLE SLOTS to fill:
-- metric: what is being measured (e.g. "CPU busy percentage", "disk read throughput")
+- metrics: an array of what is being measured (e.g. ["CPU busy percentage", "disk read throughput"])
 - entity_scope: which entities (e.g. "all CPUs", "top 5 processes", "a specific node")
 - aggregation: avg / max / sum / raw
 - time_window: time range
@@ -73,10 +73,10 @@ AVAILABLE SLOTS to fill:
 
 OUTPUT FORMAT — always respond with a JSON object:
 {
-  "action": "ask" | "fill",
-  "question": "<business-language question to ask user, only when action=ask>",
+  "action": "clarify" | "fill",
+  "question": "your question here (only if clarify)",
   "slots": {
-    "metric":           {"value": ..., "resolved": true/false, "interpretations": [...]},
+    "metrics":          {"value": ..., "resolved": true/false, "interpretations": [...]},
     "entity_scope":     {"value": ..., "resolved": true/false, "interpretations": [...]},
     "aggregation":      {"value": ..., "resolved": true/false, "interpretations": [...]},
     "time_window":      {"value": ..., "resolved": true/false, "interpretations": [...]},
@@ -87,7 +87,10 @@ OUTPUT FORMAT — always respond with a JSON object:
 }
 
 When action=ask, also include the current state of all slots (partially filled is fine).
-When action=fill, all critical slots (metric, entity_scope) must be resolved=true.
+When action=fill, all critical slots (metrics, entity_scope) must be resolved=true.
+If you are filling the spec but some non-critical slots weren't mentioned (e.g. filters), set resolved=false.
+
+CRITICAL RULE: Do not summarize away or drop any metrics, entities, or constraints from the user's original query. If the user asks for multiple things (e.g. "X and Y", "X vs Y"), you MUST extract all of them into the metrics list.
 """
 
 
@@ -113,6 +116,7 @@ class Planner:
     def start(self, user_query: str) -> PlannerTurn:
         """Begin the clarification loop for a new user query."""
         spec = IntentSpec()
+        spec.original_query = user_query
         session = PlannerSession(
             session_id=str(uuid.uuid4()),
             spec=spec,
@@ -190,7 +194,7 @@ class Planner:
             f"=== PLANNER SYSTEM PROMPT ===\n{system_prompt}\n\n"
             f"=== CONVERSATION ===\n{conversation}"
         )
-        print(f"[Planner Debug] Prompt sent to LLM:\n{debug_prompt}\n{'='*60}")
+        # Print removed to keep backend terminal clean
 
         raw = self._provider.generate(conversation, system_prompt=system_prompt)
         session.history.append({"role": "assistant", "content": raw})
@@ -249,7 +253,7 @@ class Planner:
     def _update_spec(self, spec: IntentSpec, parsed: dict) -> None:
         """Write LLM-parsed slot values into the IntentSpec."""
         slot_map = {
-            "metric": spec.metric,
+            "metrics": spec.metrics,
             "entity_scope": spec.entity_scope,
             "aggregation": spec.aggregation,
             "time_window": spec.time_window,

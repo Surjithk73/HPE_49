@@ -99,8 +99,9 @@ OUTPUT CONTRACT:
 FORMULA REFERENCE LEGEND:
 The `delta_time` column represents the measurement interval and is measured in MICROSECONDS. 
 When computing metrics, you must account for multiple intervals/CPUs in your denominator.
-Define `base_time_us` = (MAX(delta_time) * COUNT(DISTINCT from_timestamp))
-(NOTE: If normalizing metrics with `ipus`, redefine `base_time_us` = SUM(delta_time * ipus) instead)
+Define `base_time_us`:
+- If the table contains the `ipus` column (like cpu and proc), ALWAYS define `base_time_us` = SUM(delta_time * ipus).
+- For all other tables, define `base_time_us` = (MAX(delta_time) * COUNT(DISTINCT from_timestamp)).
 Apply these formulas based on the counter tags in the schema:
 - [Busy counter]       percentage  = col * 100.0 / NULLIF(base_time_us, 0)
 - [Queue counter]      avg queue   = col * 1.0   / NULLIF(base_time_us, 0)
@@ -112,6 +113,7 @@ Apply these formulas based on the counter tags in the schema:
 - [Snapshot counter]  use directly — no rate conversion needed.
 
 AGGREGATION & MATH RULES:
+- CRITICAL FALLBACK RULE: The USER INTENT block is a helpful summary, but the ORIGINAL INPUT QUERY is the ultimate source of truth. If the ORIGINAL INPUT asks for a metric or filter that the USER INTENT missed, you MUST include it.
 - HIGHEST PRIORITY: The FEW-SHOT EXAMPLES provided below are curated by experts (HPT). If a few-shot example contradicts the FORMULA REFERENCE LEGEND or any other rule, the few-shot example STRICTLY OVERRIDES the rigid rules. Always follow the patterns in the examples first!
 - If a specific formula is provided directly in the schema comment for a column, it strictly overrides the global FORMULA REFERENCE LEGEND.
 - When calculating Queue lengths or ratios that may result in very small decimals, explicitly CAST the final result to NUMERIC(10,4) so it does not truncate to 0.
@@ -163,6 +165,11 @@ USER REQUEST:
         # Reuse build_prompt() with the spec block as the "query" — the spec
         # block already contains structured intent; the system instruction adds
         # the dialect note at the top.
+        
+        # Prepend the original raw English query if available so the LLM can match few-shots
+        if hasattr(spec, "original_query") and spec.original_query:
+            spec_block = f"INPUT: {spec.original_query}\n\n{spec_block}"
+
         base_prompt = self.build_prompt(
             normalized_query=spec_block,
             schema_context=schema_context,
@@ -177,6 +184,46 @@ USER REQUEST:
             f"Generate a single valid SQL SELECT query for the schema '{target_db}'.\n{dialect_note}",
         )
         return base_prompt
+
+    def build_edit_prompt(self, original_query: str, previous_sql: str, edit_instruction: str, schema_context: str, target_db: str = "macht413", dialect: str = "postgres") -> str:
+        """
+        Build a prompt for editing an existing SQL query based on user instructions.
+        """
+        _DIALECT_NOTES = {
+            "postgres": "Use standard PostgreSQL syntax. LIMIT n is correct.",
+            "sqlmx":    "Use HPE NonStop SQL/MX syntax. Use [FIRST n] instead of LIMIT n.",
+            "sqlmp":    "Use HPE NonStop SQL/MP syntax. Use [FIRST n] instead of LIMIT n.",
+        }
+        dialect_note = _DIALECT_NOTES.get(dialect.lower(), f"Dialect: {dialect}.")
+        
+        prompt = f"""You are a SQL expert for HPE NonStop performance monitoring systems.
+Generate a single valid SQL SELECT query for the schema '{target_db}'.
+{dialect_note}
+
+Your task is to EDIT an existing SQL query based on a new instruction from the user.
+
+OUTPUT CONTRACT:
+1. You MUST output a `<thought>` block explaining your reasoning for the changes.
+2. Immediately after the `<thought>` block, output ONLY the raw SQL query wrapped in standard markdown code fences (```sql\\n...\\n```). Do not output any other text.
+3. Only SELECT statements. No DDL/DML.
+4. Always qualify tables: {target_db}.table_name.
+5. Only use columns shown in the schema context; never invent column names.
+6. Always include LIMIT {self.max_rows} unless a smaller limit is specified.
+
+SCHEMA CONTEXT:
+{schema_context}
+
+ORIGINAL USER INTENT: {original_query}
+
+PREVIOUS SQL QUERY:
+```sql
+{previous_sql}
+```
+
+NEW EDIT INSTRUCTION:
+{edit_instruction}
+"""
+        return prompt
 
     def build_retry_prompt(self, original_prompt: str, failed_sql: str, error: str) -> str:
         """

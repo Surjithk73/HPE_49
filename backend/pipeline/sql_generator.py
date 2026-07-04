@@ -99,8 +99,8 @@ class SQLGenerator:
     def _spec_to_query_signal(self, spec: IntentSpec) -> str:
         """Convert spec to a short text string suitable for schema/few-shot retrieval."""
         parts = []
-        if spec.metric.resolved:
-            parts.append(str(spec.metric.value))
+        if spec.metrics.resolved:
+            parts.append(str(spec.metrics.value))
         if spec.entity_scope.resolved:
             parts.append(str(spec.entity_scope.value))
         if spec.aggregation.resolved:

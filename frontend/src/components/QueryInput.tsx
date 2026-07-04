@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
-import { Send, Loader2, Sparkles, Code2, Image as ImageIcon, Upload } from 'lucide-react'
+import { Send, Loader2, Sparkles, Code2, Image as ImageIcon, Upload, Square } from 'lucide-react'
 import { getDatabases } from '../lib/api'
 
 export type InputMode = 'nl' | 'sql' | 'image'
@@ -10,6 +10,7 @@ interface Props {
   error: string | null
   initialValue?: string
   initialMode?: InputMode
+  onCancel?: () => void
 }
 
 const MAX_QUERY_LENGTH = 2000   // characters — prevents runaway API calls
@@ -44,7 +45,7 @@ export function highlightSQL(sql: string): string {
     .replace(numbers,  m => `<span style="color:#a78bfa">${m}</span>`)
 }
 
-export default function QueryInput({ onSubmit, loading, error, initialValue = '', initialMode = 'nl' }: Props) {
+export default function QueryInput({ onSubmit, loading, error, initialValue = '', initialMode = 'nl', onCancel }: Props) {
   const [mode, setMode]   = useState<InputMode>(initialMode)
   const [value, setValue] = useState(initialValue)
   const [availableDbs, setAvailableDbs] = useState<string[]>([])
@@ -355,6 +356,28 @@ export default function QueryInput({ onSubmit, loading, error, initialValue = ''
             )}
           </div>
           {(() => {
+            if (loading && onCancel) {
+              return (
+                <button
+                  onClick={onCancel}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '6px', borderRadius: '7px',
+                    background: 'rgba(239,68,68,0.15)',
+                    color: '#ef4444',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    cursor: 'pointer',
+                    fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.25)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                >
+                  <Square size={12} fill="currentColor" />
+                </button>
+              )
+            }
+
             const disabled = loading
               || (isImage ? !imageFile : !value.trim() || value.length > MAX_QUERY_LENGTH)
             const bg = disabled

@@ -18,13 +18,18 @@ examples:
     queue lengths, busy percentages, overhead, swaps, dispatches, cache hits, and
     disk I/Os per second
   sql: SELECT cpu_num, cpu_type, sum(mem_mb)/count(*) as mem_mb, sum(pcbs)/count(*)
-    as pcbs, sum(cpu_qtime)/sum(delta_time) AS queue_length_total, 100*sum(cpu_busy_time)/sum(delta_time)
-    AS process_busy_pct, 100*sum(intr_busy_time)/sum(delta_time) AS interrupt_busy_pct,
-    100*sum(cpu_busy_time + intr_busy_time)/sum(delta_time) AS total_busy_pct, 100*sum(process_ovhd)/sum(delta_time)
-    AS process_overhead_pct, sum(swaps)/sum(delta_time) AS memory_swaps_per_sec, sum(dispatches)/sum(delta_time)
-    AS process_dispatches_per_sec, sum(cache_hits)/sum(delta_time) AS cache_hits_per_sec,
-    sum(disc_ios)/sum(delta_time) AS disk_ios_per_sec FROM %db%.cpu GROUP BY 1, 2
-    ORDER BY 1 LIMIT 10000;
+    as pcbs, sum(cpu_qtime)/NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS queue_length_total, 100*sum(cpu_busy_time)/NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS process_busy_pct, 100*sum(intr_busy_time)/NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS interrupt_busy_pct, 100*sum(cpu_busy_time
+    + intr_busy_time)/NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0)
+    AS total_busy_pct, 100*sum(process_ovhd)/NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS process_overhead_pct, sum(swaps)/NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS memory_swaps_per_sec, sum(dispatches)/NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS process_dispatches_per_sec, sum(cache_hits)/NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS cache_hits_per_sec, sum(disc_ios)/NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS disk_ios_per_sec FROM %db%.cpu GROUP BY
+    1, 2 ORDER BY 1 LIMIT 10000;
 - domain: disc
   query: Show disk read and write counts per device
   sql: SELECT system_name, device_name, sum(reads) AS total_reads, sum(writes) AS
@@ -39,10 +44,11 @@ examples:
 - domain: multi
   query: Analyze CPU utilization with memory pressure and identify bottlenecks by
     correlating CPU busy time, page faults, and queue times across all CPUs
-  sql: SELECT cpu_num, 100*sum(cpu_busy_time)/sum(delta_time) AS cpu_utilization_pct,
-    sum(cpu_qtime)/sum(delta_time) AS avg_queue_length, sum(page_requests) as page_requests,
-    sum(page_scans) as page_scans FROM %db%.cpu WHERE cpu_busy_time > 0 GROUP BY 1
-    ORDER BY 2 DESC LIMIT 10000;
+  sql: SELECT cpu_num, 100*sum(cpu_busy_time)/NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS cpu_utilization_pct, sum(cpu_qtime)/NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS avg_queue_length, sum(page_requests) as
+    page_requests, sum(page_scans) as page_scans FROM %db%.cpu WHERE cpu_busy_time
+    > 0 GROUP BY 1 ORDER BY 2 DESC LIMIT 10000;
 - domain: multi
   query: Analyze disk cache effectiveness across all cache levels by calculating hit
     ratios, fault rates, and dirty block queue times to optimize cache configuration
@@ -50,9 +56,10 @@ examples:
     100*sum(c0_hits)/sum(c0_hits + c0_misses) AS cache_512b_hit_pct, 100*sum(c1_hits)/sum(c1_hits
     + c1_misses) AS cache_1kb_hit_pct, 100*sum(c0_faults + c1_faults + c2_faults +
     c3_faults)/sum(reads + writes) AS fault_rate_pct, sum(c0_blks_dirty_qtime + c1_blks_dirty_qtime
-    + c2_blks_dirty_qtime + c3_blks_dirty_qtime)/sum(delta_time) AS avg_dirty_blocks_queued,
-    sum(reads + writes) AS total_ios FROM %db%.disc WHERE reads + writes > 0 GROUP
-    BY 1 ORDER BY 6 DESC, 8 DESC LIMIT 10000;
+    + c2_blks_dirty_qtime + c3_blks_dirty_qtime)/NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS avg_dirty_blocks_queued, sum(reads + writes) AS total_ios
+    FROM %db%.disc WHERE reads + writes > 0 GROUP BY 1 ORDER BY 6 DESC, 8 DESC LIMIT
+    10000;
 - domain: ossns
   query: Average out all the server net values and show them to me
   sql: SELECT sum(rr_processed)/count(*) AS avg_rr_processed, sum(rr_redir_sent)/count(*)
@@ -84,8 +91,8 @@ examples:
 - domain: cpu
   query: Show the average CPU ready queue length per CPU, ensuring small values do
     not round to 0.
-  sql: SELECT cpu_num, sum(cpu_qtime)/sum(delta_time) AS avg_ready_queue_length FROM
-    %db%.cpu GROUP BY 1 ORDER BY 2 DESC LIMIT 10000;
+  sql: SELECT cpu_num, sum(cpu_qtime)/NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS avg_ready_queue_length FROM %db%.cpu GROUP BY 1 ORDER BY 2 DESC LIMIT 10000;
 - domain: disc
   query: Analyze the disk cache effectiveness for each device by showing the overall
     cache hit percentage and the total cache faults as a percentage of total I/Os.
@@ -117,93 +124,103 @@ examples:
   query: Show disk busy times including device queue busy percentage, read queue busy
     percentage, and write queue busy percentage ordered by device busy time
   sql: SELECT system_name, concat(device_name, '-', u_scsi_id_plpt_target_id) AS device_name,
-    100*sum(device_qbusy_time)/sum(delta_time) AS device_qbusy_time_pct, 100*sum(read_qbusy_time)/sum(delta_time)
-    AS read_qbusy_time_pct, 100*sum(write_qbusy_time)/sum(delta_time) AS write_qbusy_time_pct
-    FROM %db%.disc GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10;
+    100*sum(device_qbusy_time)/NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS device_qbusy_time_pct, 100*sum(read_qbusy_time)/NULLIF(MAX(delta_time) *
+    COUNT(DISTINCT from_timestamp), 0) AS read_qbusy_time_pct, 100*sum(write_qbusy_time)/NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS write_qbusy_time_pct FROM %db%.disc GROUP
+    BY 1, 2 ORDER BY 3 DESC LIMIT 10;
 - domain: disc
   query: Show disk device average service time (AST) per device ordered by AST descending
   sql: SELECT system_name, device_name || '-' || u_scsi_id_plpt_target_id AS device_name,
-    AVG(device_qbusy_time * 1.0 / NULLIF(delta_time, 0)) / NULLIF(SUM(reads * 1.0
-    / NULLIF(delta_time, 0)) + SUM(writes * 1.0 / NULLIF(delta_time, 0)), 0) / 1000.0
-    AS device_ast FROM %db%.disc WHERE reads != 0 OR writes != 0 GROUP BY system_name,
-    device_name, u_scsi_id_plpt_target_id ORDER BY device_ast DESC LIMIT 10;
+    SUM(device_qbusy_time) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) / NULLIF(SUM(reads * 1.0 / NULLIF(delta_time, 0)) + SUM(writes * 1.0 / NULLIF(delta_time,
+    0)), 0) / 1000.0 AS device_ast FROM %db%.disc WHERE reads != 0 OR writes != 0
+    GROUP BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY device_ast
+    DESC LIMIT 10;
 - domain: disc
   query: Show average input bytes per second and output bytes per second per disk
     device
   sql: SELECT system_name, device_name || '-' || u_scsi_id_plpt_target_id AS device_name,
-    AVG(1000000.0 * input_bytes / NULLIF(delta_time, 0)) AS input_bytes_per_sec, AVG(1000000.0
-    * output_bytes / NULLIF(delta_time, 0)) AS output_bytes_per_sec FROM %db%.disc
-    GROUP BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY input_bytes_per_sec
+    SUM(input_bytes) * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS input_bytes_per_sec, SUM(output_bytes) * 1000000.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS output_bytes_per_sec FROM %db%.disc GROUP
+    BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY input_bytes_per_sec
     DESC LIMIT 10;
 - domain: disc
   query: Show average read queue length and average write queue length per disk device
   sql: SELECT system_name, device_name || '-' || u_scsi_id_plpt_target_id AS device_name,
-    AVG(read_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_read_queue_length, AVG(write_qtime
-    * 1.0 / NULLIF(delta_time, 0)) AS avg_write_queue_length FROM %db%.disc GROUP
+    SUM(read_qtime) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS avg_read_queue_length, SUM(write_qtime) * 1.0 / NULLIF(MAX(delta_time) *
+    COUNT(DISTINCT from_timestamp), 0) AS avg_write_queue_length FROM %db%.disc GROUP
     BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY avg_read_queue_length
     DESC LIMIT 10;
 - domain: disc
   query: Show average requests per second per disk device
   sql: SELECT system_name, device_name || '-' || u_scsi_id_plpt_target_id AS device_name,
-    AVG(1000000.0 * requests / NULLIF(delta_time, 0)) AS requests_per_sec FROM %db%.disc
-    GROUP BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY requests_per_sec
-    DESC LIMIT 10;
+    SUM(requests) * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS requests_per_sec FROM %db%.disc GROUP BY system_name, device_name, u_scsi_id_plpt_target_id
+    ORDER BY requests_per_sec DESC LIMIT 10;
 - domain: disc
   query: Show disk request average response time (ART) per device
   sql: SELECT system_name, device_name || '-' || u_scsi_id_plpt_target_id AS device_name,
-    AVG(request_qtime * 1.0 / NULLIF(delta_time, 0)) / NULLIF(AVG(1000.0 * requests
-    / NULLIF(delta_time, 0)), 0) AS request_art FROM %db%.disc WHERE requests > 0
-    GROUP BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY request_art
-    DESC LIMIT 10;
+    SUM(request_qtime) * 1.0 / NULLIF(SUM(requests), 0) / 1000.0 AS request_art
+    FROM %db%.disc WHERE requests > 0 GROUP BY system_name, device_name, u_scsi_id_plpt_target_id
+    ORDER BY request_art DESC LIMIT 10;
 - domain: disc
   query: Show disk request queue time average queue length (AQL) per device
   sql: SELECT system_name, device_name || '-' || u_scsi_id_plpt_target_id AS device_name,
-    AVG(request_qtime * 1.0 / NULLIF(delta_time, 0)) AS request_qtime_aql FROM %db%.disc
-    GROUP BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY request_qtime_aql
-    DESC LIMIT 10;
+    SUM(request_qtime) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS request_qtime_aql FROM %db%.disc GROUP BY system_name, device_name, u_scsi_id_plpt_target_id
+    ORDER BY request_qtime_aql DESC LIMIT 10;
 - domain: disc
   query: Show disk volume semaphore queue time average queue length (AQL) per device
   sql: SELECT system_name, device_name || '-' || u_scsi_id_plpt_target_id AS device_name,
-    AVG(volsem_qtime * 1.0 / NULLIF(delta_time, 0)) AS volsem_qtime_aql FROM %db%.disc
-    GROUP BY system_name, device_name, u_scsi_id_plpt_target_id ORDER BY volsem_qtime_aql
-    DESC LIMIT 10;
+    SUM(volsem_qtime) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS volsem_qtime_aql FROM %db%.disc GROUP BY system_name, device_name, u_scsi_id_plpt_target_id
+    ORDER BY volsem_qtime_aql DESC LIMIT 10;
 - domain: dfile
   query: Show average cache write hits and cache read hits per disk file ordered by
     cache write hits
   sql: SELECT file_name_volume || '.' || file_name_subvol || '.' || file_name_filename
-    AS disk_file, AVG(cache_write_hits * 1.0) AS avg_cache_write_hits, AVG(cache_read_hits
-    * 1.0) AS avg_cache_read_hits FROM %db%.dfile GROUP BY file_name_volume, file_name_subvol,
-    file_name_filename ORDER BY avg_cache_write_hits DESC LIMIT 10;
+    AS disk_file, SUM(cache_write_hits) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS avg_cache_write_hits, SUM(cache_read_hits) * 1.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS avg_cache_read_hits FROM %db%.dfile GROUP
+    BY file_name_volume, file_name_subvol, file_name_filename ORDER BY avg_cache_write_hits
+    DESC LIMIT 10;
 - domain: dfile
   query: Show average driver input calls per disk file
   sql: SELECT file_name_volume || '.' || file_name_subvol || '.' || file_name_filename
-    AS disk_file, AVG(driver_input_calls * 1.0) AS avg_driver_input_calls FROM %db%.dfile
-    GROUP BY file_name_volume, file_name_subvol, file_name_filename ORDER BY avg_driver_input_calls
-    DESC LIMIT 10;
+    AS disk_file, SUM(driver_input_calls) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS avg_driver_input_calls FROM %db%.dfile GROUP BY file_name_volume,
+    file_name_subvol, file_name_filename ORDER BY avg_driver_input_calls DESC LIMIT
+    10;
 - domain: dfile
   query: Show average driver output calls per disk file
   sql: SELECT file_name_volume || '.' || file_name_subvol || '.' || file_name_filename
-    AS disk_file, AVG(driver_output_calls * 1.0) AS avg_driver_output_calls FROM %db%.dfile
-    GROUP BY file_name_volume, file_name_subvol, file_name_filename ORDER BY avg_driver_output_calls
-    DESC LIMIT 10;
+    AS disk_file, SUM(driver_output_calls) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS avg_driver_output_calls FROM %db%.dfile GROUP BY file_name_volume,
+    file_name_subvol, file_name_filename ORDER BY avg_driver_output_calls DESC LIMIT
+    10;
 - domain: dfile
   query: Show average open queue length per disk file
   sql: SELECT file_name_volume || '.' || file_name_subvol || '.' || file_name_filename
-    AS disk_file, AVG(open_qtime * 1.0 / NULLIF(delta_time, 0)) AS avg_open_queue_length
-    FROM %db%.dfile GROUP BY file_name_volume, file_name_subvol, file_name_filename
-    ORDER BY avg_open_queue_length DESC LIMIT 10;
+    AS disk_file, SUM(open_qtime) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS avg_open_queue_length FROM %db%.dfile GROUP BY file_name_volume,
+    file_name_subvol, file_name_filename ORDER BY avg_open_queue_length DESC LIMIT
+    10;
 - domain: dfile
   query: Show average requests per second per disk file
   sql: SELECT file_name_volume || '.' || file_name_subvol || '.' || file_name_filename
-    AS disk_file, AVG(1000000.0 * requests / NULLIF(delta_time, 0)) AS requests_per_sec
-    FROM %db%.dfile GROUP BY file_name_volume, file_name_subvol, file_name_filename
-    ORDER BY requests_per_sec DESC LIMIT 10;
+    AS disk_file, SUM(requests) * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS requests_per_sec FROM %db%.dfile GROUP BY file_name_volume,
+    file_name_subvol, file_name_filename ORDER BY requests_per_sec DESC LIMIT 10;
 - domain: dfile
   query: Show average transient opens per second per disk file
   sql: SELECT file_name_volume || '.' || file_name_subvol || '.' || file_name_filename
-    AS disk_file, AVG(100000.0 * transient_opens / NULLIF(delta_time, 0)) AS transient_opens_per_sec
-    FROM %db%.dfile GROUP BY file_name_volume, file_name_subvol, file_name_filename
-    ORDER BY transient_opens_per_sec DESC LIMIT 10;
+    AS disk_file, SUM(transient_opens) * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT
+    from_timestamp), 0) AS transient_opens_per_sec FROM %db%.dfile GROUP BY file_name_volume,
+    file_name_subvol, file_name_filename ORDER BY transient_opens_per_sec DESC LIMIT
+    10;
 - domain: proc
   query: Show process CPU busy time for a specific time range ordered by busy time
     descending
@@ -212,114 +229,122 @@ examples:
     < '2017-12-03 21:22:46.526813' ORDER BY cpu_busy_time DESC LIMIT 20;
 - domain: proc
   query: Show average dispatches per second per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(dispatches
-    * 1000000.0 / NULLIF(delta_time, 0)) AS dispatches_per_sec FROM %db%.proc GROUP
-    BY process_name, cpu_num, pin ORDER BY dispatches_per_sec DESC LIMIT 10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(dispatches)
+    * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS dispatches_per_sec
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY dispatches_per_sec
+    DESC LIMIT 10;
 - domain: proc
   query: Show average file open calls per second per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(file_open_calls
-    * 1000000.0 / NULLIF(delta_time, 0)) AS file_open_calls_per_sec FROM %db%.proc
-    GROUP BY process_name, cpu_num, pin ORDER BY file_open_calls_per_sec DESC LIMIT
-    10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(file_open_calls)
+    * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS file_open_calls_per_sec
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY file_open_calls_per_sec
+    DESC LIMIT 10;
 - domain: proc
   query: Show average info calls per second per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(info_calls
-    * 1000000.0 / NULLIF(delta_time, 0)) AS info_calls_per_sec FROM %db%.proc GROUP
-    BY process_name, cpu_num, pin ORDER BY info_calls_per_sec DESC LIMIT 10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(info_calls)
+    * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS info_calls_per_sec
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY info_calls_per_sec
+    DESC LIMIT 10;
 - domain: proc
   query: Show average memory queue time percentage per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(mem_qtime
-    * 100.0 / NULLIF(delta_time, 0)) AS mem_qtime_pct FROM %db%.proc GROUP BY process_name,
-    cpu_num, pin ORDER BY mem_qtime_pct DESC LIMIT 10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(mem_qtime)
+    * 100.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS mem_qtime_pct
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY mem_qtime_pct DESC
+    LIMIT 10;
 - domain: proc
   query: Show average messages received per second per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(messages_received
-    * 1000000.0 / NULLIF(delta_time, 0)) AS messages_received_per_sec FROM %db%.proc
-    GROUP BY process_name, cpu_num, pin ORDER BY messages_received_per_sec DESC LIMIT
-    10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(messages_received)
+    * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS messages_received_per_sec
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY messages_received_per_sec
+    DESC LIMIT 10;
 - domain: proc
   query: Show average messages sent per second per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(messages_sent
-    * 1000000.0 / NULLIF(delta_time, 0)) AS messages_sent_per_sec FROM %db%.proc GROUP
-    BY process_name, cpu_num, pin ORDER BY messages_sent_per_sec DESC LIMIT 10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(messages_sent)
+    * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS messages_sent_per_sec
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY messages_sent_per_sec
+    DESC LIMIT 10;
 - domain: proc
   query: Show average messages sent queue length per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(msgs_sent_qtime
-    * 1.0 / NULLIF(delta_time, 0)) AS avg_msgs_sent_queue_length FROM %db%.proc GROUP
-    BY process_name, cpu_num, pin ORDER BY avg_msgs_sent_queue_length DESC LIMIT 10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(msgs_sent_qtime)
+    * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS avg_msgs_sent_queue_length
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY avg_msgs_sent_queue_length
+    DESC LIMIT 10;
 - domain: proc
   query: Show average page faults per second per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(page_faults
-    * 1000000.0 / NULLIF(delta_time, 0)) AS page_faults_per_sec FROM %db%.proc GROUP
-    BY process_name, cpu_num, pin ORDER BY page_faults_per_sec DESC LIMIT 10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(page_faults)
+    * 1000000.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS page_faults_per_sec
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY page_faults_per_sec
+    DESC LIMIT 10;
 - domain: proc
   query: Show average present pages queue length per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(pres_pages_qtime
-    * 1.0 / NULLIF(delta_time, 0)) AS avg_pres_pages_queue_length FROM %db%.proc GROUP
-    BY process_name, cpu_num, pin ORDER BY avg_pres_pages_queue_length DESC LIMIT
-    10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(pres_pages_qtime)
+    * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS avg_pres_pages_queue_length
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY avg_pres_pages_queue_length
+    DESC LIMIT 10;
 - domain: proc
   query: Show average ready time percentage per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(ready_time
-    * 100.0 / NULLIF(delta_time, 0)) AS ready_time_pct FROM %db%.proc GROUP BY process_name,
-    cpu_num, pin ORDER BY ready_time_pct DESC LIMIT 10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(ready_time)
+    * 100.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS ready_time_pct
+    FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY ready_time_pct DESC
+    LIMIT 10;
 - domain: proc
   query: Show average sent bytes and received bytes per process
-  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, AVG(sent_bytes
-    * 1.0) AS avg_sent_bytes, AVG(received_bytes * 1.0) AS avg_received_bytes FROM
-    %db%.proc GROUP BY process_name, cpu_num, pin ORDER BY avg_sent_bytes DESC LIMIT
-    10;
+  sql: SELECT process_name || ':' || cpu_num || ',' || pin AS process_id, SUM(sent_bytes)
+    * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp), 0) AS avg_sent_bytes,
+    SUM(received_bytes) * 1.0 / NULLIF(MAX(delta_time) * COUNT(DISTINCT from_timestamp),
+    0) AS avg_received_bytes FROM %db%.proc GROUP BY process_name, cpu_num, pin ORDER
+    BY avg_sent_bytes DESC LIMIT 10;
 - domain: tmf
   query: Show aborting transactions per second per CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(aborting_trans * 1000000.0 / NULLIF(delta_time,
-    0)) AS aborting_trans_per_sec FROM %db%.tmf GROUP BY cpu_num ORDER BY aborting_trans_per_sec
-    DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(aborting_trans) * 1000000.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS aborting_trans_per_sec FROM %db%.tmf GROUP
+    BY cpu_num ORDER BY aborting_trans_per_sec DESC LIMIT 10;
 - domain: tmf
   query: Show home network transactions per second per CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(home_net_trans * 1000000.0 / NULLIF(delta_time,
-    0)) AS home_net_trans_per_sec FROM %db%.tmf GROUP BY cpu_num ORDER BY home_net_trans_per_sec
-    DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(home_net_trans) * 1000000.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS home_net_trans_per_sec FROM %db%.tmf GROUP
+    BY cpu_num ORDER BY home_net_trans_per_sec DESC LIMIT 10;
 - domain: tmf
   query: Show TMF home network transactions average response time (ART) per CPU
-  sql: SELECT cpu_num, AVG(home_net_trans_qtime * 1.0 / NULLIF(home_net_trans, 0)
-    / 1000.0) AS home_net_trans_art_ms FROM %db%.tmf WHERE home_net_trans > 0 GROUP
+  sql: SELECT cpu_num, SUM(home_net_trans_qtime) * 1.0 / NULLIF(SUM(home_net_trans),
+    0) / 1000.0 AS home_net_trans_art_ms FROM %db%.tmf WHERE home_net_trans > 0 GROUP
     BY cpu_num ORDER BY home_net_trans_art_ms DESC LIMIT 10000;
 - domain: tmf
   query: Show home network transactions queue time average queue length (AQL) per
     CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(home_net_trans_qtime * 1.0 / NULLIF(delta_time,
-    0)) AS avg_home_net_trans_queue_length FROM %db%.tmf GROUP BY cpu_num ORDER BY
-    avg_home_net_trans_queue_length DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(home_net_trans_qtime) * 1.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS avg_home_net_trans_queue_length FROM %db%.tmf
+    GROUP BY cpu_num ORDER BY avg_home_net_trans_queue_length DESC LIMIT 10;
 - domain: tmf
   query: Show home transactions per second per CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(home_trans * 1000000.0 / NULLIF(delta_time,
-    0)) AS home_trans_per_sec FROM %db%.tmf GROUP BY cpu_num ORDER BY home_trans_per_sec
-    DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(home_trans) * 1000000.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS home_trans_per_sec FROM %db%.tmf GROUP
+    BY cpu_num ORDER BY home_trans_per_sec DESC LIMIT 10;
 - domain: tmf
   query: Show TMF home transactions average response time (ART) per CPU
-  sql: SELECT cpu_num, AVG(home_trans_qtime * 1.0 / NULLIF(home_trans, 0) / 1000.0)
-    AS home_trans_art_ms FROM %db%.tmf WHERE home_trans > 0 GROUP BY cpu_num ORDER
-    BY home_trans_art_ms DESC LIMIT 10000;
+  sql: SELECT cpu_num, SUM(home_trans_qtime) * 1.0 / NULLIF(SUM(home_trans), 0) /
+    1000.0 AS home_trans_art_ms FROM %db%.tmf WHERE home_trans > 0 GROUP BY cpu_num
+    ORDER BY home_trans_art_ms DESC LIMIT 10000;
 - domain: tmf
   query: Show home transactions queue time average queue length (AQL) per CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(home_trans_qtime * 1.0 / NULLIF(delta_time,
-    0)) AS avg_home_trans_queue_length FROM %db%.tmf GROUP BY cpu_num ORDER BY avg_home_trans_queue_length
-    DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(home_trans_qtime) * 1.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS avg_home_trans_queue_length FROM %db%.tmf
+    GROUP BY cpu_num ORDER BY avg_home_trans_queue_length DESC LIMIT 10;
 - domain: tmf
   query: Show remote transactions per second per CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(remote_trans * 1000000.0 / NULLIF(delta_time,
-    0)) AS remote_trans_per_sec FROM %db%.tmf GROUP BY cpu_num ORDER BY remote_trans_per_sec
-    DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(remote_trans) * 1000000.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS remote_trans_per_sec FROM %db%.tmf GROUP
+    BY cpu_num ORDER BY remote_trans_per_sec DESC LIMIT 10;
 - domain: tmf
   query: Show remote transactions queue time average queue length (AQL) per CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(remote_trans_qtime * 1.0 / NULLIF(delta_time,
-    0)) AS avg_remote_trans_queue_length FROM %db%.tmf GROUP BY cpu_num ORDER BY avg_remote_trans_queue_length
-    DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(remote_trans_qtime) * 1.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS avg_remote_trans_queue_length FROM %db%.tmf
+    GROUP BY cpu_num ORDER BY avg_remote_trans_queue_length DESC LIMIT 10;
 - domain: tmf
   query: Show transaction backout queue time average queue length (AQL) per CPU
-  sql: SELECT cpu_num AS tmf_name, AVG(trans_backout_qtime * 1.0 / NULLIF(delta_time,
-    0)) AS avg_trans_backout_queue_length FROM %db%.tmf GROUP BY cpu_num ORDER BY
-    avg_trans_backout_queue_length DESC LIMIT 10;
+  sql: SELECT cpu_num AS tmf_name, SUM(trans_backout_qtime) * 1.0 / NULLIF(MAX(delta_time)
+    * COUNT(DISTINCT from_timestamp), 0) AS avg_trans_backout_queue_length FROM %db%.tmf
+    GROUP BY cpu_num ORDER BY avg_trans_backout_queue_length DESC LIMIT 10;
 - domain: tmf
   query: Show total home transactions per CPU
   sql: SELECT cpu_num AS tmf_name, SUM(home_trans) AS total_home_trans FROM %db%.tmf

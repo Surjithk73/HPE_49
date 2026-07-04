@@ -69,10 +69,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export async function runQuery(query: string, target_db: string = "macht413"): Promise<QueryResponse> {
+export async function runQuery(query: string, target_db: string = "macht413", signal?: AbortSignal, query_id?: string): Promise<QueryResponse> {
   return request<QueryResponse>('/api/query', {
     method: 'POST',
-    body: JSON.stringify({ query, target_db }),
+    body: JSON.stringify({ query, target_db, query_id }),
+    signal,
+  })
+}
+
+export async function runEditQuery(originalQuery: string, previousSql: string, editInstruction: string, target_db: string = "macht413", signal?: AbortSignal, query_id?: string): Promise<QueryResponse> {
+  return request<QueryResponse>('/api/query/edit', {
+    method: 'POST',
+    body: JSON.stringify({ original_query: originalQuery, previous_sql: previousSql, edit_instruction: editInstruction, target_db, query_id }),
+    signal,
   })
 }
 
@@ -87,41 +96,53 @@ export interface PlannerResponse extends QueryResponse {
   spec_preview?: Record<string, unknown>
 }
 
-export async function startPlannerQuery(query: string, target_db: string = "macht413"): Promise<PlannerResponse> {
+export async function startPlannerQuery(query: string, target_db: string = "macht413", signal?: AbortSignal, query_id?: string): Promise<PlannerResponse> {
   return request<PlannerResponse>('/api/query/start', {
     method: 'POST',
-    body: JSON.stringify({ query, target_db }),
+    body: JSON.stringify({ query, target_db, query_id }),
+    signal,
   })
 }
 
-export async function answerPlannerQuery(session_id: string, answer: string): Promise<PlannerResponse> {
+export async function answerPlannerQuery(session_id: string, answer: string, signal?: AbortSignal, query_id?: string): Promise<PlannerResponse> {
   return request<PlannerResponse>('/api/query/answer', {
     method: 'POST',
-    body: JSON.stringify({ session_id, answer }),
+    body: JSON.stringify({ session_id, answer, query_id }),
+    signal,
   })
 }
 
-export async function forcePlannerQuery(session_id: string, target_db: string = "macht413"): Promise<PlannerResponse> {
+export async function forcePlannerQuery(session_id: string, target_db: string = "macht413", signal?: AbortSignal, query_id?: string): Promise<PlannerResponse> {
   return request<PlannerResponse>('/api/query/force', {
     method: 'POST',
-    body: JSON.stringify({ session_id, target_db }),
+    body: JSON.stringify({ session_id, target_db, query_id }),
+    signal,
   })
 }
 
-export async function runSqlDirect(sql: string, target_db: string = "macht413"): Promise<QueryResponse> {
+export async function cancelBackendQuery(query_id: string): Promise<void> {
+  return request<void>('/api/cancel', {
+    method: 'POST',
+    body: JSON.stringify({ query_id }),
+  }).catch(() => {})
+}
+
+export async function runSqlDirect(sql: string, target_db: string = "macht413", signal?: AbortSignal): Promise<QueryResponse> {
   return request<QueryResponse>('/api/sql', {
     method: 'POST',
     body: JSON.stringify({ sql, target_db }),
+    signal,
   })
 }
 
-export async function runImageQuery(file: File, target_db: string = "macht413"): Promise<QueryResponse> {
-  const form = new FormData()
-  form.append('file', file)
-  form.append('target_db', target_db)
+export async function runImageQuery(file: File, target_db: string = "macht413", signal?: AbortSignal): Promise<QueryResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('target_db', target_db)
   const res = await fetch(`${API_BASE}/api/image-to-query`, {
     method: 'POST',
-    body: form,
+    body: formData,
+    signal,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -243,17 +264,7 @@ export async function setModel(model: string): Promise<{ model: string; previous
   })
 }
 
-export async function explainResults(
-  sql: string,
-  queryText: string,
-  columns: string[],
-  rows: Record<string, unknown>[]
-): Promise<{ explanation: string }> {
-  return request<{ explanation: string }>('/api/explain', {
-    method: 'POST',
-    body: JSON.stringify({ sql, query_text: queryText, columns, rows }),
-  })
-}
+
 
 export async function uploadMeasureData(files: File[], targetDb: string): Promise<{status: string, folder: string, results: any}> {
   const form = new FormData()

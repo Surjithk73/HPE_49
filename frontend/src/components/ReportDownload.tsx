@@ -5,6 +5,7 @@ import { exportReport } from '../lib/api'
 interface Props {
   sql: string
   queryText: string
+  onExport?: () => void
 }
 
 type Format = 'csv' | 'excel' | 'pdf'
@@ -62,7 +63,7 @@ async function captureChartImage(): Promise<string | null> {
   }
 }
 
-export default function ReportDownload({ sql, queryText }: Props) {
+export default function ReportDownload({ sql, queryText, onExport }: Props) {
   const [loading, setLoading] = useState<Format | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -82,6 +83,7 @@ export default function ReportDownload({ sql, queryText }: Props) {
     setError(null)
     try {
       await exportReport(sql, fmt, queryText)
+      if (onExport) onExport()
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -103,6 +105,7 @@ export default function ReportDownload({ sql, queryText }: Props) {
       const chartImageBase64 = includeChart ? await captureChartImage() : null
 
       await exportReport(sql, 'pdf', queryText, includeChart, includeTable, chartTypes, chartImageBase64 ?? undefined)
+      if (onExport) onExport()
     } catch (e: any) {
       setError(e.message)
     } finally {

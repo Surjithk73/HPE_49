@@ -12,7 +12,7 @@ import { buildDefaultConfig, applyGlobalKind, type ChartConfig } from '../lib/ch
 import ReportDownload from '../components/ReportDownload'
 import PromptDebugPanel from '../components/PromptDebugPanel'
 import QueryHistory from '../components/QueryHistory'
-import { runSqlDirect, runImageQuery, getHistory, getHealth, setModel, acceptQueryCache, startPlannerQuery, answerPlannerQuery, forcePlannerQuery, type QueryResponse, type PlannerResponse, type HistoryEntry, type HealthResponse } from '../lib/api'
+import { runSqlDirect, runImageQuery, getHistory, getHealth, setModel, acceptQueryCache, startPlannerQuery, answerPlannerQuery, forcePlannerQuery, runEditQuery, cancelBackendQuery, type QueryResponse, type PlannerResponse, type HistoryEntry, type HealthResponse } from '../lib/api'
 
 const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] = [
   { kind: 'bar',         label: 'Bar',          icon: <BarChart2 size={12} /> },
@@ -25,6 +25,8 @@ const CHART_TYPES: { kind: ChartKind; label: string; icon: React.ReactNode }[] =
 export default function Dashboard() {
   const [result, setResult] = useState<QueryResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const [activeQueryId, setActiveQueryId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [health, setHealth] = useState<HealthResponse | null>(null)
@@ -34,7 +36,8 @@ export default function Dashboard() {
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [currentQuery, setCurrentQuery] = useState('')
 
-  const [cacheDecision, setCacheDecision] = useState<'pending' | 'accepted' | 'rejected'>('pending')
+  const [hasCached, setHasCached] = useState(false)
+  const [showCacheToast, setShowCacheToast] = useState(false)
   // Planner clarification flow
   const [clarifying, setClarifying] = useState<{ question: string; sessionId: string; plannerPrompt?: string } | null>(null)
   const [clarifyAnswer, setClarifyAnswer] = useState('')
@@ -69,13 +72,15 @@ export default function Dashboard() {
 
 
   const handleAcceptCache = async () => {
-    if (!result || !currentQuery) return
+    if (!result || !currentQuery || hasCached) return
     try {
       await acceptQueryCache(currentQuery, result.sql, result.row_count)
-      setCacheDecision('accepted')
+      setHasCached(true)
+      setShowCacheToast(true)
+      setTimeout(() => setShowCacheToast(false), 3000)
     } catch (err: any) {
       console.error('Failed to accept cache:', err)
-      alert(err.message || 'Failed to save to cache')
+      // Silently fail on export, no need to alert
     }
   }
 
@@ -97,11 +102,12 @@ export default function Dashboard() {
   // we always store the result to keep the debug panels visible.
   const applyResult = (res: QueryResponse) => {
     setResult(res)
+    setHasCached(false)
+    setShowCacheToast(false)
     if (res.error) {
       setError(res.error)
       return
     }
-    setCacheDecision('pending')
     // Auto-select chart kind based on data shape
     let kind: ChartKind | null = null
     if (res.chart_type === 'line') {
@@ -151,6 +157,17 @@ export default function Dashboard() {
     await refreshHistory()
   }
 
+  const cancelQuery = () => {
+    if (abortController) {
+      abortController.abort()
+      setAbortController(null)
+    }
+    if (activeQueryId) {
+      cancelBackendQuery(activeQueryId)
+      setActiveQueryId(null)
+    }
+  }
+
   const handleQuery = async (payload: string | File, mode: InputMode = 'nl', targetDb: string = 'macht413') => {
     setLoading(true)
     setError(null)
@@ -158,25 +175,35 @@ export default function Dashboard() {
     setActiveTargetDb(targetDb)
     if (typeof payload === 'string') setCurrentQuery(payload)
     else setCurrentQuery(`[Image] ${payload.name}`)
+    
+    const controller = new AbortController()
+    setAbortController(controller)
+    const queryId = Date.now().toString()
+    setActiveQueryId(queryId)
+    
     try {
       // Natural-language queries go through the Planner pipeline (clarification +
       // IntentSpec). SQL and image modes keep their existing single-shot paths.
       if (mode === 'nl') {
-        const res = await startPlannerQuery(payload as string, targetDb)
+        const res = await startPlannerQuery(payload as string, targetDb, controller.signal, queryId)
         await processPlannerResponse(res)
       } else {
         const res = mode === 'image' && payload instanceof File
-          ? await runImageQuery(payload, targetDb)
-          : await runSqlDirect(payload as string, targetDb)
+          ? await runImageQuery(payload, targetDb, controller.signal)
+          : await runSqlDirect(payload as string, targetDb, controller.signal)
         if (mode === 'image' && res.inferred_query) setCurrentQuery(res.inferred_query)
         applyResult(res)
         await refreshHistory()
       }
     } catch (e: any) {
-      // Only genuine network failures reach here (query-logic errors return 200+error field)
-      setError(e.message)
+      if (e.name === 'AbortError' || e.message?.includes('aborted')) {
+        setError('Query cancelled by user.')
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
+      setAbortController(null)
     }
   }
 
@@ -185,14 +212,19 @@ export default function Dashboard() {
     if (!clarifying || !clarifyAnswer.trim()) return
     setLoading(true)
     setError(null)
+    const controller = new AbortController()
+    setAbortController(controller)
+    const queryId = Date.now().toString()
+    setActiveQueryId(queryId)
     try {
-      const res = await answerPlannerQuery(clarifying.sessionId, clarifyAnswer.trim())
+      const res = await answerPlannerQuery(clarifying.sessionId, clarifyAnswer.trim(), controller.signal, queryId)
       setClarifyAnswer('')
       await processPlannerResponse(res)
     } catch (e: any) {
-      setError(e.message)
+      setError(e.name === 'AbortError' ? 'Query cancelled by user.' : e.message)
     } finally {
       setLoading(false)
+      setAbortController(null)
     }
   }
 
@@ -201,14 +233,49 @@ export default function Dashboard() {
     if (!clarifying) return
     setLoading(true)
     setError(null)
+    const controller = new AbortController()
+    setAbortController(controller)
+    const queryId = Date.now().toString()
+    setActiveQueryId(queryId)
     try {
-      const res = await forcePlannerQuery(clarifying.sessionId, activeTargetDb)
+      const res = await forcePlannerQuery(clarifying.sessionId, activeTargetDb, controller.signal, queryId)
       setClarifyAnswer('')
       await processPlannerResponse(res)
     } catch (e: any) {
-      setError(e.message)
+      setError(e.name === 'AbortError' ? 'Query cancelled by user.' : e.message)
     } finally {
       setLoading(false)
+      setAbortController(null)
+    }
+  }
+
+  const [editInstruction, setEditInstruction] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
+
+  const handleEditSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!editInstruction.trim() || !result || !result.sql) return
+    
+    setLoading(true)
+    setError(null)
+    setIsEditing(true)
+    
+    const controller = new AbortController()
+    setAbortController(controller)
+    const queryId = Date.now().toString()
+    setActiveQueryId(queryId)
+    
+    try {
+      const res = await runEditQuery(currentQuery, result.sql, editInstruction.trim(), activeTargetDb, controller.signal, queryId)
+      applyResult(res)
+      setEditInstruction('')
+      await refreshHistory()
+    } catch (e: any) {
+      setError(e.name === 'AbortError' ? 'Query cancelled by user.' : e.message)
+    } finally {
+      setLoading(false)
+      setIsEditing(false)
+      setAbortController(null)
     }
   }
 
@@ -217,6 +284,17 @@ export default function Dashboard() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--theme-bg)', color: 'var(--theme-tx-primary)', fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace' }}>
+      
+      {showCacheToast && (
+        <div style={{
+          position: 'fixed', top: '24px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+          background: '#22c55e', color: '#fff', padding: '10px 20px', borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '8px',
+          fontSize: '14px', fontWeight: 600, animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <Check size={16} /> Saved to AI cache
+        </div>
+      )}
 
       {/* ── Header ── */}
       <header style={{ borderBottom: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)' }}>
@@ -439,6 +517,7 @@ export default function Dashboard() {
                 loading={loading}
                 error={error}
                 initialValue={currentQuery}
+                onCancel={cancelQuery}
               />
             </div>
 
@@ -505,13 +584,6 @@ export default function Dashboard() {
                   </button>
                 </div>
 
-                {/* The planner prompt that produced this question */}
-                {clarifying.plannerPrompt && (
-                  <PromptDebugPanel
-                    prompt={clarifying.plannerPrompt}
-                    title="Debug — Planner Prompt"
-                  />
-                )}
               </div>
             )}
 
@@ -525,13 +597,28 @@ export default function Dashboard() {
                   domain={result.domain ?? ''}
                 />
 
-                {/* Planner debug panel — shown when the planner pipeline was used */}
-                {result.debug_planner_prompt && (
-                  <PromptDebugPanel
-                    prompt={result.debug_planner_prompt}
-                    title="Debug — Planner Prompt"
-                  />
+                {/* Refine / Edit UI */}
+                {!result.error && (
+                  <form onSubmit={handleEditSubmit} style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <input 
+                      type="text" 
+                      value={editInstruction}
+                      onChange={e => setEditInstruction(e.target.value)}
+                      placeholder="Refine this query (e.g. 'Sort descending', 'Add column...')"
+                      style={{ flex: 1, padding: '8px 12px', background: 'var(--theme-surface-2)', border: '1px solid var(--theme-border)', borderRadius: '6px', color: 'var(--theme-tx-primary)', fontSize: '13px' }}
+                      disabled={isEditing || loading}
+                    />
+                    <button 
+                      type="submit"
+                      disabled={!editInstruction.trim() || isEditing || loading}
+                      style={{ padding: '8px 16px', background: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      {isEditing ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
+                      Refine
+                    </button>
+                  </form>
                 )}
+
 
 
                 {/* SQL generator debug panel — always shown when a prompt was built */}
@@ -624,54 +711,12 @@ export default function Dashboard() {
                   : <ResultsTable columns={result.columns ?? []} rows={result.rows ?? []} />
                 )}
 
-                {!result.error && !result.cache_hit && cacheDecision !== 'rejected' && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '16px', background: 'var(--theme-surface-1)', border: '1px solid var(--theme-border)', borderRadius: '12px',
-                    marginTop: '8px'
-                  }}>
-                    <div>
-                      <h4 style={{ margin: '0 0 4px', fontSize: '13px', color: 'var(--theme-tx-primary)', fontWeight: 600 }}>Train the AI</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--theme-tx-secondary)' }}>
-                        {cacheDecision === 'pending' ? 'Would you like to add this successful query to the system cache?' : 'Query successfully added to the cache.'}
-                      </p>
-                    </div>
-                    {cacheDecision === 'pending' ? (
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={() => setCacheDecision('rejected')}
-                          style={{
-                            padding: '6px 12px', background: 'transparent', border: '1px solid var(--theme-border)',
-                            color: 'var(--theme-tx-secondary)', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                          }}
-                        >
-                          <X size={12} /> Reject
-                        </button>
-                        <button
-                          onClick={handleAcceptCache}
-                          style={{
-                            padding: '6px 12px', background: '#a855f7', border: '1px solid #a855f7',
-                            color: 'var(--theme-tx-primary)', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600
-                          }}
-                        >
-                          <Check size={12} /> Accept
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#22c55e', fontSize: '12px', fontWeight: 600 }}>
-                        <Check size={14} /> Added
-                      </div>
-                    )}
-                  </div>
-                )}
 
 
                 {/* Download */}
                 {!result.error && result.sql && (
                   <div style={{ borderRadius: '12px', border: '1px solid var(--theme-border)', background: 'var(--theme-surface-1)', padding: '16px' }}>
-                    <ReportDownload sql={result.sql} queryText={currentQuery} />
+                    <ReportDownload sql={result.sql} queryText={currentQuery} onExport={handleAcceptCache} />
                   </div>
                 )}
               </div>

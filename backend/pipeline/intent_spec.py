@@ -38,8 +38,8 @@ class IntentSpec:
     are resolved by SQLGenerator via the RAG retriever.
     """
 
-    metric: Slot = field(
-        default_factory=lambda: Slot("metric", is_critical=True)
+    metrics: Slot = field(
+        default_factory=lambda: Slot("metrics", is_critical=True)
     )
     entity_scope: Slot = field(
         default_factory=lambda: Slot("entity_scope", is_critical=True)
@@ -56,6 +56,7 @@ class IntentSpec:
     filters: Slot = field(
         default_factory=lambda: Slot("filters", is_critical=False)
     )
+    original_query: Optional[str] = None
     # Populated whenever the system proceeds under uncertainty (default-fill,
     # budget exhausted, or user-forced). Always surfaced to the user.
     assumptions: list[str] = field(default_factory=list)
@@ -134,7 +135,7 @@ class IntentSpec:
 
     def _all_slots(self) -> list[Slot]:
         return [
-            self.metric, self.entity_scope, self.aggregation,
+            self.metrics, self.entity_scope, self.aggregation,
             self.time_window, self.ranking_and_limit, self.filters,
         ]
 
