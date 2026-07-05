@@ -1,0 +1,19 @@
+# Secrets are injected at runtime via env_file, never baked into the image.
+.env
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Generated runtime artifacts (persisted via bind mounts instead)
+cache_store/
+audit/*.db
+
+# Tests and local noise
+tests/
+*.log
+.DS_Store

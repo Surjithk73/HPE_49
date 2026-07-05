@@ -26,6 +26,7 @@ Install these before anything else:
 | Python | 3.10+ | |
 | Node.js | 18+ LTS | |
 | Git | Any | |
+| Docker + Docker Compose | Latest stable | Optional — only if using the [Docker setup](#run-with-docker-alternative-to-steps-35) |
 
 You also need a **Google Gemini API key** — get one free at https://aistudio.google.com/app/apikey
 
@@ -126,6 +127,68 @@ UNION ALL SELECT 'sqls',  COUNT(*) FROM macht413.sqls;
 ```
 
 Expected total: **212,689+ rows** across all 11 tables.
+
+---
+
+## Run with Docker (alternative to Steps 3–5)
+
+If you have **Docker** and **Docker Compose** installed, you can build and run both the backend and frontend in containers instead of installing Python/Node dependencies manually. You still need PostgreSQL set up and loaded (Steps 1–2 above) — the containers connect to a database running on your host.
+
+### D.1 — Configure the backend `.env`
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Fill in `backend/.env` as described in [Step 3](#step-3--configure-the-backend), **but set `DB_HOST` to `host.docker.internal`** so the container can reach the PostgreSQL instance running on your host:
+
+```env
+DB_HOST=host.docker.internal
+```
+
+Everything else (`DB_USER`, `DB_PASSWORD`, etc.) is the same as the manual setup.
+
+> Make sure PostgreSQL is configured to accept connections from the Docker bridge network (listen on all interfaces / `host.docker.internal`), not only `localhost`.
+
+### D.2 — Build and start the containers
+
+From the repo root:
+
+```bash
+docker compose up --build
+```
+
+This builds two images and starts them:
+
+| Service | Container port | Host URL |
+|---------|----------------|----------|
+| `backend` (FastAPI + Uvicorn) | 8000 | http://localhost:8000 |
+| `frontend` (Vite dev server)  | 5173 | http://localhost:5173 |
+
+The backend image bakes in the `BAAI/bge-large-en-v1.5` embedding model at build time, so the **first build takes several minutes** (downloads ~1.3GB). Subsequent builds are cached. Source directories are bind-mounted, so hot reload (Uvicorn `--reload` and Vite HMR) works while the containers run.
+
+**Open:** http://localhost:5173
+
+### D.3 — Verify and manage
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+Expect the same JSON response shown in [Step 6](#step-6--verify-everything-is-working).
+
+Common commands:
+
+```bash
+docker compose up --build -d     # run in the background (detached)
+docker compose logs -f backend   # follow backend logs
+docker compose down              # stop and remove the containers
+docker compose build --no-cache  # rebuild from scratch
+```
+
+> If `db_connected` is `false`, confirm `DB_HOST=host.docker.internal` in `backend/.env` and that PostgreSQL accepts remote connections. On Linux, `host.docker.internal` is provided by the `extra_hosts` mapping already configured in `docker-compose.yml`.
+
+Once running with Docker, you can skip Steps 3–5 below (they cover the manual, non-Docker setup) and jump to [Using QueryCraft](#using-querycraft).
 
 ---
 
