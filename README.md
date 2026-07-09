@@ -1,11 +1,11 @@
 # QueryCraft
 
-> Natural Language to SQL Performance Report Generator for HPE NonStop Systems
+> Natural Language to SQL Performance Report Generator for HPE Nonstop Systems
 
-QueryCraft lets analysts query HPE NonStop server performance data using plain English. Type a question, get back a SQL query, results table or chart, and a downloadable report — no SQL knowledge required.
+QueryCraft lets analysts query HPE Nonstop server performance data using plain English. Type a question, get back a SQL query, results table or chart, and a downloadable report — no SQL knowledge required.
 
 **Stack:** FastAPI · React · PostgreSQL · Google Gemini API / Groq / OpenAI-compatible · ChromaDB  
-**Database:** `macht413`, `D1`, `D2` schemas · 11 tables · Real HPE NonStop measurement data
+**Database:** `macht413`, `D1`, `D2` schemas · 11 tables · Real HPE Nonstop measurement data
 
 ---
 
