@@ -4,15 +4,27 @@
 
 QueryCraft lets analysts query HPE Nonstop server performance data using plain English. Type a question, get back a SQL query, results table or chart, and a downloadable report — no SQL knowledge required.
 
-**Stack:** FastAPI · React · PostgreSQL · Google Gemini API / Groq / OpenAI-compatible · ChromaDB  
+**Stack:** FastAPI · React · PostgreSQL · Google Gemini API / NVIDIA NIM (Qwen, GPT-OSS) · Ollama · ChromaDB  
 **Database:** `macht413`, `D1`, `D2` schemas · 11 tables · Real HPE Nonstop measurement data
 
 ---
 
+## Architecture
+
+![QueryCraft architecture](architecture.jpeg)
+
+The pipeline splits SQL generation across two specialized models. A lightweight **Planner** (GPT-OSS 20B) reads the pruned schema context and produces a structured intent spec; a **Metric Verifier** checks that every required metric/column is populated before generation. If not, the **Retry Loop** questions the user for the missing piece rather than hallucinating. Only once the intent is complete does the **Instruction Builder** hand off to the **Generator** (Qwen3-Next 80B) to emit final SQL. Every generated statement is then AST-parsed and security-checked before it can touch a read-only DB connection.
+
+---
+
 ## What's New
-- **Multi-Database Manager**: Switch between target databases (`machd500`, `D1`, `D2`) dynamically from the frontend. The `SchemaLinker` automatically filters out columns not present in the chosen target database to eliminate hallucinations.
-- **Enhanced LLM Support**: Generate SQL using **Gemini 3.1 Flash Lite**, **Gemini 3.5 Flash**, **Qwen 80B**, or **GPT OSS** depending on your performance/accuracy needs.
-- **HPE Direct-Join Syntax**: Evaluated and validated against HPE's preferred time-series correlation logic (direct `LEFT JOIN`s over CTE aggregations).
+- **Two-Model Planner + Generator Architecture**: A lightweight **Planner** model (default `openai/gpt-oss-20b`) analyzes the query and builds a structured intent spec. A larger **Generator** model (default `qwen/qwen3-next-80b-a3b-instruct`) emits the final SQL. Both are routed through NVIDIA NIM; Gemini remains available as a single-model fallback.
+- **Prompt Analyzer + Retry Loop**: A Metric Verifier inspects the planner's spec and, if required fields are missing, the system asks the user a targeted follow-up instead of hallucinating.
+- **Multi-Database Manager**: Switch between target databases (`macht413`, `D1`, `D2`) dynamically from the frontend. The `SchemaLinker` filters out columns not present in the chosen target database to eliminate hallucinations. Upload/delete databases via the UI.
+- **Dockerized**: Full `docker compose` setup for backend + frontend. See [Run with Docker](#run-with-docker-alternative-to-steps-35).
+- **Dark/Light Themes + HPE Green Styling**: Theme toggle in the top bar.
+- **Auto-Caching on Export + Robust Metrics Extraction**: Successful queries are embedded and cached in the background; IPU/utilization formulas are extracted deterministically.
+- **HPE Direct-Join Syntax**: Validated against HPE's preferred time-series correlation logic (direct `LEFT JOIN`s over CTE aggregations).
 
 ---
 
@@ -28,7 +40,9 @@ Install these before anything else:
 | Git | Any | |
 | Docker + Docker Compose | Latest stable | Optional — only if using the [Docker setup](#run-with-docker-alternative-to-steps-35) |
 
-You also need a **Google Gemini API key** — get one free at https://aistudio.google.com/app/apikey
+You also need at least one LLM provider key:
+- **Google Gemini API key** (single-model mode) — get one free at https://aistudio.google.com/app/apikey
+- **NVIDIA NIM API key** (recommended, two-model Planner + Generator mode) — https://build.nvidia.com/
 
 ---
 
@@ -209,13 +223,27 @@ DB_USER=querycraft_user
 DB_PASSWORD=your_readonly_password
 DB_ADMIN_PASSWORD=your_admin_password
 
+# Allowed DB users (comma-separated) for the Query Executor
+ALLOWED_DB_USERS=querycraft_user
+
+# LLM provider: 'gemini' (default) or 'ollama' for fully-offline generation
+LLM_PROVIDER=gemini
+
 # Gemini API — get key from https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-3.1-flash-lite
 
+# NVIDIA NIM API — required for the two-model Planner + Generator pipeline
+NVIDIA_API_KEY=your_nvidia_api_key
+
+# Model roles. Names containing qwen/gpt/openai are routed to NVIDIA NIM;
+# otherwise they fall back to Gemini. Both default to GEMINI_MODEL if unset.
+PLANNER_MODEL=openai/gpt-oss-20b
+SQL_GENERATOR_MODEL=qwen/qwen3-next-80b-a3b-instruct
+
 # App settings (defaults are fine)
 MAX_ROWS=10000
-QUERY_TIMEOUT_SECONDS=30
+QUERY_TIMEOUT_SECONDS=120
 CACHE_SIMILARITY_THRESHOLD=0.95
 AUDIT_LOG_PATH=audit/query_log.db
 SCHEMA_YAML_PATH=schema_store/enriched_schema.yaml
@@ -328,9 +356,17 @@ HPE_49/
 │   ├── pipeline/
 │   │   ├── normalizer.py              # Query normalization + domain detection
 │   │   ├── cache.py                   # ChromaDB semantic cache
+│   │   ├── embeddings.py              # BGE embedding wrapper
 │   │   ├── schema_linker.py           # TF-IDF table/column selection
+│   │   ├── schema_loader.py           # Multi-DB schema loader
 │   │   ├── prompt_builder.py          # LLM prompt assembly
-│   │   ├── llm_engine.py              # Gemini API + retry logic
+│   │   ├── few_shot_retriever.py      # NL→SQL few-shot selection
+│   │   ├── planner.py                 # Planner model + Metric Verifier + Retry Loop
+│   │   ├── intent_spec.py             # Structured intent spec used by the planner
+│   │   ├── sql_generator.py           # Instruction Builder → Generator model
+│   │   ├── model_provider.py          # Routes model names to Gemini / NVIDIA NIM
+│   │   ├── llm_engine.py              # Gemini engine
+│   │   ├── ollama_engine.py           # Offline Ollama engine
 │   │   ├── validator.py               # SQLGlot security + correctness checks
 │   │   ├── executor.py                # psycopg2 connection pool + execution
 │   │   └── report_generator.py        # CSV / Excel / PDF export
@@ -344,9 +380,10 @@ HPE_49/
 │   └── tests/                         # Unit + integration tests
 ├── frontend/
 │   └── src/
-│       ├── pages/                     # Dashboard, CacheManagement, HowItWorks
-│       ├── components/                # QueryInput, ResultsTable, ChartView, etc.
+│       ├── pages/                     # Landing, Dashboard, CacheManagement, DatabaseManager, HowItWorks
+│       ├── components/                # QueryInput, ResultsTable, ChartView, PromptDebugPanel, ThemeToggle, etc.
 │       └── lib/api.ts                 # All API calls
+├── architecture.jpeg                  # Pipeline diagram (referenced above)
 ├── measurefiles/                      # Source CSV data files (9 tables)
 └── docs/
     ├── Project_Overview.md            # Full architecture + design decisions
@@ -362,16 +399,31 @@ HPE_49/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/health` | System health check |
-| `POST` | `/api/query` | Run a natural language query |
+| `POST` | `/api/query` | Run a natural language query (Planner → Generator pipeline) |
+| `POST` | `/api/query/start` | Start a planned query; may return follow-up questions from the Metric Verifier |
+| `POST` | `/api/query/answer` | Supply the user's answer to a Retry Loop follow-up |
+| `POST` | `/api/query/force` | Skip the Metric Verifier and force generation with the current spec |
+| `POST` | `/api/query/edit` | Edit / re-run a previously generated SQL statement |
+| `POST` | `/api/cancel` | Cancel an in-flight query |
 | `POST` | `/api/sql` | Run a raw SQL query directly |
+| `POST` | `/api/image-to-query` | Convert an uploaded chart/screenshot into a natural language query |
 | `POST` | `/api/export` | Download results as CSV / Excel / PDF |
 | `GET` | `/api/history` | Last 50 queries from audit log |
 | `GET` | `/api/stats` | Analytics: hit rate, avg time, top domains |
 | `GET` | `/api/schema` | Table names and column counts |
+| `GET` | `/api/databases` | List configured target databases |
+| `GET` | `/api/databases/details` | Row counts and metadata per target database |
+| `DELETE` | `/api/databases/{target_db}` | Drop a target database |
+| `POST` | `/api/upload-measure` | Upload a measurefile zip to create a new target database |
+| `POST` | `/api/upload-measure/{target_db}/append` | Append measurefiles to an existing target database |
 | `GET` | `/api/cache` | View cached query entries |
 | `DELETE` | `/api/cache` | Clear all cache entries |
+| `DELETE` | `/api/cache/query` | Delete a single cache entry |
+| `POST` | `/api/cache/accept` | Manually cache a query/SQL pair |
 | `GET` | `/api/cache/threshold` | Read current similarity threshold |
 | `POST` | `/api/cache/threshold` | Update threshold at runtime |
+| `GET` | `/api/model` | Read the active planner / generator model |
+| `POST` | `/api/model` | Switch planner / generator model at runtime |
 
 Interactive docs: http://localhost:8000/docs
 
@@ -394,9 +446,13 @@ Interactive docs: http://localhost:8000/docs
 - Queries will work immediately but won't benefit from cache hits until the model is ready
 
 **LLM returns errors / no SQL generated**
-- Check `GEMINI_API_KEY` is valid and has quota remaining
-- Check internet connection (Gemini API is the only external call)
+- Check `GEMINI_API_KEY` and/or `NVIDIA_API_KEY` are valid and have quota remaining
+- Verify `PLANNER_MODEL` / `SQL_GENERATOR_MODEL` names are spelled correctly (any name containing `qwen`/`gpt`/`openai` is routed to NVIDIA NIM)
+- Check internet connection (Gemini / NVIDIA NIM are the only external calls)
 - Look at backend terminal for the specific error
+
+**"Please clarify …" follow-up prompts appear repeatedly**
+- The Metric Verifier detected that a required field (e.g. a specific counter or grouping dimension) was not covered by the planner's spec. Answer the follow-up or rephrase the original question to include the missing dimension.
 
 **Frontend shows "Backend unreachable"**
 - Make sure backend is running on port 8000
