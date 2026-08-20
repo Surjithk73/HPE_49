@@ -255,37 +255,42 @@ class SemanticCache:
         # Embed the query
         embedding = self.model.encode([normalized_text]).tolist()
 
-        where_clause = {}
-        if target_db:
-            where_clause["target_db"] = target_db
-
         # Query ChromaDB
         results = self.collection.query(
             query_embeddings=embedding,
-            n_results=1,
-            where=where_clause if where_clause else None,
+            n_results=5,
             include=["metadatas", "distances"]
         )
 
         if not results["distances"] or not results["distances"][0]:
             return CacheResult(hit=False, confidence=0.0)
 
-        # ChromaDB cosine distance: 0 = identical, 1 = orthogonal
-        # Convert to similarity: similarity = 1 - distance
-        distance   = results["distances"][0][0]
-        confidence = 1.0 - distance
+        # Two-pass strategy:
+        # Pass 1: try to find an exact same-db match (threshold=0.90 to catch near-identical queries)
+        # Pass 2: if no same-db hit, accept a cross-db hit (confidence >= 0.95) and substitute the db name in SQL
+        cross_db_candidate = None  # (confidence, sql, meta_target_db)
 
-        if confidence >= self._threshold:
-            meta = results["metadatas"][0][0]
-            sql  = meta.get("sql", "")
+        lookup_ent = extract_entities(normalized_text)
+
+        for i, distance in enumerate(results["distances"][0]):
+            confidence = 1.0 - distance
+            meta = results["metadatas"][0][i]
+            stored_query = meta.get("query", "")
+            meta_target_db = meta.get("target_db")
+            print(f"[Cache Debug] Candidate {i}: confidence={confidence:.4f}, threshold={self._threshold}, stored_query={repr(stored_query[:80])}, stored_target_db={repr(meta_target_db)}")
+
+            if confidence < 0.90:
+                print(f"[Cache Debug] → Skipping: below minimum threshold (0.90)")
+                continue
+
+            sql = meta.get("sql", "")
 
             # Skip entries that were previously flagged as execution failures
             if meta.get("execution_success") == "false":
                 print(f"[Cache] Skipping flagged entry (execution_success=false) for: {normalized_text[:60]}")
-                return CacheResult(hit=False, confidence=round(confidence, 4))
+                continue
 
-            # SOTA 1: Enforce exact match on numbers, quoted values, and entity terms
-            lookup_ent = extract_entities(normalized_text)
+            # Check entity matches
             stored_numbers_str = meta.get("cache_numbers")
             stored_quoted_str = meta.get("cache_quoted")
             stored_entities_str = meta.get("cache_entities")
@@ -296,7 +301,6 @@ class SemanticCache:
                 stored_entities = json.loads(stored_entities_str)
             else:
                 # Fallback for legacy cache entries
-                stored_query = meta.get("query", "")
                 stored_val = extract_entities(stored_query)
                 stored_numbers = stored_val["numbers"]
                 stored_quoted = stored_val["quoted"]
@@ -306,11 +310,29 @@ class SemanticCache:
                 lookup_ent["quoted"] != stored_quoted or
                 lookup_ent["entities"] != stored_entities):
                 print(f"[Cache] Rejecting hit due to mismatch. Lookup: {lookup_ent}, Stored: {{'numbers': {stored_numbers}, 'quoted': {stored_quoted}, 'entities': {stored_entities}}}")
-                return CacheResult(hit=False, confidence=round(confidence, 4))
+                continue
 
-            return CacheResult(hit=True, sql=sql, confidence=round(confidence, 4))
+            # Check target_db match
+            db_matches = (not target_db) or (not meta_target_db) or (meta_target_db == target_db)
+            if db_matches and confidence >= 0.90:
+                print(f"[Cache Debug] → HIT (same-db or no-db, confidence={confidence:.4f})")
+                return CacheResult(hit=True, sql=sql, confidence=round(confidence, 4))
 
-        return CacheResult(hit=False, confidence=round(confidence, 4))
+            # Cross-db candidate: the query is semantically identical but stored for a different db.
+            # We can safely substitute the db name in the SQL since the schema is identical.
+            if not db_matches and confidence >= self._threshold and cross_db_candidate is None:
+                print(f"[Cache Debug] → Cross-db candidate saved (confidence={confidence:.4f}, from {meta_target_db})")
+                cross_db_candidate = (confidence, sql, meta_target_db)
+
+        # Pass 2: use cross-db hit if available, substituting the db name
+        if cross_db_candidate and target_db:
+            confidence, sql, stored_db = cross_db_candidate
+            adapted_sql = sql.replace(f"{stored_db}.", f"{target_db}.")
+            print(f"[Cache Debug] → Cross-db HIT: adapted SQL from {stored_db} → {target_db}")
+            return CacheResult(hit=True, sql=adapted_sql, confidence=round(confidence, 4))
+
+        last_confidence = 1.0 - results["distances"][0][-1] if results["distances"][0] else 0.0
+        return CacheResult(hit=False, confidence=round(last_confidence, 4))
 
     def store(
         self,

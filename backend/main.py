@@ -484,6 +484,14 @@ def _execute_from_spec(spec, target_db: str, session=None, query_id: Optional[st
             last_sql = val_result.sanitized_sql
             try:
                 exec_result = _executor.execute(last_sql)
+                if _cache:
+                    _cache.store(
+                        normalized_text=norm["normalized_text"],
+                        sql=last_sql,
+                        execution_success=True,
+                        row_count=exec_result.row_count,
+                        target_db=target_db
+                    )
                 chart_type = detect_chart_type(exec_result.columns, exec_result.rows)
                 return {
                     "sql": last_sql,
@@ -530,6 +538,42 @@ def planner_start(req: PlannerStartRequest):
     """
     if not _planner:
         raise HTTPException(status_code=503, detail="Planner not initialised")
+
+    original_query = req.query.strip()
+    norm = _normalizer.normalize(original_query)
+    norm_text = norm["normalized_text"]
+    domain = norm["domain_category"]
+
+    print(f"[Cache Debug] original_query={repr(original_query)}")
+    print(f"[Cache Debug] norm_text={repr(norm_text)}")
+    print(f"[Cache Debug] target_db={repr(req.target_db)}")
+
+    if _cache:
+        cache_result = _cache.lookup(norm_text, target_db=req.target_db)
+        print(f"[Cache Debug] cache_result.hit={cache_result.hit}, confidence={cache_result.confidence}")
+        if cache_result.hit:
+            sql = cache_result.sql
+            try:
+                result = _executor.execute(sql)
+                chart_type = detect_chart_type(result.columns, result.rows)
+                return {
+                    "sql": sql,
+                    "columns": result.columns,
+                    "rows": result.rows,
+                    "row_count": result.row_count,
+                    "execution_time_ms": result.execution_time_ms,
+                    "cache_hit": True,
+                    "chart_type": chart_type,
+                    "domain": domain,
+                    "status": "ready",
+                    "session_id": "cache-hit",
+                    "debug_planner_prompt": "[Cache Hit] Bypassed planner.",
+                    "debug_prompt": "[Cache Hit] No prompt was sent to the LLM.",
+                    "raw_llm_output": ""
+                }
+            except Exception as e:
+                _cache.flag_failed(norm_text)
+                logger.error(f"[/api/query/start] Execution error from cache — SQL: {sql}\nError: {e}")
 
     turn = _planner.start(req.query.strip())
     turn.session.target_db = req.target_db  # remember the chosen node for later turns

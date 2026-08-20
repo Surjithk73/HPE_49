@@ -71,42 +71,18 @@ ALTER ROLE querycraft_user SET statement_timeout = '30s';
 ALTER ROLE querycraft_user SET idle_in_transaction_session_timeout = '60s';
 ```
 
-Or use the automated script (fill in your postgres password first):
+Or simply skip manual creation and use the dynamic loader in the next step (which creates schemas and tables automatically).
+
+### 2.2 Load the CSV data and Create Tables Automatically
+
+The project uses a Multi-Database Manager. The data is stored in `backend/data/D1` (for `macht413` schema) and `backend/data/D2` (for `machd500` schema). 
+
+The automated script will dynamically read the CSV headers, create the schemas and tables, and load all the data. 
+
+*Note: Before running this, copy `backend/.env.example` to `backend/.env` and ensure `DB_ADMIN_PASSWORD` is set.*
 
 ```bash
-# Edit POSTGRES_PASSWORD, OWNER_PASSWORD, READONLY_PASSWORD in the script first
-python backend/setup_scripts/setup_database_auto.py
-```
-
-### 2.2 Create the tables
-
-```bash
-psql -U postgres -d querycraft_db -f backend/setup_scripts/create_tables.sql
-```
-
-All column types are correctly defined in this file — no post-load fixes required.
-
-### 2.3 Load the CSV data
-
-```bash
-# Edit POSTGRES_PASSWORD in the script first, then:
 python backend/setup_scripts/load_csv_data_auto.py
-```
-
-Or manually via psql (update the paths to match your system):
-
-```sql
-\copy macht413.cpu   FROM 'C:/path/to/HPE_49/measurefiles/cpucsv'   WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.disc  FROM 'C:/path/to/HPE_49/measurefiles/disccsv'  WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.dfile FROM 'C:/path/to/HPE_49/measurefiles/dfilecsv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.dopen FROM 'C:/path/to/HPE_49/measurefiles/dopencsv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.file  FROM 'C:/path/to/HPE_49/measurefiles/filecsv'  WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.ossns FROM 'C:/path/to/HPE_49/measurefiles/ossnscsv' WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.proc  FROM 'C:/path/to/HPE_49/measurefiles/proccsv'  WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.tmf   FROM 'C:/path/to/HPE_49/measurefiles/tmfcsv'   WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.udef  FROM 'C:/path/to/HPE_49/measurefiles/udefcsv'  WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.sqlp  FROM 'C:/path/to/HPE_49/backend/data/D2/sqlpcsv'  WITH (FORMAT csv, HEADER true, NULL '');
-\copy macht413.sqls  FROM 'C:/path/to/HPE_49/backend/data/D2/sqlscsv'  WITH (FORMAT csv, HEADER true, NULL '');
 ```
 
 ### 2.4 Verify
