@@ -24,7 +24,7 @@ from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, SCHEMA_YAML_
 # Test set path
 TEST_SET_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "few_shots",
+    "eval",
     "model_evaluation_test_set.yaml"
 )
 
