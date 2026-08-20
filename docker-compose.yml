@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Source mounted for uvicorn --reload hot reload.
+      - ./backend:/app
+      # Keep container-side caches from leaking onto the host mount.
+      - /app/__pycache__
+    # Lets the container reach a PostgreSQL running on the host.
+    # Set DB_HOST=host.docker.internal in backend/.env when the DB is on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Source mounted for Vite HMR.
+      - ./frontend:/app
+      # Anonymous volume so the host mount doesn't hide the image's node_modules.
+      - /app/node_modules
+    depends_on:
+      - backend
