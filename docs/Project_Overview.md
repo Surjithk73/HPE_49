@@ -13,6 +13,15 @@
 
 ---
 
+## 1.5 Recent Architecture Updates
+
+- **Multi-Database Manager:** QueryCraft now supports dynamic runtime switching between target databases (e.g., `machd500`, `D1`, `D2`). The `SchemaLinker` automatically filters out columns not present in the chosen database to eliminate LLM hallucinations.
+- **Semantic Cache Two-Pass Strategy:** The ChromaDB semantic cache now performs a two-pass lookup. Pass 1 checks for exact database matches. Pass 2 accepts cross-database hits (confidence ≥ 0.95) and dynamically adapts the SQL schema prefix (e.g., swapping `macht413.` to `machd500.`), vastly improving cache hit rates across multiple environments.
+- **Dockerization:** The project is now fully containerized via `docker-compose.yml`, with dedicated `Dockerfile`s for both frontend and backend.
+- **Timestamp CTE Fix:** All cross-table time-series joins now enforce `DATE_TRUNC('second', from_timestamp)` alongside CTE pre-aggregations for queries involving 3+ large tables to avoid PostgreSQL execution timeouts.
+
+---
+
 ## 2. Monorepo Structure
 
 ```

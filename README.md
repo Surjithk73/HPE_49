@@ -363,8 +363,7 @@ HPE_49/
 ├── measurefiles/                      # Source CSV data files (9 tables)
 └── docs/
     ├── Project_Overview.md            # Full architecture + design decisions
-    ├── NOTES.md                       # Known issues, gotchas, benchmarks
-    ├── frequently_used_queries.md     # Reference examples
+    ├── QueryCraft.pdf                 # Project presentation/report
     └── plan.md                        # Original build plan (all phases complete)
 ```
 
